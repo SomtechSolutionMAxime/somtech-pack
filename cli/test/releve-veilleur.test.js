@@ -310,3 +310,74 @@ test('9 bis. LE VEILLEUR REND UNE IDENTITÉ SANS EMPREINTE → même règle : on
   assert.ok(!sortie.includes('à jour'), `jamais « à jour » sans comparaison — reçu : ${sortie}`);
   assert.equal(releveAppelee, false, 'aucune relève sur une comparaison impossible');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LE BLOC DE `pack setup` : SES DEUX GARANTIES, ÉPROUVÉES (passe de fond, 3e tour)
+//
+// ⚠️ ELLES ÉTAIENT REVENDIQUÉES EN COMMENTAIRE ET TENUES PAR RIEN. Mesuré par la passe :
+// retirer le garde `--dry-run`, ou remplacer le `catch` par un `throw`, laissait TOUTE la
+// suite verte. C'est la forme que ce jalon traque — une garantie qu'aucun essai ne tient
+// n'est pas une garantie, c'est une phrase. Et celle-ci est la plus explicitement affirmée du
+// lot, ce qui la rend pire : on s'y fie.
+import { verifierFraicheurDuVeilleur } from '../src/releve-veilleur.js';
+
+test('DRY-RUN : rien n’a été écrit, donc rien n’est vérifié et rien n’est dit', async () => {
+  const { log, lignes } = collecteur();
+  let importAppele = false;
+  await verifierFraicheurDuVeilleur({
+    destDir: '/nexiste/pas',
+    modules: ['ligne-directe'],
+    dryRun: true,
+    importer: async () => { importAppele = true; return {}; },
+    log,
+  });
+  assert.equal(importAppele, false, 'un essai à blanc ne doit RIEN importer ni approcher le poste');
+  assert.deepEqual(lignes, [], `un essai à blanc ne parle pas du veilleur — reçu : ${lignes.join(' | ')}`);
+});
+
+test('MODULE NON INSTALLÉ : aucune vérification, aucun mot sur le veilleur', async () => {
+  const { log, lignes } = collecteur();
+  let importAppele = false;
+  await verifierFraicheurDuVeilleur({
+    destDir: '/nexiste/pas',
+    modules: ['herdr-plugins'],
+    importer: async () => { importAppele = true; return {}; },
+    log,
+  });
+  assert.equal(importAppele, false);
+  assert.deepEqual(lignes, []);
+});
+
+test('L’IMPORT QUI CASSE NE FAIT JAMAIS TOMBER SETUP — il le DIT, et le motif est porté', async () => {
+  const { log, lignes } = collecteur();
+  // Le mode de panne réaliste : la copie installée est incomplète, le module est absent.
+  const importeur = async (chemin) => {
+    throw new Error(`Cannot find module '${chemin}'`);
+  };
+  await assert.doesNotReject(
+    () => verifierFraicheurDuVeilleur({ destDir: '/somtech', modules: ['ligne-directe'], importer: importeur, log }),
+    'une garde annexe qui casse ne doit JAMAIS emporter la mise à jour elle-même'
+  );
+  const sortie = lignes.join(' | ');
+  assert.ok(sortie.includes('non effectuée'), `l'échec doit être DIT — reçu : ${sortie}`);
+  assert.ok(sortie.includes('Cannot find module'), `le motif doit être porté — reçu : ${sortie}`);
+});
+
+test('LES CHEMINS IMPORTÉS VIENNENT DE destDir — jamais du paquet temporaire de npx', async () => {
+  const { log } = collecteur();
+  const demandes = [];
+  await verifierFraicheurDuVeilleur({
+    destDir: '/somtech',
+    modules: ['ligne-directe'],
+    importer: async (chemin) => {
+      demandes.push(chemin);
+      throw new Error('stop'); // on ne mesure que les chemins demandés
+    },
+    log,
+  });
+  assert.ok(
+    demandes[0].startsWith('/somtech/'),
+    `le client doit être importé depuis la copie INSTALLÉE — reçu : ${demandes[0]}`
+  );
+  assert.match(demandes[0], /ligne-directe\/src\/client\.js$/);
+});

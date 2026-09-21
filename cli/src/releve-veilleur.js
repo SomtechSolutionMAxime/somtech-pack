@@ -152,3 +152,47 @@ export async function releverSiPerime({ toolsDir, parler, passerLaMain, empreint
     log(`⚠️ veilleur : la vérification a échoué de façon inattendue (${err?.message || err}) — relève-le à la main : ligne-directe relever`);
   }
 }
+
+
+/**
+ * LE BLOC DE `pack setup` LUI-MÊME, SORTI DE `setup.js` POUR ÊTRE ÉPROUVABLE
+ * (relevé en passe de fond, 3e tour).
+ *
+ * ⚠️ IL PORTAIT DEUX GARANTIES QUE RIEN N'ÉPROUVAIT, et ce sont précisément celles que le lot
+ * REVENDIQUE en toutes lettres :
+ *   1. `--dry-run` ne vérifie RIEN — il n'a rien écrit, il n'y a donc rien à comparer, et
+ *      parler quand même ferait dire à un essai à blanc des choses sur le poste réel ;
+ *   2. une vérification de fraîcheur qui CASSE ne fait jamais tomber `setup` — elle le DIT.
+ * Mesuré par la passe : retirer l'une ou l'autre laissait toute la suite verte. Une garantie
+ * qu'aucun essai ne tient n'est pas une garantie, c'est une phrase — la forme exacte que ce
+ * jalon traque.
+ *
+ * `importer` est injecté pour que le banc puisse faire CASSER l'import sans casser de fichier :
+ * c'est le seul mode de panne réaliste de ce bloc (module absent, copie installée incomplète).
+ *
+ * @param {object} deps
+ * @param {string} deps.destDir   racine des outils de poste (~/.somtech)
+ * @param {string[]} deps.modules modules réellement installés par `installPosteModules`
+ * @param {boolean} deps.dryRun   rien n'a été écrit : il n'y a rien à vérifier
+ * @param {Function} deps.importer `(chemin) => Promise<module>` — `import()` en production
+ * @param {Function} deps.log     reçoit chaque ligne à annoncer
+ */
+export async function verifierFraicheurDuVeilleur({ destDir, modules = [], dryRun = false, importer, log = console.log }) {
+  if (dryRun || !modules.includes('ligne-directe')) return;
+  try {
+    // ⚠️ IMPORTÉ DEPUIS LA COPIE INSTALLÉE (`destDir`), JAMAIS DEPUIS `payloadRoot` — et ce
+    // n'est pas cosmétique, c'est STRUCTUREL. `reveillerVeilleur()` (client.js) calcule
+    // `ICI = dirname(fileURLToPath(import.meta.url))` et fait naître le veilleur DÉTACHÉ
+    // depuis SON PROPRE dossier. `payloadRoot` est le répertoire temporaire que `npx` dézippe
+    // pour CETTE commande : importer de là ferait naître un veilleur dont le dossier
+    // disparaît à la fin — le veilleur ÉPHÉMÈRE mesuré le 2026-08-20 (T-20260818-0035).
+    const { parler, passerLaMain } = await importer(join(destDir, 'ligne-directe', 'src', 'client.js'));
+    const { empreinteDuCode } = await importer(join(destDir, 'ligne-directe', 'src', 'identite-du-code.js'));
+    await releverSiPerime({ toolsDir: destDir, parler, passerLaMain, empreinteDuCode, log });
+  } catch (err) {
+    // JAMAIS AVALÉE, JAMAIS FATALE : une vérification de fraîcheur qui échoue doit le DIRE,
+    // pas laisser croire — en silence — que le veilleur est à jour, ni emporter `setup` avec
+    // elle. L'opérateur perdrait la mise à jour elle-même pour une garde annexe.
+    log(`⚠️  veilleur : vérification de fraîcheur non effectuée (${err?.message || err})`);
+  }
+}

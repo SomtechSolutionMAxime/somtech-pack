@@ -15,7 +15,7 @@
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, renameSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -117,4 +117,55 @@ test('une dérive sauvegardée (.somtech.bak) ne change pas l’empreinte — el
   // LE CONTRÔLE — la mesure n'est pas aveugle : un VRAI changement, lui, change l'empreinte.
   writeFileSync(join(dossier, 'veilleur.js'), 'export const x = 2;\n');
   assert.notEqual(empreinteDuCode(dossier).empreinte, avant.empreinte, 'un vrai changement doit se voir');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA SPEC DE `empreinteDuCode`, ÉCRITE UNE FOIS — pas un banc de plus par incident
+//
+// ⚠️ REPROCHE DE LA PASSE DE FOND (3e tour), ET IL EST JUSTE : ce fichier portait trois bancs
+// ciblés sur trois incidents nommés (dossier illisible, dérive sauvegardée, chemin éphémère)
+// sans qu'aucun n'éprouve la FONCTION elle-même. Deux propriétés qu'elle revendique en
+// commentaire n'étaient donc tenues par rien — mesuré : les retirer laissait la suite verte.
+// C'est le symptôme du test-par-incident : on ferme ce qu'on vient de découvrir, on n'écrit
+// jamais ce que la fonction promet.
+
+test('LE NOM ENTRE DANS L’EMPREINTE — RENOMMER un fichier la change, à contenus inchangés', () => {
+  const dossier = mkdtempSync(join(tmpdir(), 'smtk-noms-'));
+  writeFileSync(join(dossier, 'a.js'), 'export const a = 1;\n');
+  writeFileSync(join(dossier, 'b.js'), 'export const b = 2;\n');
+  const avant = empreinteDuCode(dossier);
+
+  // ⚠️ RENOMMER, PAS ÉCHANGER — et la nuance est tout l'essai. Un premier jet échangeait les
+  // CONTENUS de deux fichiers : il rougissait déjà sans le hachage du nom, parce que la SUITE
+  // des contenus lus dans l'ordre alphabétique changeait. Il ne prouvait donc rien du nom.
+  // Ici la suite des contenus est IDENTIQUE (« a » puis « b », dans cet ordre) et seul un nom
+  // diffère : sans le nom dans le hachage, l'empreinte serait la même — un veilleur servant
+  // `b.js` dirait servir exactement ce que sert un poste où ce fichier s'appelle `c.js`.
+  renameSync(join(dossier, 'b.js'), join(dossier, 'c.js'));
+
+  assert.notEqual(
+    empreinteDuCode(dossier).empreinte,
+    avant.empreinte,
+    'un fichier renommé n’est pas le même code servi : le nom fait partie de l’identité'
+  );
+});
+
+test('LA DATE RENDUE EST LA PLUS RÉCENTE, pas celle du dernier fichier lu', () => {
+  const dossier = mkdtempSync(join(tmpdir(), 'smtk-dates-'));
+  // ⚠️ L'ORDRE ALPHABÉTIQUE EST L'ORDRE DE LECTURE, et c'est ce qui rend ce cas nécessaire :
+  // si le plus RÉCENT n'est pas le DERNIER lu, une affectation inconditionnelle rendrait la
+  // date du dernier — donc une date PLUS ANCIENNE que le vrai dernier changement. Un veilleur
+  // dirait alors servir du code plus vieux qu'il ne l'est, et le journal daterait faux.
+  writeFileSync(join(dossier, 'a-le-plus-recent.js'), 'export const a = 1;\n');
+  writeFileSync(join(dossier, 'z-le-plus-ancien.js'), 'export const z = 1;\n');
+  const recent = new Date('2026-09-20T12:00:00.000Z');
+  const ancien = new Date('2026-01-01T12:00:00.000Z');
+  utimesSync(join(dossier, 'a-le-plus-recent.js'), recent, recent);
+  utimesSync(join(dossier, 'z-le-plus-ancien.js'), ancien, ancien);
+
+  assert.equal(
+    empreinteDuCode(dossier).date,
+    recent.toISOString(),
+    'la date rendue doit être celle du changement le plus récent, quel que soit l’ordre de lecture'
+  );
 });

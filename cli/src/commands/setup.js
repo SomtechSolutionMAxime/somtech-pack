@@ -252,40 +252,18 @@ export async function cmdSetup(flags) {
       }
     }
 
-    // LA MISE À JOUR NE REND JAMAIS UN SUCCÈS MUET (T-20260818-0035). `p.modules` est le
-    // fruit RÉEL de `installPosteModules`, déjà convergé vers le pack : si `ligne-directe` en
-    // fait partie, un veilleur peut déjà tourner sur ce poste et continuer de servir
-    // l'ANCIEN code pendant que `setup` vient d'en poser du neuf — c'est très exactement le
-    // veilleur ayant servi du code vieux de 3 jours, mesuré par batiscan, sans que rien ne le
-    // signale. `--dry-run` n'a rien écrit : il n'y a rien à vérifier.
-    if (!flags.dryRun && p.modules.includes('ligne-directe')) {
-      try {
-        // ⚠️ IMPORTÉ DEPUIS LA COPIE INSTALLÉE (`destDir`), JAMAIS DEPUIS `payloadRoot` — et
-        // ce n'est pas cosmétique, c'est STRUCTUREL. `reveillerVeilleur()` (dans client.js)
-        // calcule `ICI = dirname(fileURLToPath(import.meta.url))` et fait naître le veilleur
-        // DÉTACHÉ depuis SON PROPRE dossier. `payloadRoot` est le répertoire temporaire que
-        // `npx` dézippe pour l'exécution de CETTE commande : importer `client.js` depuis là
-        // ferait donc naître un veilleur dont `ICI` pointe sous `/T/tmp.XXXX/`, un dossier qui
-        // disparaît à la fin de cette commande — exactement le veilleur ÉPHÉMÈRE mesuré par
-        // batiscan le 2026-08-20 (deux commentaires du ticket T-20260818-0035).
-        const cheminClient = join(destDir, 'ligne-directe', 'src', 'client.js');
-        const cheminIdentite = join(destDir, 'ligne-directe', 'src', 'identite-du-code.js');
-        const { parler, passerLaMain } = await import(cheminClient);
-        const { empreinteDuCode } = await import(cheminIdentite);
-        const { releverSiPerime } = await import('../releve-veilleur.js');
-        await releverSiPerime({
-          toolsDir: destDir,
-          parler,
-          passerLaMain,
-          empreinteDuCode,
-          log: (m) => console.log(`  ${m}`),
-        });
-      } catch (err) {
-        // JAMAIS AVALÉE : une vérification de fraîcheur qui échoue doit le DIRE, pas laisser
-        // croire — en silence — que le veilleur est à jour.
-        console.log(`  ⚠️  veilleur : vérification de fraîcheur non effectuée (${err?.message || err})`);
-      }
-    }
+    // LA MISE À JOUR NE REND JAMAIS UN SUCCÈS MUET (T-20260818-0035) — et le geste vit dans
+    // `releve-veilleur.js`, injectable, parce que ses deux garanties (ne rien vérifier en
+    // `--dry-run` ; ne jamais faire tomber `setup`) n'étaient tenues par aucun essai tant
+    // qu'elles vivaient ici, au milieu d'une commande qu'on ne peut pas faire casser à volonté.
+    const { verifierFraicheurDuVeilleur } = await import('../releve-veilleur.js');
+    await verifierFraicheurDuVeilleur({
+      destDir,
+      modules: p.modules,
+      dryRun: flags.dryRun,
+      importer: (chemin) => import(chemin),
+      log: (m) => console.log(`  ${m}`),
+    });
   }
 
   if (doSwt) {
