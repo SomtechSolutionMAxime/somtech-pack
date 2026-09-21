@@ -578,6 +578,9 @@ function segmentsHorsPanneVeilleur(commande, role) {
   );
 }
 
+/** Les actions ServiceDesk qui restent permises pendant une panne du veilleur — lire, prévenir. */
+export const ACTIONS_SERVICEDESK_EN_PANNE = new Set(['list', 'get', 'list_posts', 'get_post', 'add_comment']);
+
 /** Le début du refus, selon le CODE mesuré — jamais deviné sur le texte du message. */
 function prefixeDuCode(code) {
   if (code === 'VEILLEUR_LENT') return 'le veilleur est vivant mais ne rend pas';
@@ -595,14 +598,12 @@ function raisonPanneVeilleur(panne) {
   return (
     `${prefixeDuCode(panne.code)} (${panne.code ?? 'sans code'}) : ${panne.message}\n` +
     `  Ce qui reste permis — lecture : Read, Grep, Glob, et un Bash de lecture pure ` +
-    `(tail, head, cat, ls, date, …) ; diagnostic : tail -20 ${CHEMIN_JOURNAL}, ` +
-    `ligne-directe etat|relever|service etat ; prévenir : un commentaire ServiceDesk ` +
-    `(mcp__servicedesk__* avec action add_comment).`
+    `(${LECTURE_PURE.join(', ')}) ; diagnostic : tail -20 ${CHEMIN_JOURNAL}, ` +
+    `ligne-directe etat|relever|service etat ; lire et prévenir au ServiceDesk ` +
+    `(mcp__servicedesk__* avec action ${[...ACTIONS_SERVICEDESK_EN_PANNE].join(', ')}).`
   );
 }
 
-/** Les actions ServiceDesk qui restent permises pendant une panne du veilleur — lire, prévenir. */
-export const ACTIONS_SERVICEDESK_EN_PANNE = new Set(['list', 'get', 'list_posts', 'get_post', 'add_comment']);
 
 /** La décision pendant une panne dont la CAUSE est le veilleur — lecture et diagnostic ouverts. */
 function deciderPanneVeilleur({ toolName, toolInput, role, panne }) {

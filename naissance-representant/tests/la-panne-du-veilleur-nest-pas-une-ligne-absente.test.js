@@ -190,11 +190,39 @@ test('CHAQUE action ServiceDesk permise en panne passe — et une action mutante
   const d = lieuTemp();
   try {
     const double = doubleQuiLeve('VEILLEUR_MUET', 'Le veilleur NE RÉPOND PLUS');
-    // MÊME RÈGLE QUE CI-DESSUS : la lecture ServiceDesk est ce que le refus ANNONCE (« lire »),
-    // et `list`/`get` sont les deux gestes de lecture que tout agent emploie pour se renseigner
-    // avant de prévenir. Les exiger nommément ici n'est pas une copie de la liste : c'est le
-    // MINIMUM sans lequel « prévenir » n'a pas de sens — on ne commente pas un ticket qu'on ne
-    // peut pas lire.
+    // MÊME GARDE QUE POUR LES OUTILS, ET ELLE MANQUAIT ICI (relevée en passe portail, REJET).
+    // Le banc voisin exige que chaque outil NOMMÉ par le refus passe réellement ; celui-ci se
+    // contentait de parcourir la liste du produit. L'angle mort était mesurable : le refus
+    // n'annonçait QUE `add_comment` alors que le code en permettait cinq — la promesse et le
+    // comportement avaient déjà divergé, en silence, dans le sens qui fait renoncer un agent à
+    // un geste qui lui est permis. Retirer une action de la liste sans la retirer du message
+    // (ou l'inverse) ne faisait rougir personne.
+    const refusSD = await traiterRequete(
+      { cwd: d, tool_name: 'mcp__servicedesk__tickets', tool_input: { action: 'update' } },
+      double
+    );
+    assert.equal(refusSD.permissionDecision, 'deny', 'écrire au ServiceDesk reste refusé pendant une panne');
+    const annoncees = [...ACTIONS_SERVICEDESK_EN_PANNE].filter((a) =>
+      new RegExp(`\\b${a}\\b`).test(refusSD.permissionDecisionReason)
+    );
+    assert.equal(
+      annoncees.length,
+      ACTIONS_SERVICEDESK_EN_PANNE.size,
+      `le refus doit NOMMER toutes les actions qu'il permet — reçu : ${refusSD.permissionDecisionReason}`
+    );
+    for (const action of annoncees) {
+      const d2 = await traiterRequete(
+        { cwd: d, tool_name: 'mcp__servicedesk__tickets', tool_input: { action } },
+        double
+      );
+      assert.equal(
+        d2.permissionDecision,
+        'allow',
+        `« ${action} » est NOMMÉE permise par le refus : la refuser serait se contredire`
+      );
+    }
+    // `list` et `get` sont le MINIMUM sans lequel « prévenir » n'a pas de sens : on ne commente
+    // pas un ticket qu'on ne peut pas lire.
     for (const lecture of ['list', 'get']) {
       assert.ok(
         ACTIONS_SERVICEDESK_EN_PANNE.has(lecture),
