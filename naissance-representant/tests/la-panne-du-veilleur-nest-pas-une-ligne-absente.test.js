@@ -126,3 +126,97 @@ for (const [code, message] of CAS) {
     }
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// CHAQUE ENTRÉE DES DEUX LISTES FERMÉES EST ÉPROUVÉE, UNE PAR UNE (passe de fond, REJET)
+//
+// ⚠️ ÉCRIT APRÈS DEUX MUTATIONS SURVIVANTES, et c'est ce qu'elles ont révélé : réduire
+// `LECTURE_PURE` à `['tail','date']` — donc retirer douze outils sur quatorze — laissait les
+// 907 essais VERTS. Idem en réduisant `ACTIONS_SERVICEDESK_EN_PANNE` au seul `add_comment`.
+// Les essais ci-dessus n'exerçaient que `tail`, `date` et `add_comment` : tout le reste des
+// deux listes était une PROMESSE que rien ne tenait.
+//
+// Ce que ça coûterait dans la vraie vie : une faute de frappe sur une entrée (`stat` écrit
+// `sta`), ou un retrait jugé anodin, romprait en SILENCE une permission que le refus
+// ANNONCE à l'agent — « ce qui reste permis : … ». Un agent en panne de veilleur se verrait
+// refuser un outil que le message du refus vient de lui promettre, et c'est précisément le
+// genre de contradiction que ce lot existe pour supprimer.
+//
+// La liste est donc DÉRIVÉE du produit, jamais recopiée ici : un banc qui porterait sa
+// propre copie prouverait seulement qu'il est d'accord avec lui-même, et un ajout à la liste
+// de production ne serait jamais éprouvé.
+import { LECTURE_PURE, ACTIONS_SERVICEDESK_EN_PANNE } from '../src/garde.js';
+
+test('CHAQUE outil de LECTURE_PURE passe pendant une panne — la liste est tenue, pas seulement annoncée', async () => {
+  const d = lieuTemp();
+  try {
+    const double = doubleQuiLeve('VEILLEUR_MUET', 'Le veilleur NE RÉPOND PLUS');
+    // ⚠️ LA BORNE NE VIENT PAS D'UN NOMBRE ÉCRIT ICI, ELLE VIENT DU REFUS LUI-MÊME. Exiger
+    // « au moins quatorze entrées » aurait été une COPIE de la liste de production dans le
+    // banc : elle tuerait la mutation en prouvant seulement que le banc est d'accord avec le
+    // chiffre qu'il porte, et il faudrait l'éditer à chaque outil ajouté. On demande donc au
+    // produit CE QU'IL PROMET — le texte du refus nomme les outils permis — et on exige que
+    // chaque outil promis passe réellement. La promesse et le comportement ne peuvent plus
+    // diverger, et un ajout à la liste n'oblige à toucher ni ce banc ni ce refus.
+    const refus = await traiterRequete({ cwd: d, tool_name: 'Write', tool_input: { file_path: 'x' } }, double);
+    assert.equal(refus.permissionDecision, 'deny', 'écrire reste refusé pendant une panne');
+    const promis = LECTURE_PURE.filter((o) => new RegExp(`\\b${o}\\b`).test(refus.permissionDecisionReason));
+    assert.ok(promis.length >= 4, `le refus doit NOMMER les outils qu'il permet — reçu : ${refus.permissionDecisionReason}`);
+    for (const outil of promis) {
+      const d2 = await traiterRequete({ cwd: d, tool_name: 'Bash', tool_input: { command: `${outil} x` } }, double);
+      assert.equal(
+        d2.permissionDecision,
+        'allow',
+        `« ${outil} » est NOMMÉ permis par le refus : le refuser serait se contredire — reçu ${d2.permissionDecisionReason}`
+      );
+    }
+    for (const outil of LECTURE_PURE) {
+      const decision = await traiterRequete(
+        { cwd: d, tool_name: 'Bash', tool_input: { command: `${outil} quelquechose` } },
+        double
+      );
+      assert.equal(
+        decision.permissionDecision,
+        'allow',
+        `« ${outil} » est annoncé permis par le refus lui-même : il doit passer — reçu ${decision.permissionDecisionReason}`
+      );
+    }
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test('CHAQUE action ServiceDesk permise en panne passe — et une action mutante reste refusée', async () => {
+  const d = lieuTemp();
+  try {
+    const double = doubleQuiLeve('VEILLEUR_MUET', 'Le veilleur NE RÉPOND PLUS');
+    // MÊME RÈGLE QUE CI-DESSUS : la lecture ServiceDesk est ce que le refus ANNONCE (« lire »),
+    // et `list`/`get` sont les deux gestes de lecture que tout agent emploie pour se renseigner
+    // avant de prévenir. Les exiger nommément ici n'est pas une copie de la liste : c'est le
+    // MINIMUM sans lequel « prévenir » n'a pas de sens — on ne commente pas un ticket qu'on ne
+    // peut pas lire.
+    for (const lecture of ['list', 'get']) {
+      assert.ok(
+        ACTIONS_SERVICEDESK_EN_PANNE.has(lecture),
+        `« ${lecture} » doit rester permis : sans lire, un agent ne peut pas prévenir utilement`
+      );
+    }
+    for (const action of ACTIONS_SERVICEDESK_EN_PANNE) {
+      const decision = await traiterRequete(
+        { cwd: d, tool_name: 'mcp__servicedesk__tickets', tool_input: { action } },
+        double
+      );
+      assert.equal(decision.permissionDecision, 'allow', `l'action « ${action} » doit passer pendant une panne`);
+    }
+    // LE CONTRÔLE NÉGATIF — sans lui, un correctif qui permettrait TOUT passerait au vert.
+    for (const action of ['update', 'create', 'delete', 'execute']) {
+      const decision = await traiterRequete(
+        { cwd: d, tool_name: 'mcp__servicedesk__tickets', tool_input: { action } },
+        double
+      );
+      assert.equal(decision.permissionDecision, 'deny', `l'action « ${action} » ÉCRIT : elle doit rester refusée`);
+    }
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+});

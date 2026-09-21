@@ -252,3 +252,61 @@ test('UNE EXCEPTION INATTENDUE EST LOGGÉE, JAMAIS AVALÉE, JAMAIS RELANCÉE', a
     `l’échec inattendu doit être JOURNALISÉ — reçu : ${lignes.join(' | ')}`
   );
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// 9. LA MESURE A RATÉ → « IMPOSSIBLE DE COMPARER », JAMAIS « À JOUR », JAMAIS UNE RELÈVE
+//
+// ⚠️ MUTATION QUI A SURVÉCU AUX 12 ESSAIS DE CE FICHIER (passe de fond) : supprimer la branche
+// `perime: null` de la copie locale de `ecart()`. Le cas qu'elle couvre est le critère 2 du
+// ticket — « jamais un succès muet » — et il n'était éprouvé NULLE PART côté CLI : seul
+// `ligne-directe/src/identite-du-code.js` l'avait, or ce module-ci en porte sa PROPRE copie
+// (contrainte de distribution, voir l'en-tête de `releve-veilleur.js`). Une copie non gardée
+// diverge de son original au premier correctif : c'est la dette que le dépôt paie déjà
+// ailleurs, et elle était ouverte ici.
+//
+// Ce qu'une mesure ratée doit produire : on le DIT, on ne relève PAS. Relever sur une mesure
+// qu'on n'a pas su faire, c'est redémarrer le veilleur du poste sans savoir s'il en avait
+// besoin ; dire « à jour », c'est le silence exact que ce lot ferme.
+test('9. EMPREINTE INSTALLÉE ILLISIBLE → « impossible de comparer », aucune relève, jamais « à jour »', async () => {
+  const toolsDir = toolsDirAvecSocket();
+  const { log, lignes } = collecteur();
+  let releveAppelee = false;
+
+  await releverSiPerime({
+    toolsDir,
+    // Le veilleur répond et dit ce qu'il sert : c'est la mesure du DISQUE qui a raté.
+    parler: async () => ({ ok: true, code: { empreinte: 'aaaaaaaaaaaa', date: '2026-09-01T00:00:00.000Z' } }),
+    passerLaMain: async () => { releveAppelee = true; },
+    // Ce que `empreinteDuCode` rend quand le dossier est illisible — forme réelle du module.
+    empreinteDuCode: () => ({ empreinte: null, fichiers: 0, date: null, refus: 'dossier illisible (…/src)' }),
+    log,
+  });
+
+  const sortie = lignes.join(' | ');
+  assert.ok(sortie.includes('impossible de comparer'), `doit NOMMER l'échec de mesure — reçu : ${sortie}`);
+  assert.ok(sortie.includes('dossier illisible'), `doit porter le motif rendu par la mesure — reçu : ${sortie}`);
+  assert.ok(!sortie.includes('à jour'), `« à jour » sur une mesure ratée est le succès muet qu'on ferme — reçu : ${sortie}`);
+  assert.equal(releveAppelee, false, 'on ne relève pas le veilleur du poste sur une mesure qu’on n’a pas su faire');
+});
+
+test('9 bis. LE VEILLEUR REND UNE IDENTITÉ SANS EMPREINTE → même règle : on le dit, on ne relève pas', async () => {
+  const toolsDir = toolsDirAvecSocket();
+  const { log, lignes } = collecteur();
+  let releveAppelee = false;
+
+  await releverSiPerime({
+    toolsDir,
+    // `code` PRÉSENT mais sans empreinte : un veilleur dont la mesure de son propre code a
+    // échoué. À distinguer de `code` ABSENT (cas 3), qui est une version antérieure au lot et
+    // se relève, elle.
+    parler: async () => ({ ok: true, code: { empreinte: null, refus: 'dossier illisible (…/src)' } }),
+    passerLaMain: async () => { releveAppelee = true; },
+    empreinteDuCode: () => EMPREINTE_INSTALLEE,
+    log,
+  });
+
+  const sortie = lignes.join(' | ');
+  assert.ok(sortie.includes('impossible de comparer'), `doit NOMMER l'échec de mesure — reçu : ${sortie}`);
+  assert.ok(!sortie.includes('à jour'), `jamais « à jour » sans comparaison — reçu : ${sortie}`);
+  assert.equal(releveAppelee, false, 'aucune relève sur une comparaison impossible');
+});

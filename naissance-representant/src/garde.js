@@ -512,7 +512,7 @@ export function lignesManquantes(role, naturesOuvertes = []) {
  * liste avec un outil qui écrit rouvre exactement la fenêtre que ce lot ferme — une panne de
  * veilleur ne doit jamais devenir une fenêtre d'écriture sans ligne ouverte.
  */
-const LECTURE_PURE = ['tail', 'head', 'cat', 'ls', 'date', 'pgrep', 'ps', 'stat', 'wc', 'grep', 'echo', 'pwd', 'whoami', 'uptime'];
+export const LECTURE_PURE = ['tail', 'head', 'cat', 'ls', 'date', 'pgrep', 'ps', 'stat', 'wc', 'grep', 'echo', 'pwd', 'whoami', 'uptime'];
 
 /** Un jeton qui est un OPÉRATEUR ou une REDIRECTION shell — jamais toléré en lecture pure. */
 function jetonOperateurOuRedirection(jeton) {
@@ -602,7 +602,7 @@ function raisonPanneVeilleur(panne) {
 }
 
 /** Les actions ServiceDesk qui restent permises pendant une panne du veilleur — lire, prévenir. */
-const ACTIONS_SERVICEDESK_EN_PANNE = new Set(['list', 'get', 'list_posts', 'get_post', 'add_comment']);
+export const ACTIONS_SERVICEDESK_EN_PANNE = new Set(['list', 'get', 'list_posts', 'get_post', 'add_comment']);
 
 /** La décision pendant une panne dont la CAUSE est le veilleur — lecture et diagnostic ouverts. */
 function deciderPanneVeilleur({ toolName, toolInput, role, panne }) {

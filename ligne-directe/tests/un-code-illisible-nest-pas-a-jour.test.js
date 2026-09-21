@@ -76,3 +76,45 @@ test('CONTRÔLE — le même geste sur un dossier LISIBLE ET INCHANGÉ rend peri
   const inexistant = ecartDeCode(identiteDuCode({ dossierSrc: join(bac, 'toujours-absent') }), surDisque);
   assert.notEqual(inexistant.perime, ecart.perime, 'la sonde coupée et la sonde qui mesure ne doivent PAS rendre le même verdict');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// UNE DÉRIVE SAUVEGARDÉE N'EST PAS DU CODE SERVI (mutation survivante, passe de fond)
+//
+// ⚠️ MUTATION QUI A SURVÉCU AUX 1444 : retirer le filtre `.somtech.bak` de `empreinteDuCode`.
+// Le fait qui rend ce filtre nécessaire est mesuré sur ce poste — `~/.somtech/ligne-directe/
+// src/` porte `arguments.js.somtech.bak`, `.somtech.bak.1`, `.somtech.bak.2` : les dérives que
+// `pack setup` met de côté AVANT d'écraser un fichier modifié à la main. Node ne les charge
+// jamais ; le veilleur ne sert donc pas une ligne de leur contenu.
+//
+// Sans le filtre, l'empreinte les COMPTE. Deux conséquences, et la seconde est la grave :
+//   1. deux postes au code IDENTIQUE rendent des empreintes DIFFÉRENTES, selon l'historique
+//      de leurs dérives — l'empreinte cesse d'identifier le code ;
+//   2. une simple sauvegarde posée à côté fait basculer le veilleur en « périmé », donc
+//      `pack setup` le RELÈVE pour rien, et le journal annonce un écart qui n'existe pas.
+//      Un veilleur relevé sans raison est un dispositif qui crie au loup : on cesse de le lire.
+//
+// ⚠️ LE BANC NE COMPTE PAS LES FICHIERS, IL COMPARE DEUX MESURES. Vérifier « 3 fichiers »
+// serait une copie du contenu du dossier dans le banc ; ce qu'on exige est une PROPRIÉTÉ :
+// poser une sauvegarde ne change pas ce que le veilleur sert.
+test('une dérive sauvegardée (.somtech.bak) ne change pas l’empreinte — elle n’est pas servie', () => {
+  const dossier = mkdtempSync(join(tmpdir(), 'smtk-bak-'));
+  writeFileSync(join(dossier, 'veilleur.js'), 'export const x = 1;\n');
+  const avant = empreinteDuCode(dossier);
+  assert.ok(avant.empreinte, 'le dossier est lisible : l’empreinte doit exister');
+
+  // Exactement ce que `pack setup` dépose à côté d'un fichier qu'il converge.
+  writeFileSync(join(dossier, 'veilleur.js.somtech.bak'), 'export const x = 0; // la version d’avant\n');
+  writeFileSync(join(dossier, 'veilleur.js.somtech.bak.1'), 'export const x = -1;\n');
+  const apres = empreinteDuCode(dossier);
+
+  assert.equal(
+    apres.empreinte,
+    avant.empreinte,
+    'le code servi n’a pas bougé : poser une sauvegarde à côté ne doit pas faire basculer le veilleur en « périmé »'
+  );
+  assert.equal(apres.fichiers, avant.fichiers, 'une sauvegarde n’est pas un fichier servi et ne se compte pas');
+
+  // LE CONTRÔLE — la mesure n'est pas aveugle : un VRAI changement, lui, change l'empreinte.
+  writeFileSync(join(dossier, 'veilleur.js'), 'export const x = 2;\n');
+  assert.notEqual(empreinteDuCode(dossier).empreinte, avant.empreinte, 'un vrai changement doit se voir');
+});

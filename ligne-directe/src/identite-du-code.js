@@ -44,9 +44,20 @@ export function empreinteDuCode(dossierSrc) {
     return { empreinte: null, fichiers: 0, date: null, refus: `dossier illisible (${dossierSrc}) : ${err?.message || err}` };
   }
 
-  // `*.somtech.bak*` : les dérives sauvegardées par le pack (installGlobalSkills et
-  // consorts, voir setup.js) — jamais du code servi, jamais compté.
-  const fichiers = entrees.filter((f) => f.endsWith('.js') && !f.includes('.somtech.bak')).sort();
+  // `.js` ET RIEN D'AUTRE — et c'est cette seule condition qui écarte les dérives sauvegardées.
+  //
+  // ⚠️ IL Y AVAIT ICI UN SECOND FILTRE, `!f.includes('.somtech.bak')`, ET IL ÉTAIT MORT.
+  // Relevé par une mutation SURVIVANTE en passe de fond : le retirer ne faisait rougir aucun
+  // des 1444 essais. Mesuré plutôt que supposé, sur l'installation réelle du poste — le pack
+  // sauvegarde sous `<fichier>.somtech.bak` (voir `cli/src/engine.js`), donc `arguments.js.
+  // somtech.bak`, `boite.js.somtech.bak.1` : AUCUN de ces noms ne finit par `.js`, et le
+  // dossier installé en porte 0 sur 0. La condition ne pouvait jamais être atteinte.
+  //
+  // On la retire plutôt que de la garder « au cas où » : un filtre qu'aucun cas n'exerce se
+  // lit comme une garantie et n'en est pas une — le jour où un nom de sauvegarde finirait par
+  // `.js`, c'est le banc voisin (une dérive posée ne change pas l'empreinte) qui rougirait, et
+  // c'est lui la vraie garde.
+  const fichiers = entrees.filter((f) => f.endsWith('.js')).sort();
 
   if (!fichiers.length) {
     return { empreinte: null, fichiers: 0, date: null, refus: `aucun fichier .js dans ${dossierSrc}` };

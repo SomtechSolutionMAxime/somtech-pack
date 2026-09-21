@@ -80,3 +80,43 @@ test('ligne du MÊME lieu sur un AUTRE pane : Grep refusé, mais la raison invit
     rmSync(d, { recursive: true, force: true });
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// UNE LIGNE OUVERTE SUR CE PANE-CI N'EST PAS UN ÉTAT PERDU (mutation survivante, passe de fond)
+//
+// ⚠️ MUTATION QUI A SURVÉCU AUX 907 : retirer `l.pane !== pane` du calcul de `lignesDuLieu`
+// dans `hook.js`. Mesuré par la passe : un représentant dont la ligne CLIENTE est déjà
+// ouverte SUR CE PANE et à qui il manque celle du dirigeant se voyait alors répondre « une
+// ligne de ce lieu existe déjà sur un AUTRE pane — rejoue l'ouverture ». C'est faux deux
+// fois : le pane est le sien, et surtout le message l'envoie RÉOUVRIR la ligne qu'il a déjà
+// au lieu de lui dire laquelle lui manque. Un agent qui suit ce conseil rouvre sa ligne
+// cliente, revient au même refus, et boucle — sans jamais apprendre qu'il lui manque le
+// dirigeant, c'est-à-dire le manque exact que la garde existe pour nommer (T-20260813-0076).
+test('une ligne déjà ouverte SUR CE PANE ne se lit pas comme un état perdu — le refus nomme ce qui MANQUE', async () => {
+  const d = lieuTemp();
+  try {
+    // Le représentant doit DEUX lignes : celle de son client, celle du dirigeant. La cliente
+    // est ouverte, sur SON pane, avec le worktree de ce lieu.
+    const double = async () => ({
+      pane: 'pane-1',
+      etat: { ouvertes: [{ pane: 'pane-1', chantier: 'acme', canal: 'acme', nature: 'client', worktree: d }] },
+    });
+    const decision = await traiterRequete(
+      { cwd: d, tool_name: 'Grep', tool_input: { pattern: 'x' } },
+      double
+    );
+    assert.equal(decision.permissionDecision, 'deny', 'il manque encore la ligne du dirigeant');
+    assert.match(
+      decision.permissionDecisionReason,
+      /[Ii]l te manque/,
+      `le refus doit nommer CE QUI MANQUE — reçu : ${decision.permissionDecisionReason}`
+    );
+    assert.doesNotMatch(
+      decision.permissionDecisionReason,
+      /autre pane|état local|périmé/,
+      `ce pane est le sien : rien n'est perdu — reçu : ${decision.permissionDecisionReason}`
+    );
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+});
