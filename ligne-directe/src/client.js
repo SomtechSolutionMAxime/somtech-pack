@@ -500,21 +500,42 @@ async function veilleurParleEncore(cheminSocket, borneSonde, signal) {
  * sa vue complète en 67 s. Le refus attribuait au veilleur un silence qu'il n'avait pas, et
  * envoyait chercher la panne là où elle n'était pas.
  */
+/**
+ * LE `code` QUI ACCOMPAGNE CHAQUE REFUS, ET POURQUOI IL EST NOMMÉ ICI (T-20260914-0004).
+ *
+ * Avant ce lot, `hook.js` avalait TOUTE exception de son sondage en `naturesOuvertes = []` —
+ * un veilleur en panne et une ligne jamais ouverte tombaient dans le MÊME état, et le garde
+ * appliquait la même branche : « n'ouvre aucune de tes lignes ». Distinguer les deux exige un
+ * fait stable sur l'erreur elle-même, pas un `.match()` sur un message en français — un
+ * message peut changer de mot sans changer de cause, et un test qui lirait le message
+ * divergerait du premier correctif de style venu.
+ *
+ * `VEILLEUR_MUET` : le ping lui-même ne répond plus — la bouche est fermée.
+ * `VEILLEUR_LENT` : le veilleur répond au ping mais n'a pas rendu le geste dans sa borne — il
+ * est vivant, occupé, ce n'est pas une panne à proprement parler (T-20260908-0057 le sépare
+ * déjà par le mot ; ce lot lui donne un `code`).
+ */
 export function refusSansReponse({ geste, ms, vivant }) {
   // ⚠️ AU DIXIÈME, PAS À LA SECONDE. Une attente de 0,3 s arrondie à la seconde s'affiche « 0s »
   // — un refus qui dit avoir attendu zéro seconde se lit comme un bogue, pas comme une mesure.
   const secondes = Math.round(ms / 100) / 10;
   if (vivant) {
-    return new Error(
-      `Le veilleur EST VIVANT — il répond au ping — mais il n'a pas rendu « ${geste} » en ${secondes}s.\n` +
-        `  Ce geste est donc plus long que sa borne, ce n'est pas une panne de veilleur.\n` +
-        `  Vois ce qu'il fait : tail -20 ${CHEMIN_JOURNAL}`
+    return Object.assign(
+      new Error(
+        `Le veilleur EST VIVANT — il répond au ping — mais il n'a pas rendu « ${geste} » en ${secondes}s.\n` +
+          `  Ce geste est donc plus long que sa borne, ce n'est pas une panne de veilleur.\n` +
+          `  Vois ce qu'il fait : tail -20 ${CHEMIN_JOURNAL}`
+      ),
+      { code: 'VEILLEUR_LENT' }
     );
   }
-  return new Error(
-    `Le veilleur NE RÉPOND PLUS — « ${geste} » attendu ${secondes}s, et le ping reste sans réponse.\n` +
-      `  Sa bouche est fermée : ce n'est pas un geste lent, c'est un veilleur en panne.\n` +
-      `  Regarde pourquoi : tail -20 ${CHEMIN_JOURNAL}`
+  return Object.assign(
+    new Error(
+      `Le veilleur NE RÉPOND PLUS — « ${geste} » attendu ${secondes}s, et le ping reste sans réponse.\n` +
+        `  Sa bouche est fermée : ce n'est pas un geste lent, c'est un veilleur en panne.\n` +
+        `  Regarde pourquoi : tail -20 ${CHEMIN_JOURNAL}`
+    ),
+    { code: 'VEILLEUR_MUET' }
   );
 }
 
@@ -650,8 +671,14 @@ export async function parler(
       if (err.code !== 'ENOENT' && err.code !== 'ECONNREFUSED') throw err;
     }
   }
-  throw new Error(
-    `Le veilleur n'a pas démarré en 10s. Regarde pourquoi : tail -20 ${CHEMIN_JOURNAL}\n` +
-      `(cause la plus fréquente : un jeton absent ou vide au trousseau)`
+  // `VEILLEUR_NE_DEMARRE_PAS` — le réveil paresseux a été tenté et n'a jamais abouti à un
+  // socket qui répond. C'est un troisième fait, distinct du silence (`VEILLEUR_MUET`) et de
+  // la lenteur (`VEILLEUR_LENT`) : ici, personne n'a jamais décroché du tout (T-20260914-0004).
+  throw Object.assign(
+    new Error(
+      `Le veilleur n'a pas démarré en 10s. Regarde pourquoi : tail -20 ${CHEMIN_JOURNAL}\n` +
+        `(cause la plus fréquente : un jeton absent ou vide au trousseau)`
+    ),
+    { code: 'VEILLEUR_NE_DEMARRE_PAS' }
   );
 }

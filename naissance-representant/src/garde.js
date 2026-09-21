@@ -28,6 +28,9 @@ import { lignesDuRole } from '../../ligne-directe/src/roles.js';
 // et divergerait de la commande au premier correctif porté à l'une des deux (T-20260813-0078
 // a payé exactement ça sur `option`, qui trouvait un drapeau là où il n'était qu'une valeur).
 import { optionDonnee, premierLibre, OPTIONS_A_VALEUR } from '../../ligne-directe/src/arguments.js';
+// LE CHEMIN EXACT DU JOURNAL — jamais recopié en dur. Un refus qui invente son propre chemin
+// diverge du jour où `RACINE` change (variable d'environnement, poste de test).
+import { CHEMIN_JOURNAL } from '../../ligne-directe/src/registre.js';
 
 const SEGMENTS_COMMUNS = [
   /^\s*$/, // ligne vide
@@ -487,16 +490,234 @@ export function lignesManquantes(role, naturesOuvertes = []) {
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * LA BRANCHE « PANNE DU VEILLEUR » (T-20260914-0004)
+ *
+ * Avant ce lot, une exception du sondage retombait sur `naturesOuvertes = []`, et le garde
+ * appliquait la branche « lignes manquantes » — Grep, tail, date refusés avec « n'ouvre
+ * aucune de tes lignes », comme si la ligne n'avait jamais existé. Un agent dont le veilleur
+ * est en panne ne pouvait alors même pas LIRE LE JOURNAL pour comprendre le mode de panne.
+ *
+ * ⚠️ LA POLARITÉ RESTE LE REFUS — seule la LECTURE PURE et le DIAGNOSTIC (mesurer la panne
+ * elle-même) sont ouverts, et seulement quand la panne est TYPÉE comme venant du veilleur.
+ * Une exception inconnue (voir plus bas) ne relâche RIEN de plus qu'avant.
+ */
+
+/**
+ * Les commandes de LECTURE PURE tolérées pendant une panne du veilleur — une liste FERMÉE,
+ * jamais une régie par un motif. Chacune ne fait qu'observer : aucune ne peut modifier quoi
+ * que ce soit sur le disque, le réseau, ou un processus.
+ *
+ * ⚠️ `rm`, `mv`, `cp`, `kill`… N'Y SONT PAS, ET NE DOIVENT JAMAIS Y ENTRER. Élargir cette
+ * liste avec un outil qui écrit rouvre exactement la fenêtre que ce lot ferme — une panne de
+ * veilleur ne doit jamais devenir une fenêtre d'écriture sans ligne ouverte.
+ */
+const LECTURE_PURE = ['tail', 'head', 'cat', 'ls', 'date', 'pgrep', 'ps', 'stat', 'wc', 'grep', 'echo', 'pwd', 'whoami', 'uptime'];
+
+/** Un jeton qui est un OPÉRATEUR ou une REDIRECTION shell — jamais toléré en lecture pure. */
+function jetonOperateurOuRedirection(jeton) {
+  return jeton.includes('>') || jeton.includes('<') || jeton === '|' || jeton === '||' || jeton === '&';
+}
+
+/**
+ * Ce segment est-il une commande Bash de LECTURE PURE ?
+ *
+ * Trois conditions, ENSEMBLE — une seule qui manque et le segment n'est pas lu :
+ *   1. des jetons LISIBLES (`jetonsDuSegment` ne rend pas `null`) ;
+ *   2. un PREMIER JETON dans la liste fermée `LECTURE_PURE` ;
+ *   3. aucun jeton qui soit un opérateur ou une redirection.
+ * Pour `tail`/`head`/`cat`, une option n'est pas filtrée plus finement — la borne tient tout
+ * entière sur ces trois points.
+ *
+ * ⚠️ AUCUNE VÉRIFICATION DE SUBSTITUTION ICI, DÉLIBÉRÉMENT — MÊME CONVENTION QUE
+ * `segmentsHorsSequence` POUR LA SÉQUENCE D'OUVERTURE. La substitution est éprouvée UNE FOIS,
+ * au niveau du filtre (`segmentsHorsPanneVeilleur`), « AVANT toute reconnaissance » — la
+ * dupliquer ici créerait DEUX points qui doivent rester d'accord, et c'est exactement la
+ * dette que ce fichier refuse déjà ailleurs (« deux sources qui disent la même chose
+ * divergent »).
+ */
+function segmentDeLecturePure(segment) {
+  const jetons = jetonsDuSegment(segment);
+  if (!jetons || !jetons.length) return false;
+  if (!LECTURE_PURE.includes(jetons[0])) return false;
+  return !jetons.some(jetonOperateurOuRedirection);
+}
+
+/**
+ * Ce segment est-il un geste de DIAGNOSTIC ou de RELÈVE de ligne-directe ?
+ *
+ * `$LD etat|relever|service` ou `node <chemin>/ligne-directe.js etat|relever|service`, et
+ * RIEN d'autre derrière — sauf pour `service`, qui tolère un unique argument `etat`
+ * (`ligne-directe service etat` interroge le service systemd/launchd, il n'en modifie rien).
+ */
+function segmentDiagnosticLigneDirecte(segment) {
+  const jetons = jetonsDuSegment(segment);
+  if (!jetons || !jetons.length) return false;
+  let debut;
+  if (jetons[0] === '$LD') debut = 1;
+  else if (jetons[0] === 'node' && /ligne-directe\.js$/.test(jetons[1] || '')) debut = 2;
+  else return false;
+  const geste = jetons[debut];
+  const reste = jetons.slice(debut + 1);
+  if (geste === 'service') return reste.length === 1 && reste[0] === 'etat';
+  return (geste === 'etat' || geste === 'relever') && reste.length === 0;
+}
+
+/**
+ * Les segments d'une commande Bash qui n'appartiennent PAS à ce qui reste permis pendant une
+ * panne du veilleur : la séquence d'ouverture (inchangée), la lecture pure, ou le diagnostic.
+ */
+function segmentsHorsPanneVeilleur(commande, role) {
+  return segments(commande).filter(
+    (s) =>
+      SUBSTITUTION.test(s) ||
+      (!SEGMENTS_COMMUNS.some((r) => r.test(s)) &&
+        !ligneOuverteParSegment(s, role) &&
+        !segmentDeLecturePure(s) &&
+        !segmentDiagnosticLigneDirecte(s))
+  );
+}
+
+/** Le début du refus, selon le CODE mesuré — jamais deviné sur le texte du message. */
+function prefixeDuCode(code) {
+  if (code === 'VEILLEUR_LENT') return 'le veilleur est vivant mais ne rend pas';
+  if (code === 'VEILLEUR_NE_DEMARRE_PAS') return 'le veilleur n’a pas démarré';
+  // VEILLEUR_MUET, ECONNREFUSED, ENOENT — trois façons de mesurer le même silence.
+  return 'le veilleur ne répond plus';
+}
+
+/**
+ * La raison d'un refus pendant une panne DE CAUSE VEILLEUR — nomme le code, dit ce qui reste
+ * permis, et NE DIT JAMAIS « n'ouvre aucune de tes lignes » ni « il te manque » : ce n'est
+ * précisément pas ce qui est mesuré ici (T-20260914-0004).
+ */
+function raisonPanneVeilleur(panne) {
+  return (
+    `${prefixeDuCode(panne.code)} (${panne.code ?? 'sans code'}) : ${panne.message}\n` +
+    `  Ce qui reste permis — lecture : Read, Grep, Glob, et un Bash de lecture pure ` +
+    `(tail, head, cat, ls, date, …) ; diagnostic : tail -20 ${CHEMIN_JOURNAL}, ` +
+    `ligne-directe etat|relever|service etat ; prévenir : un commentaire ServiceDesk ` +
+    `(mcp__servicedesk__* avec action add_comment).`
+  );
+}
+
+/** Les actions ServiceDesk qui restent permises pendant une panne du veilleur — lire, prévenir. */
+const ACTIONS_SERVICEDESK_EN_PANNE = new Set(['list', 'get', 'list_posts', 'get_post', 'add_comment']);
+
+/** La décision pendant une panne dont la CAUSE est le veilleur — lecture et diagnostic ouverts. */
+function deciderPanneVeilleur({ toolName, toolInput, role, panne }) {
+  if (toolName === 'Read' || toolName === 'Grep' || toolName === 'Glob') {
+    return {
+      permissionDecision: 'allow',
+      permissionDecisionReason: `lecture pure, permise pendant une panne du veilleur (${panne.code})`,
+    };
+  }
+
+  if (toolName === 'Bash') {
+    const segs = segments(toolInput?.command);
+    const hors = segmentsHorsPanneVeilleur(toolInput?.command, role);
+    if (segs.length > 0 && hors.length === 0) {
+      return {
+        permissionDecision: 'allow',
+        permissionDecisionReason: `lecture, diagnostic ou séquence d’ouverture, permis pendant une panne du veilleur (${panne.code})`,
+      };
+    }
+    return { permissionDecision: 'deny', permissionDecisionReason: raisonPanneVeilleur(panne) };
+  }
+
+  if (typeof toolName === 'string' && toolName.startsWith('mcp__servicedesk__')) {
+    if (ACTIONS_SERVICEDESK_EN_PANNE.has(toolInput?.action)) {
+      return {
+        permissionDecision: 'allow',
+        permissionDecisionReason: `lecture ou avertissement ServiceDesk, permis pendant une panne du veilleur (${panne.code})`,
+      };
+    }
+    return { permissionDecision: 'deny', permissionDecisionReason: raisonPanneVeilleur(panne) };
+  }
+
+  return { permissionDecision: 'deny', permissionDecisionReason: raisonPanneVeilleur(panne) };
+}
+
+/**
+ * La décision pendant une panne dont la cause reste INCONNUE — la polarité de refus
+ * INTÉGRALE d'avant ce lot (Read seul permis). On ne sait pas que c'est le veilleur : élargir
+ * l'accès sur une exception qu'on n'a pas su classer serait le relâchement inverse de celui
+ * que ce lot corrige.
+ */
+function deciderPanneInconnue({ toolName, panne }) {
+  if (toolName === 'Read') {
+    return { permissionDecision: 'allow', permissionDecisionReason: 'lecture locale, permise avant l’ouverture (étape 1)' };
+  }
+  return {
+    permissionDecision: 'deny',
+    permissionDecisionReason: `le garde n’a pas pu mesurer l’état de tes lignes (${panne.code ?? 'sans code'}) : ${panne.message}`,
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ * LA BRANCHE « ÉTAT LOCAL PERDU » (T-20260914-0004, voisin de T-20260908-0057)
+ *
+ * Le registre connaît une ligne pour CE LIEU (même ancre), mais sur un AUTRE pane. Ce n'est
+ * pas une ligne jamais ouverte : c'est un renseignement local périmé (renaissance dans un
+ * autre pane, par exemple). Les permissions restent celles de « lignes manquantes »
+ * (Read + séquence d'ouverture) — seule la RAISON change, pour envoyer rejouer l'ouverture
+ * plutôt que d'annoncer un manque qui n'en est pas un.
+ */
+function raisonEtatLocalPerdu(lignesDuLieu) {
+  const l = lignesDuLieu[0];
+  const chantier = l?.chantier || '<chantier>';
+  const canal = l?.canal || l?.canal_nom || '<canal>';
+  return (
+    `une ligne de ce lieu existe déjà (chantier ${chantier}, canal ${canal}) sur un autre pane — ` +
+    `ton état local est périmé : rejoue l’ouverture, elle reprend le canal existant (reprise idempotente) — ` +
+    `node $HOME/.somtech/ligne-directe/bin/ligne-directe.js ouvrir ${chantier} …`
+  );
+}
+
+function deciderEtatLocalPerdu({ toolName, toolInput, role, lignesDuLieu }) {
+  if (toolName === 'Read') {
+    return { permissionDecision: 'allow', permissionDecisionReason: 'lecture locale, permise avant l’ouverture (étape 1)' };
+  }
+  if (toolName === 'Bash') {
+    const segs = segments(toolInput?.command);
+    const hors = segmentsHorsSequence(toolInput?.command, role);
+    if (segs.length > 0 && hors.length === 0) {
+      return { permissionDecision: 'allow', permissionDecisionReason: 'fait partie de la séquence d’ouverture de ligne' };
+    }
+    return { permissionDecision: 'deny', permissionDecisionReason: raisonEtatLocalPerdu(lignesDuLieu) };
+  }
+  return { permissionDecision: 'deny', permissionDecisionReason: raisonEtatLocalPerdu(lignesDuLieu) };
+}
+
+/**
  * La décision pour un appel d'outil, sachant quelles NATURES de ligne sont ouvertes sur ce pane.
  *
- * @param {{toolName: string, toolInput: object, naturesOuvertes?: string[], role?: string}} params
+ * @param {{toolName: string, toolInput: object, naturesOuvertes?: string[], role?: string,
+ *   panne?: {cause: 'veilleur'|'inconnue', code: string|null, message: string}|null,
+ *   lignesDuLieu?: object[]}} params
  * @returns {{permissionDecision: 'allow'|'deny', permissionDecisionReason: string}}
  */
-export function decider({ toolName, toolInput, naturesOuvertes = [], role = 'representant' }) {
+export function decider({ toolName, toolInput, naturesOuvertes = [], role = 'representant', panne = null, lignesDuLieu = [] }) {
   const manquantes = lignesManquantes(role, naturesOuvertes);
   if (manquantes.length === 0) {
     return { permissionDecision: 'allow', permissionDecisionReason: 'toutes les lignes de ce rôle sont ouvertes pour ce pane' };
   }
+
+  // (b) PANNE — AVANT la branche « lignes manquantes ». Une exception du sondage n'est pas
+  // une ligne absente : c'est un fait distinct, qui mérite sa propre décision.
+  if (panne) {
+    return panne.cause === 'veilleur'
+      ? deciderPanneVeilleur({ toolName, toolInput, role, panne })
+      : deciderPanneInconnue({ toolName, panne });
+  }
+
+  // (c) ÉTAT LOCAL PERDU — une ligne de ce lieu existe déjà, ailleurs que sur ce pane.
+  if (lignesDuLieu.length > 0) {
+    return deciderEtatLocalPerdu({ toolName, toolInput, role, lignesDuLieu });
+  }
+
+  // (d) LIGNE JAMAIS OUVERTE — strictement inchangé.
   // CE QUI MANQUE EST NOMMÉ, avec la commande exacte — pas un renvoi à une documentation. Un
   // agent bloqué par un refus qui ne dit pas quoi ouvrir relance la même commande, ou renonce.
   const quiManque = manquantes
