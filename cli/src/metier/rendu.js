@@ -302,6 +302,16 @@ export function rendre(classement) {
 
   for (const c of chapitres) {
     const regles = items.filter((i) => i.chapitre === c.nom);
+    // T-20260921-0028 — un item `regle` avait son `enonce_socle` écrit mais
+    // jamais LU par ce rendu : le chapitre ne citait que son ID (ligne
+    // « Répond de » ci-dessous), le texte réellement chargé par un
+    // orchestrateur né restait le seul `contenu` écrit à la main. Ajoutée EN
+    // TÊTE, jamais en remplacement : une épreuve sur `chefs-equipe` a mesuré
+    // qu'y remplacer le récit par ces seules citations perd 94 % et détruit du
+    // savoir opératoire (commandes, incidents datés) sans trace ailleurs dans
+    // l'ABC — arbitrage batiscan, T-20260921-0032. Les `garde-fou` ne sont pas
+    // repris ici : L1 les rend déjà en entier, les re-citer dupliquerait.
+    const reglesSocle = regles.filter((i) => i.nature === 'regle');
     artefacts[`chapitres/${c.nom}.md`] = [
       `# ${c.nom}`,
       '',
@@ -312,6 +322,7 @@ export function rendre(classement) {
       // texte. L'ABC est leur source, et le socle porte les cardinales. Recopier
       // ici pesait 19 949 octets, la duplication même que ce modèle combat.
       ...(regles.length ? [`> **Répond de** ${regles.map((i) => i.id).join(' · ')}`, ''] : []),
+      ...(reglesSocle.length ? [...reglesSocle.map((i) => puce(i)), ''] : []),
       ...(c.contenu ? [c.contenu, ''] : []),
     ].join('\n');
   }

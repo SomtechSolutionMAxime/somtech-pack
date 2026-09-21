@@ -1347,7 +1347,46 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 # ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0 : le
 # prochain ajout se refuse par défaut, et c'est le passage de remplacement —
 # bancs JOUÉS, pas relus — qu'on lui demandera d'abord.
-BASELINE=171024
+# ── RE-BASELINE DU 2026-09-21 — T-20260921-0028 / J-20260814-0002 ─────────────
+#
+#   POURQUOI ÇA GROSSIT, PAS SEULEMENT DE COMBIEN. `puce(i)` — la fonction qui
+#   écrit `enonce_socle` — n'était appelée QUE dans L1 (cardinales, dérogés,
+#   garde-fous). La boucle qui construit `chapitres/<nom>.md` ne citait ses
+#   items que par ID : 43 items `nature: regle` avaient un `enonce_socle`
+#   ÉCRIT dans le classement et JAMAIS RENDU à un orchestrateur né — une
+#   source prête, que le pipeline ne lisait pas. Ce lot fait lire ces 43
+#   citations, EN TÊTE de chaque chapitre concerné, sans toucher au récit.
+#
+#   171 024 → 182 043. MARGE ZÉRO, comme les précédentes. +11 019, exactement
+#   les 43 citations socle (aucun autre changement).
+#
+#   POURQUOI EN TÊTE ET PAS EN REMPLACEMENT DU RÉCIT — LE CHOIX EST MESURÉ, PAS
+#   SUBI. Une épreuve a été jouée AVANT de construire, sur UN SEUL chapitre
+#   (`chefs-equipe`, choisi pour son ratio récit/règles le plus élevé PARMI
+#   les chapitres non dilués par des garde-fous hors périmètre — `reflexes`
+#   avait un ratio plus haut mais 13 de ses 17 items sont `garde-fou`, déjà
+#   rendus en L1). Remplacer son récit par les seules citations socle a mesuré
+#   29 826 → 1 770 caractères, **−94 %** — et ce qui disparaissait n'avait
+#   AUCUNE trace ailleurs dans le classement (deux natures seulement y
+#   existent, `regle` et `garde-fou`) : table de choix du modèle Opus/Haiku
+#   et son incident, la règle « dialogue de choix → tu annules », toute la
+#   section veille de déblocage, la procédure de fermeture (piège `@{u}`).
+#   Ce n'était pas du récit d'incident, c'était du savoir opératoire sans
+#   autre lieu où vivre. Arbitrage révisé en conséquence par `batiscan`
+#   (T-20260921-0032) : AJOUTER, jamais remplacer.
+#
+# DÉCOMPOSITION, mesurée par chapitre — les 7 chapitres portant des `regle` :
+#   servicedesk        +1943   cadrer-concevoir   +1402   faire-appliquer +2495
+#   rendre-compte       +1454  rondes             +1457   reflexes         +757
+#   chefs-equipe        +1511
+#   (`continuite`, `mise-en-production`, `outils`, `anti-patterns` : aucun
+#   item `regle`, donc aucun changement — hors périmètre de ce ticket.)
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0, et
+# la séparation entre savoir opératoire et récit d'incident — nommée par cette
+# épreuve, jamais faite avant elle — reste un chantier ouvert (voir le ticket
+# qui la porte, cité dans le jalon).
+BASELINE=182043
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"
