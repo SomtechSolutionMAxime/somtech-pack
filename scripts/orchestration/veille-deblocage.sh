@@ -389,8 +389,22 @@ but_actif() {
 # ou une heure) : sans elle, une phrase ordinaire d'un agent qui les CITE
 # (« l'API renvoie parfois "usage limit reached" ») retenait la veille jusqu'à
 # épuisement et lui faisait perdre la borne `repos-prolonge` (régression de
-# a935855, passe portail T-20260921-0077). Panne assumée : un libellé dont
-# l'heure passe à la ligne n'est pas vu — la borne de repos s'applique.
+# a935855, passe portail T-20260921-0077).
+#
+# ⚠️ COMPROMIS ASSUMÉ, AVEC SES DEUX FACES — la sonde lit un ÉCRAN, qui est un
+# journal et non un capteur ; aucun libellé n'est à la fois large et sans faux
+# positif. La borne de repos est le livrable ; cette sonde est un BONUS.
+#   • FAUX POSITIF résiduel — une phrase ordinaire citée AVEC une heure ou le mot
+#     « reset(s) » (« usage limit reached at 10am », « the usage limit reached
+#     counter resets every hour ») retient l'agent au repos jusqu'à `tours-epuises`.
+#     Borné, et sans effet sur autrui : la veille reste trop longtemps.
+#   • FAUX NÉGATIF — une vraie coupure au libellé long n'est pas vue :
+#     « Claude usage limit reached|<epoch> », « You have reached your usage
+#     limit. » avec l'heure à la LIGNE SUIVANTE, « … wait until 15:00 » (24 h sans
+#     am/pm ni « resets »). Dans ces cas la veille retombe sur la borne de repos
+#     (`repos-prolonge`) ou, agent `blocked`, sur `ecran-non-reconnu` : l'état
+#     d'AVANT ce lot, jamais pire.
+# Suite : T-20260921-0110 (parser l'heure annoncée, ou retirer la sonde).
 MOTIF_LIMITE="hit your .{0,24}limit|(reached your .{0,24}usage limit|usage limit reached).{0,80}(resets?|[0-9]{1,2}(:[0-9]{2})? ?[ap]m)|Continuing automatically at"
 limite_annoncee() {
   printf '%s' "$1" | grep -qiE "$MOTIF_LIMITE"
@@ -419,8 +433,12 @@ limite_en_cours() {
      && [ $(( maintenant_lim - LIMITE_SIG_T )) -lt "${VD_LIMITE_MEMOIRE:-72000}" ]; then
     return 1
   fi
+  # L'horodatage est celui de la PREMIÈRE vue de cette signature, pas de la
+  # dernière : la fenêtre de mémoire se mesure depuis le début de la coupure.
+  if [ "$sig_lim" != "$LIMITE_SIG" ] || [ "$LIMITE_REPRIS" = "1" ]; then
+    LIMITE_SIG_T="$maintenant_lim"
+  fi
   LIMITE_SIG="$sig_lim"
-  LIMITE_SIG_T="$maintenant_lim"
   LIMITE_REPRIS=0
   return 0
 }

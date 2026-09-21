@@ -2247,6 +2247,13 @@ printf 'working\ndone\ndone\nworking\ndone\n' > "$SEQ_FILE"
 run_cfg registre-51m 40 VD_REPOS_TOURS=3 VD_LIMITE_MEMOIRE=0
 case "$OUT" in *"MOTIF: tours-epuises"*) ok "la signature n'est un vestige que dans sa fenêtre de mémoire" ;; *) ko "une coupure réelle de même signature est oubliée : $OUT" ;; esac
 
+echo "→ 51q. CHAQUE branche de l'heure de reprise suffit seule (le banc garde les deux, pas leur réunion)"
+for PH in "  ⎿  You've reached your usage limit. Resets on Friday" "  ⎿  usage limit reached, back at 3pm"; do
+  printf '%s\n' "$PH" > "$SCREEN_FILE"; printf 'working\ndone\n' > "$SEQ_FILE"
+  run_cfg registre-51q 12 VD_REPOS_TOURS=3
+  case "$OUT" in *"MOTIF: tours-epuises"*) ok "« ${PH## } » retient l'agent" ;; *) ko "branche seule non reconnue (« $PH ») : $OUT" ;; esac
+done
+
 echo "→ 51n. done/idle rompt la série de retenues : trois relevés bloqués NON consécutifs ne s'additionnent pas"
 printf ' Bash command\n   grep "hit your session limit"\n Do you want to proceed?\n ❯ 1. Yes\n' > "$SCREEN_FILE"
 printf 'blocked\nblocked\nidle\nblocked\nblocked\n' > "$SEQ_FILE"
