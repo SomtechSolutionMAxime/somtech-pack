@@ -2168,6 +2168,36 @@ rm -f "$SEQ_FILE"
 FAKE_HERDR_STATUS=blocked run_cfg registre-51e 6
 case "$OUT" in *"MOTIF: ecran-non-reconnu"*) ko "elle abandonne un agent coupé par la limite sous prétexte d'un écran inconnu : $OUT" ;; *) ok "l'écran de limite n'épuise pas le compteur d'écrans inconnus" ;; esac
 
+echo "→ 51g. REJET du portail : un dialogue INCONNU qui CITE la phrase de limite n'est pas retenu sans borne, en silence"
+cat > "$SCREEN_FILE" <<'ECRAN51G'
+ Bash command
+
+   grep -r "You've hit your session limit" logs/
+
+ Do you want to proceed?
+ ❯ 1. Yes
+ECRAN51G
+rm -f "$SEQ_FILE"
+: > "${WORK}/j51g.log"
+FAKE_HERDR_STATUS=blocked run_cfg registre-51g 30 VD_BUT_TOURS=3 VD_JOURNAL="${WORK}/j51g.log"
+case "$OUT" in *"MOTIF: ecran-non-reconnu"*) ok "la retenue est BORNÉE : elle finit par dire qu'une intervention est requise" ;; *) ko "retenue sans borne devant un dialogue inconnu : $OUT" ;; esac
+grep -q "grep -r" "${WORK}/j51g.log" && ok "l'écran retenu est journalisé (le refus se relit)" || ko "aucun refus journalisé pendant la retenue"
+case "$OUT" in *"réponds pas"*) ok "elle DIT qu'elle ne répond pas" ;; *) ko "elle retient en silence : $OUT" ;; esac
+
+echo "→ 51h. un déblocage réel remet la retenue de limite à zéro (sinon deux plages séparées s'additionnent)"
+ECR_L51H="${WORK}/ecran-l-51h.txt"
+printf ' Bash command\n   grep "hit your session limit"\n Do you want to proceed?\n ❯ 1. Yes\n' > "$ECR_L51H"
+ECR_P51H="${WORK}/ecran-p-51h.txt"; printf ' Do you want to proceed?\n ❯ 1. Yes\n   2. No\n' > "$ECR_P51H"
+SS51H="${WORK}/screen_seq_51h.txt"; rm -f "${SS51H}.ridx"
+printf '%s\n%s\n%s\n%s\n%s\n' "$ECR_L51H" "$ECR_L51H" "$ECR_P51H" "$ECR_L51H" "$ECR_L51H" > "$SS51H"
+rm -f "$SEQ_FILE" "${SEQ_FILE}.idx"; : > "$WITNESS"
+OUT="$(env PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_SEQ_FILE="$SS51H" FAKE_HERDR_STATUS=blocked \
+       FAKE_HERDR_WITNESS="$WITNESS" VD_REGISTRE_DIR="${WORK}/registre-51h" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 \
+       VD_SLEEP_APRES_DEBLOCAGE=0 VD_SLEEP_POSE=0 VD_BUT_TOURS=3 \
+       bash "$VEILLE" test-pane test-agent 5 --dry-run 2>&1)"
+case "$OUT" in *"debloque (#1)"*) ok "le déblocage a eu lieu" ;; *) ko "aucun déblocage : $OUT" ;; esac
+case "$OUT" in *"MOTIF: ecran-non-reconnu"*) ko "deux plages séparées par un déblocage s'additionnent : $OUT" ;; *) ok "la retenue repart de zéro après un déblocage" ;; esac
+
 # ── Défaut secondaire : le journal annoncé est celui qu'on trouve ────────────
 echo "→ 52. le chemin de journal de --list EXISTE dès la pose, et la pose annonce les deux fichiers"
 REG52="${WORK}/registre-52"; rm -rf "$REG52"

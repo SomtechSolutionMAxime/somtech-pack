@@ -655,6 +655,7 @@ REPOS=0
 BUT_INACHEVE=0
 PREAVIS_EMIS=0
 LIMITE_DITE=0
+LIMITE_BLOQUEE=0
 DERNIER_ETAT=""
 # Un pane peut être fermé SOUS la veille. Sans ce compteur, elle continue de
 # tourner sur un pane qui n'existe plus — mesuré sur un agent d'essai réel :
@@ -901,6 +902,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       # après qu'on lui a parlé.
       BUT_INACHEVE=0
       LIMITE_DITE=0
+      LIMITE_BLOQUEE=0
       # « 3 relevés CONSÉCUTIFS » : un tour de travail rompt la série. Sans
       # ce reset, trois écrans bizarres espacés dans le temps coupaient la
       # veille sur un agent vivant — d'autant plus probable que ce lot
@@ -941,6 +943,7 @@ for i in $(seq 1 "$VD_TOURS"); do
 
         DEBLOQUES=$((DEBLOQUES+1))
         INCONNUES=0
+        LIMITE_BLOQUEE=0
         echo "[$i] debloque (#$DEBLOQUES)"
         journaliser_deblocage "$i" "$TOUCHES" "$ECRAN"
         sleep "$VD_SLEEP_APRES_DEBLOCAGE"
@@ -951,8 +954,19 @@ for i in $(seq 1 "$VD_TOURS"); do
       # pas un écran INCONNU non plus — le compter mènerait `ecran-non-reconnu`
       # au troisième relevé et retirerait la veille avant la reprise. Elle ne
       # répond pas, et elle reste.
+      # ⚠️ MAIS PAS SANS BORNE NI EN SILENCE (rejet de la passe portail) : la
+      # sonde cherche une PHRASE, et un dialogue inconnu peut la CITER (une
+      # commande `grep "…hit your session limit…"`, un diff). Retenue muette et
+      # infinie, la garde n° 2 (« devant un inconnu elle ne répond pas ET le
+      # dit ») tombait. Elle dit donc ce qu'elle voit, journalise l'écran, et
+      # au-delà de `VD_BUT_TOURS` relevés rend la main sur `ecran-non-reconnu`.
       if limite_annoncee "$ECRAN"; then
-        echo "[$i] coupé par une limite d'usage (reprise annoncée à l'écran) — je ne réponds pas, je reste"
+        LIMITE_BLOQUEE=$((LIMITE_BLOQUEE+1))
+        echo "[$i] écran bloqué portant une phrase de limite d'usage ($LIMITE_BLOQUEE/$VD_BUT_TOURS) — je ne réponds pas, je reste"
+        journaliser_refus "$i" "$ECRAN"
+        if [ "$LIMITE_BLOQUEE" -ge "$VD_BUT_TOURS" ]; then
+          terminer ecran-non-reconnu "$LIMITE_BLOQUEE relevés d'un écran bloqué portant une phrase de limite d'usage, sans demande de permission reconnue — coupure réelle ou dialogue inconnu qui cite la phrase, je ne peux pas trancher ; intervention humaine requise"
+        fi
         sleep "$VD_SLEEP"
         continue
       fi
