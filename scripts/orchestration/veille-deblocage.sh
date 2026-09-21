@@ -356,9 +356,32 @@ travail_en_vol() {
 # le sens. Décision validée par le chef d'équipe du lot T-20260826-0064.
 # Le scénario 48f du banc garde la borne basse (pas trop large) ; les scénarios
 # 48/48c/48g gardent la borne haute (pas trop stricte).
+# Prend l'ÉCRAN en argument (voir `limite_annoncee`).
 but_actif() {
-  ECRAN_BUT=$(herdr pane read "$PANE" --lines 40 2>/dev/null)
-  printf '%s' "$ECRAN_BUT" | grep -qF '/goal active'
+  printf '%s' "$1" | grep -qF '/goal active'
+}
+
+# EST-IL COUPÉ PAR UNE LIMITE D'USAGE ? — la seule chose que l'état ne dit pas.
+#
+# ⚠️ (T-20260921-0077) Coupé par la limite de session, un agent présente l'état
+# d'un agent au repos. Mesuré le 2026-09-21 : son écran porte, en toutes lettres,
+#     « You've hit your session limit · resets 12:30pm (America/Toronto) »
+#     « Continuing automatically at 12:30pm »
+# La reprise est AUTOMATIQUE : il redémarrera seul, et il redémarrera SANS veille
+# si elle s'est retirée entre-temps — c'est la fenêtre où elle sert le plus.
+# La reprise peut être à des heures : ni la borne de repos ni celle du but ne
+# s'appliquent, seule la durée totale de la veille borne l'attente.
+#
+# ⚠️ ON CHERCHE LA PHRASE DE L'OUTIL, JAMAIS LE MOT `limit` : un écran qui PARLE
+# de limite (documentation, discussion de plan) ne coupe personne — même leçon
+# que `/goal active` contre `goal`. Panne assumée : si le libellé change, la sonde
+# ne voit rien et la borne de repos s'applique (la veille part plus tôt, elle ne
+# répond jamais à tort).
+# Prend l'ÉCRAN en argument : le chemin du repos le lit UNE fois et interroge
+# ensuite la limite puis le but sur le même relevé — deux lectures successives
+# pourraient se contredire si l'écran change entre les deux.
+limite_annoncee() {
+  printf '%s' "$1" | grep -qiE "hit your .{0,24}limit|Continuing automatically at"
 }
 
 # Le PANE existe-t-il ? — et c'est une question DIFFÉRENTE de « un agent y
@@ -451,6 +474,8 @@ if [ "$MODE_LIST" = "1" ]; then
     r_motif="$(registre_lire "$f" motif)"
     r_debut="$(registre_lire "$f" debut)"
     r_journal="$(registre_lire "$f" journal)"
+    r_sortie="$(registre_lire "$f" sortie)"
+    [ -n "$r_sortie" ] && r_journal="$r_journal sortie=$r_sortie"
     if [ "$r_statut" = "terminee" ]; then
       echo "○ terminée · pane=$r_pane agent=$r_agent pid=$r_pid motif=${r_motif:-?} journal=$r_journal"
     elif veille_vivante "$r_pid" "$r_pane"; then
@@ -528,9 +553,9 @@ if [ "$DETACH" = "1" ]; then
   LOG="${VD_LOG:-${VD_REGISTRE_DIR}/${PANE_SLUG}-$(date +%Y%m%d-%H%M%S).log}"
   ARGS_RELANCE="$VD_TOURS"
   if [ "$DRY_RUN" = "1" ]; then
-    nohup bash "$SCRIPT_ABS" "$PANE" "$AGENT" "$ARGS_RELANCE" --dry-run > "$LOG" 2>&1 &
+    VD_SORTIE="$LOG" nohup bash "$SCRIPT_ABS" "$PANE" "$AGENT" "$ARGS_RELANCE" --dry-run > "$LOG" 2>&1 &
   else
-    nohup bash "$SCRIPT_ABS" "$PANE" "$AGENT" "$ARGS_RELANCE" > "$LOG" 2>&1 &
+    VD_SORTIE="$LOG" nohup bash "$SCRIPT_ABS" "$PANE" "$AGENT" "$ARGS_RELANCE" > "$LOG" 2>&1 &
   fi
   ENFANT=$!
   disown "$ENFANT" 2>/dev/null
@@ -561,7 +586,11 @@ if [ "$DETACH" = "1" ]; then
   fi
 
   echo "veille détachée · pane=$PANE agent=$AGENT pid=$ENFANT"
+  # DEUX fichiers, deux rôles : la sortie (motif d'arrêt, tours) et le journal
+  # des déblocages/refus. On annonce le chemin RÉEL de chacun — celui que
+  # `--list` affichera, avec le pid de la veille.
   echo "journal : $LOG"
+  echo "déblocages : ${VD_JOURNAL:-${VD_REGISTRE_DIR}/${PANE_SLUG}-${ENFANT}-deblocages.log}"
   echo "l'arrêter : kill $ENFANT   ·   les lister : $0 --list"
   exit 0
 fi
@@ -625,6 +654,7 @@ REPOS=0
 # elle-même, qui est le fait que ce compteur attend.
 BUT_INACHEVE=0
 PREAVIS_EMIS=0
+LIMITE_DITE=0
 DERNIER_ETAT=""
 # Un pane peut être fermé SOUS la veille. Sans ce compteur, elle continue de
 # tourner sur un pane qui n'existe plus — mesuré sur un agent d'essai réel :
@@ -654,6 +684,11 @@ SEUIL_INSTABLE=4
 
 VD_JOURNAL="${VD_JOURNAL:-${VD_REGISTRE_DIR}/${PANE_SLUG}-$$-deblocages.log}"
 REGISTRE_FICHIER="${VD_REGISTRE_DIR}/${PANE_SLUG}-$$.veille"
+# ⚠️ (T-20260921-0077) LE CHEMIN QU'ON ANNONCE DOIT EXISTER. Le journal ne se
+# créait qu'au premier déblocage ou refus : `--list` affichait un chemin absent,
+# et qui le suivait concluait que la veille n'avait jamais rien écrit. On le crée
+# à la pose — vide veut dire « rien débloqué, rien refusé », ce qui est un fait.
+: >> "$VD_JOURNAL" 2>/dev/null
 
 {
   echo "pane=$PANE"
@@ -662,6 +697,7 @@ REGISTRE_FICHIER="${VD_REGISTRE_DIR}/${PANE_SLUG}-$$.veille"
   echo "statut=active"
   echo "debut=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "journal=$VD_JOURNAL"
+  [ -n "${VD_SORTIE:-}" ] && echo "sortie=$VD_SORTIE"
   echo "tours=$VD_TOURS"
 } > "$REGISTRE_FICHIER" 2>/dev/null
 if [ ! -f "$REGISTRE_FICHIER" ]; then
@@ -864,6 +900,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       # exactement ce qui s'est produit dans la repro du défaut ② — 8 secondes
       # après qu'on lui a parlé.
       BUT_INACHEVE=0
+      LIMITE_DITE=0
       # « 3 relevés CONSÉCUTIFS » : un tour de travail rompt la série. Sans
       # ce reset, trois écrans bizarres espacés dans le temps coupaient la
       # veille sur un agent vivant — d'autant plus probable que ce lot
@@ -910,6 +947,16 @@ for i in $(seq 1 "$VD_TOURS"); do
         continue
       fi
 
+      # Coupé par une limite d'usage (reprise annoncée) : pas une demande, mais
+      # pas un écran INCONNU non plus — le compter mènerait `ecran-non-reconnu`
+      # au troisième relevé et retirerait la veille avant la reprise. Elle ne
+      # répond pas, et elle reste.
+      if limite_annoncee "$ECRAN"; then
+        echo "[$i] coupé par une limite d'usage (reprise annoncée à l'écran) — je ne réponds pas, je reste"
+        sleep "$VD_SLEEP"
+        continue
+      fi
+
       INCONNUES=$((INCONNUES+1))
       echo "[$i] BLOQUE SANS DEMANDE RECONNUE — je ne reponds pas"
       printf '%s' "$ECRAN" | tail -8
@@ -919,44 +966,27 @@ for i in $(seq 1 "$VD_TOURS"); do
         terminer ecran-non-reconnu "3 relevés non reconnus consécutifs — elle n'a pas répondu, une intervention humaine est requise"
       fi
       ;;
-    done)
-      ABSENCES=0
-      ILLISIBLES=0
-      INVISIBLES=0
-      ABSENT_TOTAL=0
-      REPOS=0
-      INCONNUES=0
-      # `done` est un état terminal EXPLICITE : il ne survient pas à la
-      # naissance, contrairement à `idle`. Il arme donc la détection.
-      VU_TRAVAILLER=1
-      sleep "$VD_SLEEP_CONFIRM"
-      ETAT2="$(etat_courant)"
-      if [ "$ETAT2" = "done" ] || [ "$ETAT2" = "idle" ]; then
-        # ⚠️ DEUX RELEVÉS CONCORDANTS NE DISENT QUE « IL NE BOUGE PLUS » — c'est
-        # tout le défaut ② (T-20260826-0064). L'état d'un agent COUPÉ PAR LA
-        # LIMITE DE SESSION est mot pour mot celui d'un agent qui a fini. Avant
-        # de libérer l'agent de toute protection, on lit donc son MANDAT :
-        # tant que son but est actif à l'écran, il n'a pas fini, et on ne le
-        # dit pas. Elle ne conclut pas — et elle ne se tait pas non plus.
-        if but_actif; then
-          BUT_INACHEVE=$((BUT_INACHEVE+1))
-          echo "[$i] état terminal ($ETAT), mais son BUT est encore actif à l'écran ($BUT_INACHEVE/$VD_BUT_TOURS) — je ne conclus pas qu'il a fini, je veille"
-          if [ "$BUT_INACHEVE" -ge "$VD_BUT_TOURS" ]; then
-            terminer but-inacheve \
-              "$BUT_INACHEVE relevés d'état terminal alors que son but est TOUJOURS actif à l'écran (~$(( BUT_INACHEVE * VD_SLEEP / 60 )) min) — je ne sais PAS s'il a fini, je sais que son mandat n'est pas clos et qu'il ne bouge plus (session coupée ? limite atteinte ?). Va le voir : un message suffit peut-être à le faire repartir ; il n'est plus protégé"
-          fi
-        else
-          echo "TERMINE apres $DEBLOQUES deblocages"
-          terminer agent-termine "l'agent a fini (confirmé sur deux relevés, aucun but actif à l'écran)"
-        fi
-      fi
-      ;;
-    idle)
+    done|idle)
       ABSENCES=0
       ILLISIBLES=0
       INVISIBLES=0
       ABSENT_TOTAL=0
       INCONNUES=0
+      # ⚠️ `done` N'EST PAS « L'AGENT A FINI » — c'est « il a fini SON TOUR et
+      # personne n'a encore regardé ce pane » (herdr le documente ainsi), soit
+      # l'état NORMAL d'un agent qui a répondu et attend le message suivant.
+      # Mesuré le 2026-09-21 (T-20260921-0077) sur un vrai agent : réponse
+      # « ok », puis `done` à 8 relevés d'affilée. Cette branche concluait
+      # `agent-termine` en DEUX relevés : 482 veilles mortes, 101 agents,
+      # aucune vivante. La confirmation « sur deux relevés » n'y changeait rien —
+      # un agent au repos est stable, les deux relevés concordaient sur le faux.
+      # `done` et `idle` suivent donc UN SEUL chemin : le repos, compté, borné,
+      # et nommé pour ce qu'il est (`repos-prolonge`) — jamais « il a fini ».
+      # Rien à l'état ni à l'écran ne dit « fini » avec certitude ; ce que la
+      # veille sait dire, c'est « il ne bouge plus depuis N relevés ».
+      # `done` arme la détection au même titre que `working` : il ne survient pas
+      # à la naissance, contrairement à `idle`.
+      [ "$ETAT" = "done" ] && VU_TRAVAILLER=1
       # ⚠️ UN AGENT AU REPOS N'A PAS FINI — c'est tout le défaut ①.
       #
       # Deux confusions ont vécu ici, l'une après l'autre. La première :
@@ -993,7 +1023,17 @@ for i in $(seq 1 "$VD_TOURS"); do
           echo "[$i] au repos, mais du travail en vol — je veille"
         fi
         REPOS=0
-      elif but_actif; then
+      elif ECRAN_REPOS="$(herdr pane read "$PANE" --lines 40 2>/dev/null)"; limite_annoncee "$ECRAN_REPOS"; then
+        # Coupé par une limite d'usage, reprise annoncée : il ne s'est pas
+        # reposé, il attend l'heure. Aucun compteur ne court — la veille reste,
+        # et le dit UNE fois. (Voir `limite_annoncee`.)
+        REPOS=0
+        BUT_INACHEVE=0
+        if [ "$LIMITE_DITE" = "0" ]; then
+          echo "[$i] coupé par une limite d'usage (reprise annoncée à l'écran) — je reste : il repartira seul, et c'est alors qu'il aura besoin de moi"
+          LIMITE_DITE=1
+        fi
+      elif but_actif "$ECRAN_REPOS"; then
         # ⚠️ LE SYMÉTRIQUE DU CORRECTIF DE LA BRANCHE `done)`, ET LA PORTE PAR
         # LAQUELLE LE TICKET EST RÉELLEMENT ENTRÉ. L'écran mesuré le 2026-08-26
         # portait le statut `idle`, pas `done` : un agent coupé par la limite de
