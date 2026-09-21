@@ -5,6 +5,20 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-09-21
+
+*Ticket `T-20260920-0132`, livraison `J-20260814-0002` — « on enlève le récit, on garde le déclencheur ». Écrit `enonce_socle` (court, quand/alors) pour les 37 items de nature `regle` du classement de l'orchestrateur (`metier/orchestrateur/classement.json`) qui n'en avaient pas encore, et classe chacun `discipline_assumee` ou `dette_dispositif` (`triage_dispositif`). Ce lot livre une SOURCE — vérifié par exécution, le pipeline de rendu ne lit pas encore `enonce_socle` pour la nature `regle` ; suite ouverte : `T-20260921-0028`.*
+
+### Ajoute
+
+- **`enonce_socle` et `triage_dispositif`** sur les 37 règles de l'orchestrateur qui n'avaient qu'un énoncé long — le registre canonique (`classement.json`) porte désormais une forme courte pour ses 56 règles, classées selon qu'un dispositif pourrait un jour les garder ou non.
+- **Test de complétude** (`cli/test/metier-classement-socle-regles.test.js`) qui garde ce périmètre : chaque règle porte son socle, chaque item sans dispositif porte son triage.
+
+### Technique
+
+- Aucun artefact rendu ni distribué ne change (vérifié par exécution) : `enonce_socle` d'un item de nature `regle` n'est lu par aucun des 4 sites d'appel de `puce()` dans `cli/src/metier/rendu.js` aujourd'hui — c'est le matériau de `T-20260921-0028`.
+
+
 ## [Non-versionne] - 2026-09-20
 
 *Livraison `J-20260814-0002`, epic `E-20260920-0011` — **dernier des trois** : `T-20260818-0036`. Deux panes ont porté **le même nom** sur le lieu d'un client servi. L'adressage entre agents se fait par le NOM : deux porteurs, c'est un message qui part chez le mauvais destinataire — et là, le destinataire était le représentant d'un client, dont le canal est **le canal du client**.*
