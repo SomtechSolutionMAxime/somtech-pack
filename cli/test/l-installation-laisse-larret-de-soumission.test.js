@@ -38,10 +38,12 @@ const ecran = (t) => ['x', '─'.repeat(40), `❯ ${t}`, '─'.repeat(40)].join(
 function ancienneDelivrance() {
   const src = readFileSync(join(REPO, 'ligne-directe', 'src', 'delivrance.js'), 'utf8');
   const ancien = src.replace(
-    /export const SOUMISSION_DE_LA_BOITE_DAUTRUI_AUTORISEE = false;/,
+    /export const SOUMISSION_DE_LA_BOITE_DAUTRUI_AUTORISEE = (?:false|true);/,
     'export const SOUMISSION_DE_LA_BOITE_DAUTRUI_AUTORISEE = true;'
   );
-  assert.notEqual(ancien, src, 'le banc ne sait plus fabriquer l’ancien code — la constante a bougé');
+  // ⚠️ `true|false` accepté : si le dépôt était rallumé, l'ancien code serait identique au neuf, et c'est
+  // l'INSTALLATION qui doit rougir — pas ce fabricant d'ancien code.
+  assert.match(ancien, /AUTORISEE = true;/, 'le banc ne sait plus fabriquer l’ancien code — la constante a bougé');
   return ancien;
 }
 
