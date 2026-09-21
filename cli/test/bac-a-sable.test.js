@@ -13,7 +13,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, utimesSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 
 import { empreinteDuHome, assertHomeIntact, HorsBacASable } from './lib/bac-a-sable.js';
@@ -85,4 +85,38 @@ test('UNE MTIME CHANGÉE SANS CHANGER LE CONTENU FAIT AUSSI ROUGIR — une réé
   const dansUneMinute = new Date(Date.now() + 60_000);
   utimesSync(join(home, '.zshenv'), dansUneMinute, dansUneMinute);
   assert.throws(() => assertHomeIntact(avant), /\.zshenv/);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA GARDE DE LA GARDE — ELLE DOIT MESURER LE VRAI COMPTE, PAS LE HOME SANDBOXÉ
+//
+// ⚠️ ÉCRIT APRÈS UNE MUTATION SURVIVANTE, ET C'EST TOUT SON INTÉRÊT. Mutation jouée :
+// remplacer `userInfo().homedir` par `homedir()` dans `empreinteDuHome`. Les six essais
+// ci-dessus sont restés VERTS — ils injectent tous `obtenirHome`, donc aucun n'exerce le
+// défaut par DÉFAUT. Or c'est précisément cette mutation qui rend la garde AVEUGLE : un test
+// qui pose `process.env.HOME = <jetable>` (ce que fait toute l'isolation de ce dépôt) ferait
+// alors mesurer à la garde le home qu'on vient de sandboxer — elle surveillerait le dossier
+// jetable, trouverait qu'il a changé (c'est le but du test) ou qu'il n'a pas changé, et ne
+// dirait plus jamais rien du VRAI `/Users/…`. L'incident `.zshenv` se rejouerait en silence.
+//
+// Cet essai n'écrit RIEN : il lit seulement d'où la garde prend son repère.
+test('LE REPÈRE EST LE COMPTE DU SYSTÈME, PAS $HOME — sinon la garde surveille le bac à sable qu’elle devait juger', () => {
+  const jetable = tmp('smtk-bac-faux-home-');
+  const vrai = userInfo().homedir;
+  const avantHome = process.env.HOME;
+  try {
+    // Exactement ce que fait l'isolation de `setup.test.js` et de
+    // `veilleur-relance-a-la-mise-a-jour.test.js`.
+    process.env.HOME = jetable;
+    const mesure = empreinteDuHome(); // AUCUNE injection : le chemin de production
+    assert.equal(mesure.home, vrai, 'la garde doit mesurer le compte du système');
+    assert.notEqual(
+      mesure.home,
+      jetable,
+      'un $HOME sandboxé ne doit JAMAIS devenir le repère de la garde — elle surveillerait le bac à sable'
+    );
+  } finally {
+    if (avantHome === undefined) delete process.env.HOME;
+    else process.env.HOME = avantHome;
+  }
 });
