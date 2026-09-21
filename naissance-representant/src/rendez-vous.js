@@ -425,11 +425,19 @@ export async function avecLetatDuMandat(orchestrateurs, { lireLetat } = {}) {
  * porter un nom déjà pris. Le nombre de muettes voyage avec le résultat.
  *
  * MESURÉ LE 2026-09-20 À 22 H 30 UTC, avant d'écrire : 16 sessions dont 11 MUETTES — des sockets
- * morts du 7 juillet au 22 août, pas des sessions vivantes manquées —, 80 agents vus, 39 distincts,
+ * morts du 7 juillet au 22 août, pas des sessions vivantes manquées —, 80 agents vus, 39 noms distincts,
  * ZÉRO doublon. Le défaut n'était pas actif ce jour-là ; sa cause l'était.
  *
  * @param {Array<{socket: string, reponse?: object, muette?: boolean}>} lectures  le balayage
- * @returns {Array<{nom, porteurs}>} augmenté d'une propriété `muettes` — ce qu'on n'a pas lu
+ * @returns {{doublons: Array<{nom, porteurs}>, muettes: number}} — `doublons` porte les noms
+ *   partagés, `muettes` ce qu'on N'A PAS PU LIRE.
+ *
+ * ⚠️ CETTE SIGNATURE A DÉJÀ MENTI UNE FOIS, ET C'EST POURQUOI ELLE EST ÉCRITE AINSI. Elle
+ * annonçait « un Array augmenté d'une propriété `muettes` » — la forme précédente, éliminée
+ * parce qu'une propriété posée sur un tableau **ne survit pas à `JSON.stringify`**. Le corps a
+ * été recâblé, la signature est restée : un lecteur qui aurait codé contre elle plutôt que
+ * contre le corps aurait recréé le défaut exact que ce lot venait de fermer. Relevé par une
+ * passe de fond, sur le delta qui corrigeait ce défaut.
  */
 export function nomsEnDouble(lectures) {
   const parNom = new Map();
