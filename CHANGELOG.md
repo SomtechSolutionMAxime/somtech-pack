@@ -7,6 +7,41 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-20
 
+*Livraison `J-20260814-0002`, epic `E-20260920-0011` — **dernier des trois** : `T-20260818-0036`. Deux panes ont porté **le même nom** sur le lieu d'un client servi. L'adressage entre agents se fait par le NOM : deux porteurs, c'est un message qui part chez le mauvais destinataire — et là, le destinataire était le représentant d'un client, dont le canal est **le canal du client**.*
+
+### Ajoute
+
+- **La ronde SIGNALE tout nom porté par plus d'un agent vivant**, à travers **toutes** les sessions du poste — et elle **nomme** le nom *et ses porteurs*, avec leur pane et leur session. *Un signal qui dit « il y a un doublon » sans dire où envoie chercher partout.*
+- **⚠️ La population est le piège de ce critère.** `agent list` d'une session ne rend que la sienne ; ce poste en porte seize. Un compte fait depuis une seule aurait rendu « aucun doublon » — vrai pour ce qu'il a vu, **faux pour le poste** — et les deux porteurs de l'incident n'étaient justement pas dans la même session.
+- **La casse ne fabrique pas deux agents** : l'agent s'appelait `charles-olivier`, son lieu `Charles-Olivier`, et `herdr` compare déjà sans en tenir compte. Un relevé qui les distinguerait manquerait le doublon qu'il cherche.
+- **Un agent sans nom n'est pas un homonyme**, et **une session muette ne fait pas conclure « aucun doublon »** — la réserve voyage avec le résultat.
+
+### ⚠️ Ce que ce lot NE ferme PAS, et le dit
+
+Le ticket pose **trois** critères. **Un seul nous appartient**, et c'est dit avant d'écrire :
+
+| | |
+|---|---|
+| ① `herdr agent rename` refuse un nom déjà pris | **CODE DE `herdr`, pas ce dépôt** (règle d'or n°7). Non traité, et non prétendu fermé — vérifié hors dépôt par une revue : binaire Homebrew séparé. |
+| ② un envoi vers un nom ambigu REFUSE | **Déjà fait avant ce lot**, dans `destinataire.js`, et gardé par un essai non vide. |
+| ③ la ronde signale les doublons | **Celui-ci.** |
+
+**La ronde ne peut pas EMPÊCHER un doublon ; elle peut refuser de le laisser passer inaperçu.** C'est tout ce qui est promis.
+
+### Eprouve
+
+- **Mesuré AVANT d'écrire**, le 2026-09-20 : 16 sessions dont **11 muettes** — des sockets morts du 7 juillet au 22 août, *pas* des sessions vivantes manquées —, 80 agents vus, 39 noms distincts, **zéro doublon**. Le défaut n'était pas actif ; sa cause l'était.
+- **12 mutations, 0 survivante** à la tête finale — dont les trois du câblage, le seuil, la casse, et celle qui fait taire les sessions muettes.
+- **🔴 Une assertion qui visait un texte que le code n'écrit pas.** Mon essai « la ronde ne dit rien » cherchait « en double » — **zéro occurrence** dans le fichier. Un regex qui ne vise rien de ce qui est écrit **ne peut jamais rougir**, sur aucun des deux chemins. Ce qu'il laissait passer, prouvé par mutation : faire crier la ronde **à chaque passage** sur un poste sans doublon. *C'est le mode de mort que mon propre commentaire nomme trois lignes plus haut — « une garde qui crie tous les jours cesse d'être lue » — et l'essai censé le garder ne le touchait pas.*
+- **🔴 La garantie centrale ne franchissait pas le JSON.** La réserve était une propriété posée sur un **tableau** ; `JSON.stringify` ne la sérialise pas — et c'est **le canal réel** par lequel un humain lit ce résultat. *La promesse, écrite deux fois en commentaire, mourait au premier appel.* ⚠️ Et mon essai ne pouvait pas le voir : il lisait la propriété **en mémoire**. Une contre-épreuve qui prouve la fonction, pas le canal.
+
+### Technique
+
+- **Ce qui n'est PAS gardé est écrit comme tel.** La ronde lève si le balayage ne rend pas son relevé — plutôt qu'un `?? []`, un repli qui **fabrique** un zéro indiscernable d'un zéro mesuré (`T-20260920-0160`). Mais retirer ce `throw` laisse la suite verte : aucun appelant de production ne produit ce cas. *Fabriquer une entrée pour le faire rougir prouverait le banc, pas le code.* Ce qui est gardé, c'est le **contrat** du balayage — le rompre fait rougir 29 essais.
+- **Une signature qui décrivait la forme que le lot venait d'éliminer.** Le corps recâblé, le JSDoc resté : un lecteur qui aurait codé contre lui **aurait recréé le défaut**. Même forme que les cinq textes du lot précédent — *une description survit à la correction de ce qu'elle décrit, et rien ne peut la faire rougir.*
+- Deux relevés du même jour (80 et 66 agents) **réconciliés** et datés, et la mesure du code de production porte enfin sa date — *la règle posée le même soir, appliquée dans le test, oubliée dans le fichier le plus lu sans son historique.*
+- **⚠️ Question de portée laissée ouverte, et assumée comme telle** : ce signal vit dans un journal **que personne ne lit activement**, le même régime passif que les sessions bloquées. Le critère ③ dit « signalé nommément » et il l'est — mais pour un incident dont la gravité est « un message chez le représentant d'un client », *décider de ne pas pousser activement doit être un arbitrage écrit, pas un silence qui se lit comme un oui.* Posé au coordonnateur dans le même geste que cette fermeture.
+
 *Livraison `J-20260814-0002`, demande `D-20260920-0002` — `T-20260920-0125`. **L'avis de perte partait sur la soumission du dirigeant lui-même**, des dizaines de fois par jour, pendant que le cas qu'il existe pour signaler s'est produit **3 fois en 46 jours**. ⚠️ La fonction disait ne pas pouvoir distinguer les deux causes — **elle avait raison de ce qu'elle voyait et tort de ce qu'elle concluait** : la distinction ne vit pas sur l'écran, elle vit sur l'agent.*
 
 ### Corrige
