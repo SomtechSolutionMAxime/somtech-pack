@@ -2254,6 +2254,19 @@ for PH in "  ⎿  You've reached your usage limit. Resets on Friday" "  ⎿  usa
   case "$OUT" in *"MOTIF: tours-epuises"*) ok "« ${PH## } » retient l'agent" ;; *) ko "branche seule non reconnue (« $PH ») : $OUT" ;; esac
 done
 
+# La fenêtre de mémoire se mesure depuis la PREMIÈRE vue de la signature (temps réel,
+# VD_SLEEP=1 : un tour = ~1 s).
+echo "→ 51r. la fenêtre part de la PREMIÈRE vue : revoir la même signature ne la rafraîchit pas"
+printf '%s\n' "$ECRAN_LIMITE" > "$SCREEN_FILE"
+printf 'working\ndone\ndone\ndone\ndone\nworking\ndone\ndone\ndone\n' > "$SEQ_FILE"
+run_cfg registre-51r 9 VD_SLEEP=1 VD_REPOS_TOURS=3 VD_LIMITE_MEMOIRE=3
+case "$OUT" in *"MOTIF: tours-epuises"*) ok "coupure vue depuis plus que la fenêtre : retenue, pas oubliée" ;; *) ko "la fenêtre est mesurée depuis la DERNIÈRE vue (revue rafraîchit T) : $OUT" ;; esac
+
+echo "→ 51s. après une coupure acceptée, la fenêtre REPART : le vestige suivant est oublié, pas retenu"
+printf 'working\ndone\ndone\ndone\ndone\ndone\nworking\ndone\nworking\ndone\ndone\ndone\n' > "$SEQ_FILE"
+run_cfg registre-51s 12 VD_SLEEP=1 VD_REPOS_TOURS=2 VD_LIMITE_MEMOIRE=4
+case "$OUT" in *"MOTIF: repos-prolonge"*) ok "le vestige qui suit une coupure acceptée est oublié" ;; *) ko "T n'est pas réécrit à l'acceptation : le vestige suivant est retenu : $OUT" ;; esac
+
 echo "→ 51n. done/idle rompt la série de retenues : trois relevés bloqués NON consécutifs ne s'additionnent pas"
 printf ' Bash command\n   grep "hit your session limit"\n Do you want to proceed?\n ❯ 1. Yes\n' > "$SCREEN_FILE"
 printf 'blocked\nblocked\nidle\nblocked\nblocked\n' > "$SEQ_FILE"
