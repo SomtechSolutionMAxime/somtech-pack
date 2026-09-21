@@ -406,7 +406,11 @@ test('une passe ne MUTE JAMAIS la mémoire qu’on lui donne — sinon un tour r
 
 // ═══ 9. LA FENÊTRE QUE LE BALAYEUR NOMME EST LA SIENNE ══════════════════════════════════
 
-test('le balayeur passe SA fenêtre au geste — et zéro devant un texte COLLÉ', async () => {
+test('le balayeur passe ZÉRO au geste, collé ou tapé — la soumission est éteinte, l’attente n’a plus d’objet', async () => {
+  // ⚠️ CONVERTI PAR D-20260921-0003. Ce banc éprouvait « fenêtre du balayage pour un texte TAPÉ, zéro pour
+  // un COLLÉ ». Tant que la soumission est éteinte, le balayeur ne paie plus aucune attente (elle servait à
+  // s'assurer qu'un texte ne bouge pas AVANT de le soumettre). La distinction tapé/collé reste écrite dans
+  // `fenetreDImmobilite` et éprouvée là ; elle est DORMANTE ici, et ce banc dit qu'elle l'est.
   // ⚠️ CET ESSAI NE MESURE PAS LE GESTE, IL MESURE CE QU'ON LUI DIT. C'est le seul endroit où
   // la troisième fenêtre est éprouvée : partout ailleurs le banc la neutralise pour rester
   // court, ce qui la rendrait invisible — un réglage qu'aucun essai ne touche est un réglage
@@ -434,8 +438,7 @@ test('le balayeur passe SA fenêtre au geste — et zéro devant un texte COLLÉ
 
   assert.deepEqual(
     vues,
-    [FENETRE_DU_BALAYAGE_MS, 0],
-    'UN TEXTE TAPÉ GARDE LA FENÊTRE DU BALAYAGE ; un texte COLLÉ n’a personne derrière lui, ' +
-      'donc rien à observer — et cette règle vit dans `fenetreDImmobilite`, elle n’est pas recopiée ici.'
+    [0, 0],
+    'la soumission est éteinte : le balayeur ne doit payer AUCUNE fenêtre, ni pour un texte tapé ni pour un collé'
   );
 });

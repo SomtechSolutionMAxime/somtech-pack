@@ -154,3 +154,23 @@ test('le refus est l’état PAR DÉFAUT du code versionné, et il se lit en UN 
   assert.match(corps, /commandes\.soumettre/, 'le code d’origine doit rester lisible sous la garde');
   assert.match(corps, /SOUMISSION_DE_LA_BOITE_DAUTRUI_AUTORISEE/);
 });
+
+test('le balayeur ne PAIE PLUS la fenêtre d’immobilité devant un refus certain — il passe zéro à la délivrance', async () => {
+  // Revue de fond : une boîte abandonnée reste candidate à vie ; à 10 s par tentative et 3 tentatives
+  // par tour, le tour retardait la relance des messages gardés (qui passe APRÈS lui) pour rien.
+  const pane = 'w1:p1';
+  const recus = [];
+  const rendu = await unTourDeBalayage({
+    agents: [{ pane, nom: 'a' }],
+    lireEcran: async () => ecran(TEXTE),
+    delivrer: async (a) => {
+      recus.push(a.immobiliteMs);
+      return { ok: false, cause: 'soumission-interdite', soumis: false };
+    },
+    memoire: new Map([[pane, { texte: TEXTE, tours: TOURS_DIMMOBILITE_EXIGES - 1, depuis: 0 }]]),
+    maintenant: 600_000,
+  });
+  assert.deepEqual(recus, [0], `la délivrance a reçu une fenêtre d’attente : ${JSON.stringify(recus)}`);
+  assert.equal(rendu.refus.find((r) => r.pane === pane)?.cause, 'soumission-interdite',
+    'le refus reste rendu, nommé — on économise l’attente, pas le mot');
+});
