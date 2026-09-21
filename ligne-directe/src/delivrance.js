@@ -292,6 +292,15 @@ export function fenetreDImmobilite(texteCoince, { texteTapeMs }) {
 export { ressembleAUnChoix };
 
 /**
+ * ⛔ LA SOUMISSION DE LA BOÎTE D'AUTRUI EST ÉTEINTE — et cette constante est le SEUL endroit où ça se lit.
+ *
+ * Ordre du dirigeant, 2026-09-21 : « je veux que ça cesse » (D-20260921-0003). Elle n'est pas
+ * lue dans l'environnement et aucun appelant ne la passe : ce n'est pas un réglage, c'est une règle.
+ * `delivrerLaBoite` la lit avant de presser la touche d'envoi et rend `soumission-interdite`.
+ */
+export const SOUMISSION_DE_LA_BOITE_DAUTRUI_AUTORISEE = false;
+
+/**
  * Tenter de libérer une boîte encombrée — et rendre ce qu'on a constaté.
  *
  * Quatre issues, et chacune porte sur un état qui POUVAIT être différent :
@@ -436,6 +445,24 @@ export async function delivrerLaBoite({
   if (apres !== texteCoince) return { ok: false, cause: 'bouge', soumis: false, texteVu: apres };
   // Et une seconde fois sur ce qu'on relit : le contenu a pu devenir un dialogue entre-temps.
   if (ressembleAUnChoix(apres)) return { ok: false, cause: 'choix', soumis: false };
+
+  // ⛔ ON NE SOUMET JAMAIS LA BOÎTE D'UN AUTRE (D-20260921-0003).
+  //
+  // Tout ce qui précède ATTEND et REGARDE : si l'auteur soumet lui-même pendant la fenêtre, la boîte
+  // se vide et on est sorti par `vide-cause-inconnue` avant d'arriver ici. Arrivé ici, le texte est
+  // là, immobile — et il n'est pas à nous. Le soumettre, c'est faire PARLER son auteur à sa place :
+  // mesuré deux fois le 2026-09-21 dans le pane du dirigeant, dont une phrase est partie coupée.
+  //
+  // ⚠️ C'EST UN REFUS NOMMÉ, PAS UN SILENCE. Le journal du balayeur, le mot rendu à l'expéditeur et
+  // le résultat de `livrer.js` disent tous POURQUOI rien n'est parti. Un dispositif qui ne fait rien
+  // et ne le dit pas est le défaut qu'on combat ici.
+  //
+  // ⚠️ L'ARRÊT EST REVERSIBLE PAR LECTURE : le code qui soumettait reste dessous, intact. Qui ouvre
+  // ce fichier voit ce qui a été neutralisé et pourquoi. Pas d'interrupteur d'environnement, exprès :
+  // rallumer ça d'un `export` sur un poste, c'est ce que l'ordre du dirigeant interdit.
+  if (!SOUMISSION_DE_LA_BOITE_DAUTRUI_AUTORISEE) {
+    return { ok: false, cause: 'soumission-interdite', soumis: false };
+  }
 
   // ⚠️ LE DERNIER REGARD AVANT LE GESTE — et il existe parce qu'une passe de revue de fond l'a
   // exigé (T-20260818-0078), à raison.
@@ -783,6 +810,7 @@ export const ISSUES_DE_DELIVRANCE = Object.freeze([
   'vide-cause-inconnue',
   'bouge',
   'plus-autorise',
+  'soumission-interdite',
   'soumis',
   'sans-effet',
 ]);
@@ -855,6 +883,19 @@ export const MOTS_DE_DELIVRANCE = Object.freeze({
       '⚠️ Je n’ai RIEN soumis : au dernier regard avant la touche d’envoi, je n’étais PLUS ' +
       'AUTORISÉ à toucher ce pane — il a pu être réservé pendant que j’attendais. Attends que ' +
       'cette réservation tombe avant de renvoyer',
+  }),
+  // ⚠️ CE N'EST PAS `plus-autorise`. Celui-là dit « on m'a retiré le droit » (une réservation
+  // tombée entre-temps) et se règle en attendant ; celui-ci dit « ce geste n'existe pas », et
+  // attendre n'y change rien. Les confondre enverrait l'expéditeur attendre une réservation qui
+  // n'existe pas.
+  'soumission-interdite': Object.freeze({
+    court: () =>
+      'le texte coincé est resté dans la boîte : on ne soumet JAMAIS la boîte de saisie d’un autre, et je n’ai rien soumis',
+    long: () =>
+      '⚠️ Je n’ai RIEN soumis : cette boîte porte un texte que son auteur n’a pas envoyé, et la ' +
+      'règle est qu’on ne soumet jamais la boîte d’un autre — ce serait le faire parler à sa place. ' +
+      'Ton message n’est pas passé : renvoie-le plus tard, ou joins l’agent autrement, mais ne compte ' +
+      'pas sur un déblocage automatique',
   }),
   soumis: Object.freeze({
     court: () => 'la touche d’envoi est partie et la boîte s’est vidée : le texte coincé a été soumis pour son auteur',
