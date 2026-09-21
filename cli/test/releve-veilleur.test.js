@@ -381,3 +381,53 @@ test('LES CHEMINS IMPORTÉS VIENNENT DE destDir — jamais du paquet temporaire 
   );
   assert.match(demandes[0], /ligne-directe\/src\/client\.js$/);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// LA RACINE CONFIÉE EST CELLE QU'ON A REÇUE — et pas seulement les chemins importés
+//
+// ⚠️ SURVIVANTE NEUVE, TROUVÉE EN REVUE DU DELTA (les correctifs eux-mêmes). Muter
+// `toolsDir: destDir` en un chemin bidon, dans l'appel que `verifierFraicheurDuVeilleur` fait
+// à `releverSiPerime`, laissait TOUT vert : les 15 essais de ce fichier, les 1346 du CLI, les
+// 912 et 1454 des deux autres modules.
+//
+// ⚠️ ET LE BANC VOISIN NE POUVAIT PAS L'ATTRAPER : « LES CHEMINS IMPORTÉS VIENNENT DE destDir »
+// éprouve les chemins passés à l'IMPORTEUR — deux `join(destDir, …)` composés juste au-dessus.
+// La racine CONFIÉE au geste, elle, voyage par un autre paramètre, et rien ne la suivait.
+// Deux choses qui viennent de la même variable et dont une seule est gardée : la forme exacte
+// que ce jalon traque.
+//
+// Pourquoi personne ne l'a vu autrement : sur un chemin bidon, `releverSiPerime` ne trouve
+// aucun socket et rend « aucun en cours » — c'est-à-dire EXACTEMENT ce que rend un poste neuf
+// au bon chemin. Le mutant produit le même mot que le code sain, pour une raison opposée.
+// C'est pourquoi ce banc ne lit pas un message : il relève la racine REÇUE.
+test('LA RACINE CONFIÉE À LA RELÈVE EST destDir — un chemin muté ne se cache pas derrière « aucun en cours »', async () => {
+  const destDir = toolsDirAvecSocket(); // un socket existe : le geste ira jusqu'au bout
+  const { log } = collecteur();
+  const dossiersMesures = [];
+  let socketInterroge = null;
+
+  await verifierFraicheurDuVeilleur({
+    destDir,
+    modules: ['ligne-directe'],
+    importer: async (chemin) =>
+      chemin.endsWith('client.js')
+        ? {
+            parler: async (_requete, options) => {
+              socketInterroge = options?.cheminSocket ?? null;
+              return { ok: true, code: { empreinte: 'aaaaaaaaaaaa', date: 'X' } };
+            },
+            passerLaMain: async () => {},
+          }
+        : { empreinteDuCode: (dossier) => {
+            dossiersMesures.push(dossier);
+            return { empreinte: 'aaaaaaaaaaaa', fichiers: 1, date: 'X' };
+          } },
+    log,
+  });
+
+  // LE DOSSIER MESURÉ et LE SOCKET INTERROGÉ sont tous deux dérivés de la racine confiée :
+  // si elle est fausse, le veilleur du poste est comparé à un code qui n'est pas le sien, ou
+  // n'est pas interrogé du tout — sans que le geste ne s'en plaigne.
+  assert.deepEqual(dossiersMesures, [join(destDir, 'ligne-directe', 'src')], 'le code mesuré doit être celui de la racine reçue');
+  assert.equal(socketInterroge, join(destDir, 'ligne-directe', 'veilleur.sock'), 'le veilleur interrogé doit être celui de la racine reçue');
+});
