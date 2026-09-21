@@ -123,3 +123,51 @@ test('CHEMIN ÉPHÉMÈRE → avertissement dédié, cumulable avec le reste', as
   assert.match(r.stderr, /éphémère/, `stderr doit signaler le chemin éphémère — reçu : ${r.stderr}`);
   assert.match(r.stderr, /\/tmp\/xyz\/ligne-directe\/src/, 'et le nommer');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// PÉRIMÉ *ET* ÉPHÉMÈRE — LES DEUX SE DISENT, JAMAIS L'UN À LA PLACE DE L'AUTRE
+//
+// ⚠️ MUTATION SURVIVANTE (passe de fond) : rendre le bloc « chemin éphémère » EXCLUSIF des
+// deux premiers (un `else if` au lieu d'un second `if` indépendant) laissait les quatre
+// essais de ce fichier verts, et les 1450 de la suite aussi. Chaque fait était éprouvé SEUL ;
+// leur CUMUL ne l'était par personne.
+//
+// Or le cumul n'est pas un cas de laboratoire, c'est le cas MESURÉ le 2026-08-20 : le veilleur
+// du poste tournait depuis un dossier temporaire ET servait du code décalé. Sous la mutation,
+// l'avertissement le plus grave des deux — celui qui dit que ce veilleur peut DISPARAÎTRE avec
+// son dossier — se taisait, masqué par celui du code périmé. Un dispositif qui dit un fait sur
+// deux est plus dangereux qu'un qui se tait : on croit avoir lu tout ce qu'il avait à dire.
+test('PÉRIMÉ ET ÉPHÉMÈRE ENSEMBLE → stderr porte les DEUX avertissements, aucun n’en masque l’autre', async () => {
+  const r = await etatAvec({
+    empreinte: 'aaa111aaa111',
+    date: '2026-08-17T00:00:00.000Z',
+    chemin: '/var/folders/jx/T/tmp.LTH989/ligne-directe/src',
+    demarre_le: '2026-08-17T00:00:00.000Z',
+    ephemere: true,
+    sur_disque: { empreinte: 'bbb222bbb222', date: '2026-08-20T00:00:00.000Z' },
+    perime: true,
+    motif:
+      "le veilleur sert l'empreinte aaa111aaa111 (code du 2026-08-17T00:00:00.000Z), " +
+      "le poste a installé bbb222bbb222 (code du 2026-08-20T00:00:00.000Z)",
+  });
+  assert.equal(r.code, 0);
+  assert.match(r.stderr, /aaa111aaa111/, `l’écart de code doit être dit — reçu : ${r.stderr}`);
+  assert.match(r.stderr, /éphémère/, `le chemin éphémère doit être dit AUSSI — reçu : ${r.stderr}`);
+  assert.match(r.stderr, /tmp\.LTH989/, `l’avertissement éphémère doit NOMMER le chemin — reçu : ${r.stderr}`);
+});
+
+test('IMPOSSIBLE À COMPARER ET ÉPHÉMÈRE ENSEMBLE → les DEUX se disent également', async () => {
+  const r = await etatAvec({
+    empreinte: null,
+    date: null,
+    chemin: '/var/folders/jx/T/tmp.QQQ/ligne-directe/src',
+    demarre_le: 'X',
+    ephemere: true,
+    sur_disque: { empreinte: null, date: null, refus: 'dossier illisible' },
+    perime: null,
+    motif: 'impossible de comparer le code servi au code installé : dossier illisible',
+  });
+  assert.equal(r.code, 0);
+  assert.match(r.stderr, /impossible de comparer/, `l’échec de mesure doit être dit — reçu : ${r.stderr}`);
+  assert.match(r.stderr, /éphémère/, `le chemin éphémère doit être dit AUSSI — reçu : ${r.stderr}`);
+});

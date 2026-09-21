@@ -248,3 +248,48 @@ test('CHAQUE action ServiceDesk permise en panne passe — et une action mutante
     rmSync(d, { recursive: true, force: true });
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// `service` : SEUL `etat` PASSE — `installer` et `retirer` ÉCRIVENT SUR LE POSTE
+//
+// ⚠️ MUTATION SURVIVANTE (passe de fond) : remplacer tout le cas `service` de
+// `segmentDiagnosticLigneDirecte` par `return true` laissait les 910 essais VERTS. Aucun
+// n'exerçait ce cas, ni dans un sens ni dans l'autre.
+//
+// Ce que la mutation rouvrait : `ligne-directe service installer` et `service retirer` posent
+// et retirent un VRAI service launchd du poste (voir `ligne-directe/bin/ligne-directe.js`) —
+// une écriture, et sur le poste entier, pas sur le lieu de l'agent. Les classer « diagnostic »
+// rouvrait, à l'endroit le plus discret du lot, la fenêtre d'écriture que tout le reste ferme.
+// Seul `service etat` interroge sans rien toucher.
+test('pendant une panne : « service etat » passe, « service installer » et « service retirer » sont REFUSÉS', async () => {
+  const d = lieuTemp();
+  try {
+    const double = doubleQuiLeve('VEILLEUR_MUET', 'Le veilleur NE RÉPOND PLUS');
+    const LD = 'node /Users/x/.somtech/ligne-directe/bin/ligne-directe.js';
+
+    for (const commande of [`$LD service etat`, `${LD} service etat`]) {
+      const decision = await traiterRequete({ cwd: d, tool_name: 'Bash', tool_input: { command: commande } }, double);
+      assert.equal(decision.permissionDecision, 'allow', `« ${commande} » interroge sans rien toucher — reçu ${decision.permissionDecisionReason}`);
+    }
+
+    // ⚠️ CE QUI ÉCRIT SUR LE POSTE, et qu'aucune panne ne justifie : poser ou retirer le
+    // service du veilleur touche TOUS les agents de la machine, pas seulement celui qui est
+    // bloqué. Un agent en panne diagnostique ; il ne réinstalle pas l'infrastructure du parc.
+    for (const geste of ['installer', 'retirer']) {
+      for (const commande of [`$LD service ${geste}`, `${LD} service ${geste}`]) {
+        const decision = await traiterRequete({ cwd: d, tool_name: 'Bash', tool_input: { command: commande } }, double);
+        assert.equal(
+          decision.permissionDecision,
+          'deny',
+          `« ${commande} » ÉCRIT sur le poste : une panne du veilleur ne l'autorise pas — reçu ${decision.permissionDecisionReason}`
+        );
+      }
+    }
+
+    // Et `service` NU, sans argument : on ne sait pas ce qu'il fera, donc il ne passe pas.
+    const nu = await traiterRequete({ cwd: d, tool_name: 'Bash', tool_input: { command: '$LD service' } }, double);
+    assert.equal(nu.permissionDecision, 'deny', '« service » sans argument n’est pas « service etat »');
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+});
