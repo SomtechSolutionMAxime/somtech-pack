@@ -10,6 +10,14 @@
 // minutes, et deux fois le prompt de ronde d'un orchestrateur coincé dans sa propre boîte,
 // **qui ne faisait donc plus ses rondes sans que rien ne le lui dise**.
 //
+// ⚠️ CONVERTI PAR D-20260921-0003 : la délivrance ne SOUMET PLUS JAMAIS la boîte d'autrui (ordre du
+// dirigeant : « je veux que ça cesse »). Ce banc éprouvait « trois tours immobiles ⇒ la touche part » ;
+// il éprouve maintenant « trois tours immobiles ⇒ la touche NE PART PAS, et le refus est NOMMÉ »
+// (`soumission-interdite`, au compte rendu et au journal). Ce que chaque essai protégeait d'autre — les
+// trois tours, la remise à zéro, l'avis qui ne se perd pas — reste éprouvé, dans son sens actuel.
+// L'absence de touche seule ne suffit pas : elle serait aussi satisfaite par un balayeur supprimé.
+// La cause nommée est ce qui prouve que le balayeur a tourné, a vu, et s'est ABSTENU.
+//
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // ⚠️ CE BANC AURAIT PU NE PAS POUVOIR ÉCHOUER, ET C'EST LA PREMIÈRE CHOSE QU'IL PROUVE
 //
@@ -161,7 +169,7 @@ test('LE TOUR VOIT LES AGENTS QUE LE BANC A POSÉS — sinon le banc ne peut pas
 
 // ═══ 1. TROIS TOURS DÉLIVRENT — DEUX NE DÉLIVRENT PAS ═══════════════════════════════════
 
-test('une boîte immobile sur TROIS tours est délivrée — et à DEUX tours, elle ne l’est pas', async () => {
+test('une boîte immobile sur TROIS tours n’est JAMAIS soumise — à deux tours pas encore admise, à trois REFUSÉE et nommée', async () => {
   const p = poste('trois-tours', [{ pane_id: 'w1:p1', name: 'ristigouche' }]);
   p.pane('w1:p1', { boite: 'le prompt de ronde que personne ne soumet' });
   const liste = [{ pane_id: 'w1:p1', name: 'ristigouche', herdr_socket: '/s/1' }];
@@ -171,17 +179,26 @@ test('une boîte immobile sur TROIS tours est délivrée — et à DEUX tours, e
   assert.equal(deux.debloques.length, 0);
   assert.equal(deux.refus.at(-1).cause, 'pas-encore-immobile');
 
-  const trois = await tours(3, { p, agents: liste });
-  assert.equal(touchesEnvoyees(p, 'w1:p1'), 1, 'au troisième tour, la touche d’envoi part — une seule fois');
-  assert.equal(trois.debloques.length, 1);
-  assert.equal(trois.debloques[0].texte, 'le prompt de ronde que personne ne soumet');
-  assert.equal(trois.debloques[0].tours, 3);
-  assert.equal(p.recu('w1:p1'), 'le prompt de ronde que personne ne soumet', 'et le texte est PARTI, entier');
+  const journal = [];
+  const trois = await tours(3, { p, agents: liste, journal });
+  assert.equal(touchesEnvoyees(p, 'w1:p1'), 0, 'AU TROISIÈME TOUR NON PLUS : on ne soumet JAMAIS la boîte d’un autre');
+  assert.equal(trois.debloques.length, 0, 'rien n’est compté comme débloqué');
+  // ⚠️ LA CAUSE NOMMÉE : sans elle, ce banc serait aussi vert avec un balayeur qui ne fait rien.
+  // Le tour a atteint le troisième compteur, a tenté la délivrance, et s'est abstenu POUR CETTE RAISON.
+  const refus = trois.refus.find((r) => r.pane === 'w1:p1');
+  assert.equal(refus.cause, 'soumission-interdite');
+  assert.match(refus.mot, /on ne soumet JAMAIS/i, 'le mot rendu dit la règle, pas une autre issue');
+  assert.equal(trois.parCause['soumission-interdite'], 1);
+  assert.ok(
+    journal.some((l) => /NON DÉLIVRÉ w1:p1 \(ristigouche\) \[soumission-interdite\]/.test(l)),
+    `le journal nomme le refus : ${JSON.stringify(journal)}`
+  );
+  assert.equal(p.recu('w1:p1'), null, 'et le texte n’a pas été soumis : rien n’est arrivé côté destinataire');
 });
 
 // ═══ 2. UN TEXTE QUI CHANGE REMET LE COMPTEUR À ZÉRO ════════════════════════════════════
 
-test('un texte qui change au 2ᵉ tour REMET LE COMPTEUR À ZÉRO — un banc vivant n’est pas une boîte oubliée', async () => {
+test('un texte qui change au 2ᵉ tour REMET LE COMPTEUR À ZÉRO — le refus nommé n’arrive qu’au tour où il est immobile', async () => {
   const p = poste('remise-a-zero', [{ pane_id: 'w1:p1', name: 'ristigouche' }]);
   const liste = [{ pane_id: 'w1:p1', name: 'ristigouche' }];
 
@@ -201,14 +218,19 @@ test('un texte qui change au 2ᵉ tour REMET LE COMPTEUR À ZÉRO — un banc vi
   assert.equal(rendu.debloques.length, 0);
   assert.equal(rendu.memoire.get('w1:p1').tours, 2, 'le compteur repart de la première lecture du NOUVEAU texte');
 
-  // Un tour de plus sur le même texte, et là seulement il part.
+  // Un tour de plus sur le même texte : il a maintenant ses trois tours, donc la délivrance est
+  // TENTÉE — et refusée, nommément. La remise à zéro retardait le refus, elle ne l'a pas supprimé.
   const quatre = await unTourDeBalayage({
     agents: liste,
     ...branchements(p),
     memoire: rendu.memoire,
     maintenant: 1_000_000 + 3 * 60_000,
   });
-  assert.equal(quatre.debloques.length, 1, 'trois tours du MÊME texte, et il part');
+  assert.equal(quatre.debloques.length, 0, 'trois tours du MÊME texte, et il ne part toujours pas');
+  assert.equal(touchesEnvoyees(p, 'w1:p1'), 0, 'aucune touche, jamais');
+  assert.equal(quatre.refus.at(-1).cause, 'soumission-interdite', 'la délivrance a été tentée au 4ᵉ tour et refusée par la règle');
+  // Et AVANT ce tour, le refus était bien « pas encore immobile » : c'est ce qui distingue la remise à zéro.
+  assert.equal(rendu.refus.at(-1).cause, 'pas-encore-immobile');
 });
 
 // ═══ 3. LE BAIL PASSE AVANT TOUT LE RESTE ═══════════════════════════════════════════════
@@ -276,49 +298,50 @@ test('un DIALOGUE affiché par-dessus une boîte lisible fait s’abstenir aussi
 
 // ═══ 6. L'AVIS — CE QUI EST PARTI, ET PAR QUOI ══════════════════════════════════════════
 
-test('après délivrance, l’avis dit LE TEXTE LIBÉRÉ et PAR QUOI il a été soumis', async () => {
+test('devant une boîte figée, AUCUN avis « débloquée » ne part — il n’y a rien eu de débloqué, et le refus est nommé', async () => {
   const p = poste('avis', [{ pane_id: 'w1:p1', name: 'ristigouche' }]);
   p.pane('w1:p1', { boite: 'ordre du CTO resté en boîte' });
   const avis = [];
+  const journal = [];
 
   const rendu = await tours(3, {
     p,
     agents: [{ pane_id: 'w1:p1', name: 'ristigouche', herdr_socket: '/s/7' }],
+    journal,
     avertir: async (pane, texte, vers) => avis.push({ pane, texte, vers }),
   });
 
-  assert.equal(avis.length, 1, 'un avis, et un seul');
-  assert.equal(avis[0].pane, 'w1:p1');
-  assert.equal(avis[0].vers.socket, '/s/7', 'porté à la session DE CET AGENT, pas à la plus récente du poste');
-  assert.match(avis[0].texte, /ordre du CTO resté en boîte/, 'LE TEXTE LIBÉRÉ, ENTIER — sinon l’incident est inexplicable');
-  assert.match(avis[0].texte, /balayeur de boîtes oubliées/, 'ET PAR QUOI — c’est le critère du ticket, et rien d’autre ne le porte');
-  assert.match(
-    avis[0].texte,
-    /aucun message ne suit/i,
-    'sur ce chemin il n’y a rien à livrer : promettre un second message enverrait l’attendre'
-  );
-  assert.equal(rendu.debloques[0].avis, 'remis');
+  // ⚠️ ANNONCER « TON TEXTE A ÉTÉ SOUMIS » ALORS QU'IL NE L'A PAS ÉTÉ serait pire que le silence.
+  assert.deepEqual(avis, [], 'aucun avis de boîte débloquée : rien n’a été soumis');
+  assert.equal(rendu.debloques.length, 0);
+  assert.equal(rendu.avisPerdus, 0);
+  assert.equal(rendu.refus.find((r) => r.pane === 'w1:p1').cause, 'soumission-interdite', 'le refus est NOMMÉ, pas silencieux');
+  assert.ok(journal.some((l) => /NON DÉLIVRÉ w1:p1 .*\[soumission-interdite\].*on ne soumet JAMAIS/.test(l)), 'et le journal dit la règle');
+  assert.equal(touchesEnvoyees(p, 'w1:p1'), 0);
 });
 
-test('un `avertir` qui JETTE ne fait pas échouer le tour — et l’échec est au compte rendu', async () => {
+test('un `avertir` qui JETTE n’est jamais appelé devant une boîte figée — le refus reste au compte rendu, sans avis perdu', async () => {
   const p = poste('avis-perdu', [{ pane_id: 'w1:p1', name: 'ristigouche' }]);
-  p.pane('w1:p1', { boite: 'un texte qui va partir quand même' });
+  p.pane('w1:p1', { boite: 'un texte qui ne partira pas' });
   const journal = [];
+  let appels = 0;
 
   const rendu = await tours(3, {
     p,
     agents: [{ pane_id: 'w1:p1', name: 'ristigouche' }],
     journal,
     avertir: async () => {
+      appels += 1;
       throw new Error('slack injoignable');
     },
   });
 
-  assert.equal(rendu.debloques.length, 1, 'le geste, lui, a bien eu lieu — le tour ne le renie pas');
-  assert.equal(rendu.debloques[0].avis, 'perdu');
-  assert.match(rendu.debloques[0].avisRefuse, /slack injoignable/);
-  assert.equal(rendu.avisPerdus, 1, 'UN AVIS PERDU EN SILENCE EST LE DÉFAUT QUE L’AVIS EXISTE POUR FERMER');
-  assert.ok(journal.some((l) => /AVIS PERDU/.test(l)), 'et il laisse une trace lisible');
+  assert.equal(appels, 0, 'pas de geste, donc pas d’avis à porter — et pas d’avis qui jette');
+  assert.equal(rendu.avisPerdus, 0);
+  assert.equal(rendu.refus.find((r) => r.pane === 'w1:p1').cause, 'soumission-interdite');
+  assert.ok(!journal.some((l) => /AVIS PERDU/.test(l)));
+  assert.ok(journal.some((l) => /\[soumission-interdite\]/.test(l)), 'la trace du refus est lisible');
+  assert.equal(touchesEnvoyees(p, 'w1:p1'), 0);
 });
 
 // ═══ 7. LE BATTEMENT DE CŒUR ════════════════════════════════════════════════════════════

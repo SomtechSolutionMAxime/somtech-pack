@@ -2055,7 +2055,16 @@ export class Veilleur {
   // ————————————————————————————————————————————————————————————— le balayage des boîtes oubliées
 
   /**
-   * LE BALAYEUR — la seule force du poste qui délivre une boîte SANS qu'on écrive à l'agent.
+   * ⛔ LE BALAYEUR NE SOUMET PLUS RIEN (D-20260921-0003). Ordre du dirigeant, le 2026-09-21 : il
+   * soumettait dans le pane de quelqu'un un texte qu'on était en train de taper. `delivrerLaBoite`
+   * refuse désormais de presser la touche d'envoi (`soumission-interdite`), et chaque tour le DIT au
+   * journal (`NON DÉLIVRÉ … [soumission-interdite]`). Le tour continue de tourner — il porte aussi la
+   * relance des messages gardés — : ce qui est éteint est le GESTE, pas le fil. Ne pas commenter
+   * `v.balayer()` pour « l'arrêter » : ce serait le rendre muet, et tuer la relance avec lui.
+   *
+   * (Ce qui suit décrit le dispositif tel qu'il a été conçu, quand il délivrait.)
+   *
+   * LE BALAYEUR — la seule force du poste qui délivrait une boîte SANS qu'on écrive à l'agent.
    *
    * ═══════════════════════════════════════════════════════════════════════════════════════
    * POURQUOI IL VIT ICI, ET PAS DANS UN SERVICE À PART (T-20260818-0078)

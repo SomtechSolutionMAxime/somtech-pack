@@ -298,10 +298,10 @@ test('MAIS UNE BOÎTE QU’ON N’A PAS SU LIBÉRER RESTE UN REFUS — deux text
   // par-dessus un reste ne livre pas deux messages : il en livre un seul, les deux textes
   // aboutés, et le destinataire lit un mélange dont personne ne sait qu'il en est un.
   //
-  // ⚠️ `enterInoperant` — LA DÉLIVRANCE NE DONNE AUCUN DROIT D'ÉCRIRE (T-20260816-0114). Depuis
-  // ce lot, un texte coincé IMMOBILE est soumis pour son auteur : le blocage doit finir. Mais
-  // quand la touche d'envoi ne libère rien, la boîte reste pleine — et le refus doit alors être
-  // exactement celui d'avant. C'est cet essai qui rougirait si « j'ai essayé » devenait un jour
+  // converti par D-20260921-0003 : ce commentaire disait « un texte coincé IMMOBILE est soumis pour
+  // son auteur ». On ne soumet plus JAMAIS la boîte d'un autre : la touche d'envoi ne part pas, et
+  // `enterInoperant` n'a plus d'effet ici. Le refus reste un refus — désormais NOMMÉ
+  // (`soumission-interdite`) — et l'intention du test tient : « j'ai essayé » ne devient jamais
   // une permission d'écrire par-dessus.
   const journal = installerFauxHerdr({
     boiteInitiale: 'un début de phrase qu’un humain avait tapé',
@@ -311,6 +311,13 @@ test('MAIS UNE BOÎTE QU’ON N’A PAS SU LIBÉRER RESTE UN REFUS — deux text
 
   assert.equal(r.code, 1, 'le geste est refusé');
   assert.match(r.refus, /bo[iî]te/i, 'et le refus dit ce qu’il a vu');
+  assert.equal(r.sortie?.causeDelivre, 'soumission-interdite', 'la cause est NOMMÉE en champ, pas seulement en prose');
+  assert.match(r.refus, /RIEN soumis/, 'et le texte du refus dit ce qui n’a pas été fait');
+  assert.match(r.refus, /jamais la bo[iî]te d’un autre/, 'et pourquoi');
+  assert.ok(
+    !appels(journal).some((p) => p.args[1] === 'send-keys'),
+    'aucune touche d’envoi ne part sur la boîte d’un autre'
+  );
   assert.ok(
     !appels(journal).some((p) => p.args[1] === 'prompt'),
     'et RIEN n’a été écrit dans la boîte qui n’a pas pu être vidée'
