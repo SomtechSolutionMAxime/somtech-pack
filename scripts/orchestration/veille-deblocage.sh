@@ -384,7 +384,14 @@ but_actif() {
 # Prend l'ÉCRAN en argument : le chemin du repos le lit UNE fois et interroge
 # ensuite la limite puis le but sur le même relevé — deux lectures successives
 # pourraient se contredire si l'écran change entre les deux.
-MOTIF_LIMITE="hit your .{0,24}limit|reached your .{0,24}usage limit|usage limit reached|Continuing automatically at"
+# ⚠️ Les deux libellés « reached your … usage limit » / « usage limit reached »
+# n'ont de sens que suivis d'une HEURE DE REPRISE sur la même ligne (« resets… »
+# ou une heure) : sans elle, une phrase ordinaire d'un agent qui les CITE
+# (« l'API renvoie parfois "usage limit reached" ») retenait la veille jusqu'à
+# épuisement et lui faisait perdre la borne `repos-prolonge` (régression de
+# a935855, passe portail T-20260921-0077). Panne assumée : un libellé dont
+# l'heure passe à la ligne n'est pas vu — la borne de repos s'applique.
+MOTIF_LIMITE="hit your .{0,24}limit|(reached your .{0,24}usage limit|usage limit reached).{0,80}(resets?|[0-9]{1,2}(:[0-9]{2})? ?[ap]m)|Continuing automatically at"
 limite_annoncee() {
   printf '%s' "$1" | grep -qiE "$MOTIF_LIMITE"
 }
@@ -397,16 +404,23 @@ limite_annoncee() {
 # un agent au repos ordinaire. La signature du message (les lignes qui portent la
 # phrase, heure de reprise comprise) est mémorisée ; après une REPRISE (`working`
 # vu), le même texte est un vestige et le repos redevient ordinaire — alors
-# qu'une NOUVELLE coupure porte une autre heure de reprise, donc une autre
-# signature, et retient de nouveau. Appelée dans le shell principal (elle écrit
+# qu'une NOUVELLE coupure porte en général une autre heure de reprise, donc une
+# autre signature, et retient de nouveau.
+# ⚠️ MAIS L'HEURE N'A PAS DE DATE : « resets 12:30pm » se répète à 24 h. Une même
+# signature n'est donc un vestige que dans sa FENÊTRE DE MÉMOIRE
+# (`VD_LIMITE_MEMOIRE`, 20 h par défaut : deux coupures de même heure de reprise
+# sont espacées d'au moins un jour). Passé cela, c'est une nouvelle coupure. Appelée dans le shell principal (elle écrit
 # des globales), jamais dans une substitution de commande.
 limite_en_cours() {
   limite_annoncee "$1" || return 1
   sig_lim="$(printf '%s' "$1" | grep -iE "$MOTIF_LIMITE" | tr -s ' \n' ' ')"
-  if [ "$LIMITE_REPRIS" = "1" ] && [ "$sig_lim" = "$LIMITE_SIG" ]; then
+  maintenant_lim="$(date +%s)"
+  if [ "$LIMITE_REPRIS" = "1" ] && [ "$sig_lim" = "$LIMITE_SIG" ] \
+     && [ $(( maintenant_lim - LIMITE_SIG_T )) -lt "${VD_LIMITE_MEMOIRE:-72000}" ]; then
     return 1
   fi
   LIMITE_SIG="$sig_lim"
+  LIMITE_SIG_T="$maintenant_lim"
   LIMITE_REPRIS=0
   return 0
 }
@@ -684,6 +698,7 @@ PREAVIS_EMIS=0
 LIMITE_DITE=0
 LIMITE_BLOQUEE=0
 LIMITE_SIG=""
+LIMITE_SIG_T=0
 LIMITE_REPRIS=0
 DERNIER_ETAT=""
 # Un pane peut être fermé SOUS la veille. Sans ce compteur, elle continue de
@@ -824,13 +839,16 @@ journaliser_deblocage() {
 # donc pas répondu. Sans cette moitié, le journal ne portait qu'une des deux
 # populations : « ce qu'elle débloque à tort » était relisable, « ce qu'elle
 # refuse à tort » ne l'était pas. Une garde se juge sur les DEUX.
+# $3 (facultatif) : le numéro de relevé à porter — la retenue de limite ne compte
+# pas dans INCONNUES, l'étiquette disait donc « #0 ».
 journaliser_refus() {
+  local n="${3:-$INCONNUES}"
   {
-    echo "=== REFUS #$INCONNUES · tour $1 · $(date -u +%Y-%m-%dT%H:%M:%SZ) · pane=$PANE agent=$AGENT"
+    echo "=== REFUS #$n · tour $1 · $(date -u +%Y-%m-%dT%H:%M:%SZ) · pane=$PANE agent=$AGENT"
     echo "--- aucune touche envoyée (écran non reconnu)"
     echo "--- écran refusé :"
     printf '%s\n' "$2"
-    echo "=== fin refus #$INCONNUES"
+    echo "=== fin refus #$n"
     echo
   } >> "$VD_JOURNAL" 2>/dev/null
 }
@@ -994,7 +1012,7 @@ for i in $(seq 1 "$VD_TOURS"); do
       if limite_annoncee "$ECRAN"; then
         LIMITE_BLOQUEE=$((LIMITE_BLOQUEE+1))
         echo "[$i] écran bloqué portant une phrase de limite d'usage ($LIMITE_BLOQUEE/$VD_BUT_TOURS) — je ne réponds pas, je reste"
-        journaliser_refus "$i" "$ECRAN"
+        journaliser_refus "$i" "$ECRAN" "$LIMITE_BLOQUEE"
         if [ "$LIMITE_BLOQUEE" -ge "$VD_BUT_TOURS" ]; then
           terminer ecran-non-reconnu "$LIMITE_BLOQUEE relevés d'un écran bloqué portant une phrase de limite d'usage, sans demande de permission reconnue — coupure réelle ou dialogue inconnu qui cite la phrase, je ne peux pas trancher ; intervention humaine requise"
         fi
@@ -1017,6 +1035,8 @@ for i in $(seq 1 "$VD_TOURS"); do
       INVISIBLES=0
       ABSENT_TOTAL=0
       INCONNUES=0
+      # Comme INCONNUES : la retenue de limite compte des relevés CONSÉCUTIFS.
+      LIMITE_BLOQUEE=0
       # ⚠️ `done` N'EST PAS « L'AGENT A FINI » — c'est « il a fini SON TOUR et
       # personne n'a encore regardé ce pane » (herdr le documente ainsi), soit
       # l'état NORMAL d'un agent qui a répondu et attend le message suivant.

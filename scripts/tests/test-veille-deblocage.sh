@@ -2234,6 +2234,37 @@ OUT="$(env PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_SEQ_FILE="$SS51H" FAKE_HER
 case "$OUT" in *"debloque (#1)"*) ok "le déblocage a eu lieu" ;; *) ko "aucun déblocage : $OUT" ;; esac
 case "$OUT" in *"MOTIF: ecran-non-reconnu"*) ko "deux plages séparées par un déblocage s'additionnent : $OUT" ;; *) ok "la retenue repart de zéro après un déblocage" ;; esac
 
+# ── Passe portail sur le delta a55f70e..a935855 (T-20260921-0077) ────────────
+echo "→ 51l. RÉGRESSION : une phrase ORDINAIRE qui cite « usage limit reached » ne retient pas un agent au repos"
+printf '%s\n' '  L API renvoie parfois "usage limit reached" quand le quota est depasse.' > "$SCREEN_FILE"
+printf 'working\ndone\n' > "$SEQ_FILE"
+run_cfg registre-51l 40 VD_REPOS_TOURS=3
+case "$OUT" in *"MOTIF: repos-prolonge"*) ok "sans heure de reprise annoncée, la phrase citée ne retient pas la veille" ;; *) ko "une phrase ordinaire retient la veille jusqu'à épuisement (borne de repos perdue) : $OUT" ;; esac
+
+echo "→ 51m. une 2ᵉ coupure RÉELLE de même signature (même heure, jour suivant) est retenue, pas oubliée comme vestige"
+printf '%s\n' "$ECRAN_LIMITE" > "$SCREEN_FILE"
+printf 'working\ndone\ndone\nworking\ndone\n' > "$SEQ_FILE"
+run_cfg registre-51m 40 VD_REPOS_TOURS=3 VD_LIMITE_MEMOIRE=0
+case "$OUT" in *"MOTIF: tours-epuises"*) ok "la signature n'est un vestige que dans sa fenêtre de mémoire" ;; *) ko "une coupure réelle de même signature est oubliée : $OUT" ;; esac
+
+echo "→ 51n. done/idle rompt la série de retenues : trois relevés bloqués NON consécutifs ne s'additionnent pas"
+printf ' Bash command\n   grep "hit your session limit"\n Do you want to proceed?\n ❯ 1. Yes\n' > "$SCREEN_FILE"
+printf 'blocked\nblocked\nidle\nblocked\nblocked\n' > "$SEQ_FILE"
+run_cfg registre-51n 5 VD_BUT_TOURS=3
+case "$OUT" in *"MOTIF: ecran-non-reconnu"*) ko "un tour au repos n'a pas remis la retenue à zéro : $OUT" ;; *) ok "done/idle remet la retenue de limite à zéro" ;; esac
+
+echo "→ 51o. un tour de travail rompt aussi la série de retenues (la remise à zéro de la branche working est GARDÉE)"
+printf 'blocked\nblocked\nworking\nblocked\nblocked\n' > "$SEQ_FILE"
+run_cfg registre-51o 5 VD_BUT_TOURS=3
+case "$OUT" in *"MOTIF: ecran-non-reconnu"*) ko "un tour de travail n'a pas remis la retenue à zéro : $OUT" ;; *) ok "working remet la retenue de limite à zéro" ;; esac
+
+echo "→ 51p. le journal de retenue porte le VRAI numéro de relevé, pas « REFUS #0 »"
+printf 'blocked\nblocked\nblocked\n' > "$SEQ_FILE"
+: > "${WORK}/j51p.log"
+run_cfg registre-51p 5 VD_BUT_TOURS=5 VD_JOURNAL="${WORK}/j51p.log"
+grep -q "REFUS #0" "${WORK}/j51p.log" && ko "étiquette fausse dans le journal : REFUS #0" || ok "aucun « REFUS #0 » dans le journal de retenue"
+grep -q "REFUS #2" "${WORK}/j51p.log" && ok "le 2ᵉ relevé retenu est étiqueté #2" || ko "numérotation absente du journal de retenue"
+
 # ── Défaut secondaire : le journal annoncé est celui qu'on trouve ────────────
 echo "→ 52. le chemin de journal de --list EXISTE dès la pose, et la pose annonce les deux fichiers"
 REG52="${WORK}/registre-52"; rm -rf "$REG52"
