@@ -366,6 +366,47 @@ async function tenirLeRendezVous(nom, debut) {
   // réveillé tout seul — `batiscan` a été fermé le 19 août puis rouvert le 20, et le service
   // n'a rien su des deux. Une solution qui ne gère que la fermeture laisserait un agent rouvert
   // hors des rondes, et ce défaut-là serait plus silencieux.
+  // ⚠️ UN NOM EN DOUBLE FAIT ROUGIR QUELQUE CHOSE (T-20260818-0036). Deux panes ont porté
+  // `charles-olivier` sur le lieu d'un client servi : l'adressage se fait par le NOM, donc deux
+  // porteurs c'est un message chez le mauvais destinataire — et là, le destinataire était le
+  // représentant d'un client, dont le canal est le canal du client.
+  //
+  // ⚠️ CE QU'ON NE PRÉTEND PAS FERMER : que `herdr agent rename` refuse un nom déjà pris. C'est
+  // SON code, pas le nôtre (règle d'or n°7). La ronde ne peut pas empêcher le doublon ; elle
+  // peut refuser de le laisser passer inaperçu, et c'est tout ce qu'on promet.
+  // ⚠️ ON N'ÉCRIT PAS `?? []` ICI, ET C'EST MESURÉ, PAS DU STYLE (T-20260920-0160). Un repli du
+  // langage FABRIQUE une valeur : `undefined ?? []` rend `[]`, dont la longueur est zéro — un
+  // zéro indiscernable d'un zéro mesuré. Ce soir même, cette forme m'a fait rapporter « zéro
+  // doublon sur le poste » sur un champ qui n'existait pas. Si le balayage ne rend pas ce
+  // champ, c'est un défaut à voir, pas un vide à absorber.
+  //
+  // ⚠️ ET CE `throw` N'EST PAS GARDÉ, JE LE DIS PLUTÔT QUE DE LE PRÉTENDRE. Une mutation qui le
+  // retire laisse la suite entière verte : aucun appelant de production ne produit ce cas,
+  // puisque `orchestrateursDuPoste` rend toujours le champ. Fabriquer une entrée qui n'existe
+  // pas pour le faire rougir prouverait mon banc, pas ce code.
+  //
+  // CE QUI EST GARDÉ, ET C'EST L'UTILE : le CONTRAT du balayage — `tests/un-nom-porte-deux-fois
+  // -fait-rougir.test.js` exige qu'il rende toujours son relevé. Si ce contrat tombe un jour,
+  // ça rougit LÀ-BAS, avant que ce `throw` ait à servir. Il reste comme ceinture, pas comme
+  // garde : il ne coûte rien, et il transforme une régression silencieuse en panne nommée.
+  const releve = balayage.nomsEnDouble;
+  if (!releve || !Array.isArray(releve.doublons)) {
+    throw new Error(
+      'le balayage n’a pas rendu le relevé des noms — rien n’a été mesuré, et un zéro fabriqué ' +
+        'ici se lirait comme « aucun doublon »'
+    );
+  }
+  const doublons = releve.doublons;
+  if (doublons.length) {
+    process.stderr.write(
+      `${r.etiquette} : ${doublons.length} nom(s) porté(s) par PLUS D'UN agent vivant — l'adressage ` +
+        `entre agents se fait par le nom, donc un message peut partir chez le mauvais :\n` +
+        doublons
+          .map((d) => `  « ${d.nom} » — ${d.porteurs.map((p) => `${p.pane} (${p.socket})`).join(', ')}\n`)
+          .join('')
+    );
+  }
+
   const avecMandat = await avecLetatDuMandat(balayage.orchestrateurs, { lireLetat: lecteurDEtatDeMandat() });
   const closPourDeVrai = (m) => m?.chantier?.clos === true;
   const ecartes = avecMandat.filter(closPourDeVrai).map((o) => ({
@@ -596,7 +637,7 @@ async function tenirLeRendezVous(nom, debut) {
     );
   }
   process.stdout.write(
-    `${JSON.stringify({ rendez_vous: nom, duree_ms: Date.now() - debut, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, ...(ecartes.length ? { mandats_clos: ecartes } : {}), ...(nonMesures.length ? { mandats_non_mesures: nonMesures } : {}), ...(bloques.length ? { bloques } : {}), familles, comptes, ...(vigie.length ? { vigie } : {}), ...(nonRegardes.length ? { vigie_non_regardes: nonRegardes } : {}), ...(hygiene.length ? { lignes_au_chantier_disparu: hygiene } : {}) })}\n`
+    `${JSON.stringify({ rendez_vous: nom, duree_ms: Date.now() - debut, sessions: balayage.sessions, muettes: balayage.muettes, agents_vus: balayage.agentsVus, orchestrateurs: comptes.length, livres: comptes.length - manques.length, ...(doublons.length ? { noms_en_double: { doublons, muettes: releve.muettes } } : {}), ...(ecartes.length ? { mandats_clos: ecartes } : {}), ...(nonMesures.length ? { mandats_non_mesures: nonMesures } : {}), ...(bloques.length ? { bloques } : {}), familles, comptes, ...(vigie.length ? { vigie } : {}), ...(nonRegardes.length ? { vigie_non_regardes: nonRegardes } : {}), ...(hygiene.length ? { lignes_au_chantier_disparu: hygiene } : {}) })}\n`
   );
   noterLePassage(nom, manques.length === 0 ? 'abouti' : 'partiel', debut, {
     orchestrateurs: comptes.length,

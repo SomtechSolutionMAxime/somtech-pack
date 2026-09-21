@@ -192,14 +192,21 @@ export async function orchestrateursDuPoste({ appel, sessions, estUnLieu = roleD
   const muettes = [];
   let agentsVus = 0;
 
+  // ⚠️ LES LECTURES SONT CONSERVÉES POUR LE RELEVÉ DES NOMS (T-20260818-0036). Un doublon ne se
+  // voit qu'à travers TOUTES les sessions — les deux porteurs de l'incident n'étaient pas dans
+  // la même. Ce balayage est le seul endroit du dispositif qui les voit toutes ; en refaire un
+  // second pour compter les noms, ce serait deux populations qui peuvent diverger.
+  const lectures = [];
   for (const socket of aBalayer) {
     const r = await appel(['agent', 'list'], { socket });
     // Une session qui ne répond pas ne fait pas tomber la ronde : les autres attendent leur
     // réveil, et une session morte est un fait à RAPPORTER, pas une raison d'abandonner.
     if (!r.ok) {
       muettes.push(socket);
+      lectures.push({ socket, muette: true });
       continue;
     }
+    lectures.push({ socket, reponse: r.reponse });
     // ⚠️ ON COMPTE CE QU'ON A VU AVANT DE FILTRER, et ce n'est pas de la statistique.
     // « Aucun orchestrateur » a DEUX causes que rien ne distinguait : il n'y en a vraiment
     // aucun, ou `roleDuLieu` n'en a reconnu aucun — un gabarit modifié, un en-tête déplacé,
@@ -210,7 +217,7 @@ export async function orchestrateursDuPoste({ appel, sessions, estUnLieu = roleD
     for (const o of orchestrateursVivants(r.reponse, { estUnLieu })) orchestrateurs.push({ ...o, socket });
   }
 
-  return { orchestrateurs, muettes, sessions: aBalayer.length, agentsVus };
+  return { orchestrateurs, muettes, sessions: aBalayer.length, agentsVus, nomsEnDouble: nomsEnDouble(lectures) };
 }
 
 /**
@@ -387,4 +394,93 @@ export async function avecLetatDuMandat(orchestrateurs, { lireLetat } = {}) {
     rendus.push({ ...o, chantier: { ...(await lireLetat(mandat)), mandat } });
   }
   return rendus;
+}
+
+/**
+ * LES NOMS PORTÉS PAR PLUS D'UN AGENT VIVANT — pour qu'un doublon FASSE ROUGIR quelque chose
+ * (T-20260818-0036).
+ *
+ * ═════════════════════════════════════════════════════════════════════════════════════
+ * L'INCIDENT, ET IL A EU LIEU SUR LE LIEU D'UN CLIENT SERVI
+ *
+ * Deux panes ont porté SIMULTANÉMENT le nom `charles-olivier`, chez `constructiongauthier`.
+ * L'adressage entre agents se fait par le NOM : deux porteurs, c'est un message qui part chez le
+ * mauvais destinataire — et ici le destinataire était le représentant d'un client, dont le canal
+ * est le canal du client. Lequel des deux recevait ses messages n'a jamais été mesuré.
+ *
+ * ⚠️ CE QUE CETTE FONCTION NE FAIT PAS, ET IL FAUT LE DIRE. Le ticket pose TROIS critères :
+ *   ① `herdr agent rename` REFUSE un nom déjà porté — **code de `herdr`, pas le nôtre**
+ *      (règle d'or n°7). On ne l'invente pas, et on ne prétend pas l'avoir fermé.
+ *   ② un envoi vers un nom ambigu REFUSE — **déjà fait**, dans `destinataire.js`, et gardé.
+ *   ③ la ronde SIGNALE tout nom porté par plus d'un agent vivant — **c'est celui-ci**.
+ *
+ * ⚠️ LA POPULATION EST LE PIÈGE. `agent list` d'UNE session ne rend que la sienne ; ce poste en
+ * porte seize. Un compte fait sur une seule session sous-compte, et son « zéro doublon »
+ * ressemble trait pour trait à un vrai zéro. C'est pour ça que cette fonction prend le balayage
+ * COMPLET en entrée au lieu de lire elle-même : elle ne peut pas être appelée sur une population
+ * partielle sans qu'on l'ait voulu.
+ *
+ * ⚠️ ET CE QU'ELLE N'A PAS PU LIRE, ELLE LE DIT. Une session muette ne fait pas conclure « aucun
+ * doublon » : le compte porte alors sur moins que le poste, et un agent qu'on n'a pas vu peut
+ * porter un nom déjà pris. Le nombre de muettes voyage avec le résultat.
+ *
+ * MESURÉ LE 2026-09-20 À 22 H 30 UTC, avant d'écrire : 16 sessions dont 11 MUETTES — des sockets
+ * morts du 7 juillet au 22 août, pas des sessions vivantes manquées —, 80 agents vus, 39 noms distincts,
+ * ZÉRO doublon. Le défaut n'était pas actif ce jour-là ; sa cause l'était.
+ *
+ * @param {Array<{socket: string, reponse?: object, muette?: boolean}>} lectures  le balayage
+ * @returns {{doublons: Array<{nom, porteurs}>, muettes: number}} — `doublons` porte les noms
+ *   partagés, `muettes` ce qu'on N'A PAS PU LIRE.
+ *
+ * ⚠️ CETTE SIGNATURE A DÉJÀ MENTI UNE FOIS, ET C'EST POURQUOI ELLE EST ÉCRITE AINSI. Elle
+ * annonçait « un Array augmenté d'une propriété `muettes` » — la forme précédente, éliminée
+ * parce qu'une propriété posée sur un tableau **ne survit pas à `JSON.stringify`**. Le corps a
+ * été recâblé, la signature est restée : un lecteur qui aurait codé contre elle plutôt que
+ * contre le corps aurait recréé le défaut exact que ce lot venait de fermer. Relevé par une
+ * passe de fond, sur le delta qui corrigeait ce défaut.
+ */
+export function nomsEnDouble(lectures) {
+  const parNom = new Map();
+  let muettes = 0;
+  for (const l of lectures ?? []) {
+    if (l?.muette || !l?.reponse) {
+      muettes += 1;
+      continue;
+    }
+    for (const a of l.reponse?.result?.agents ?? []) {
+      // ⚠️ UN AGENT SANS NOM N'EST PAS UN HOMONYME. Mesuré LE 2026-09-20 : 31 des 66 agents que
+      // le registre rendait À CE MOMENT-LÀ n'en avaient pas — les compter ensemble ferait un
+      // « doublon » de la moitié du poste, tous les jours, et une garde qui crie tous les jours
+      // cesse d'être lue. C'est ainsi qu'elle meurt.
+      //
+      // ⚠️ CE 66 ET LE 80 DU BLOC AU-DESSUS SONT DEUX RELEVÉS DIFFÉRENTS DU MÊME JOUR, pris à
+      // quelques heures d'écart — le poste ouvre et ferme des sessions au fil de la journée.
+      // Relevé par une passe de fond : lu tel quel, le bloc se contredisait sur combien d'agents
+      // tournaient « ce jour-là ». Deux mesures datées du même jour ne sont pas la même mesure.
+      const nom = typeof a?.name === 'string' ? a.name.trim() : '';
+      if (!nom) continue;
+      // ⚠️ LA CASSE NE FABRIQUE PAS DEUX AGENTS. L'incident porte les deux graphies —
+      // l'agent s'appelait `charles-olivier`, son lieu `.gestionnaire/Charles-Olivier` — et
+      // `herdr` lui-même compare sans en tenir compte (`agentPorteLeNom`). Un relevé qui les
+      // distinguerait manquerait très exactement le doublon qu'il cherche.
+      const cle = nom.toLowerCase();
+      if (!parNom.has(cle)) parNom.set(cle, { nom, porteurs: [] });
+      parNom.get(cle).porteurs.push({ pane: a.pane_id ?? null, socket: l.socket ?? null });
+    }
+  }
+  const doubles = [...parNom.values()].filter((v) => v.porteurs.length > 1);
+  // ⚠️ LA RÉSERVE EST UNE VRAIE DONNÉE, PAS UNE PROPRIÉTÉ POSÉE SUR UN TABLEAU — et la première
+  // rédaction faisait l'inverse. `doubles.muettes = muettes` tenait en mémoire et **disparaissait
+  // à la sérialisation** : `JSON.stringify` n'inclut jamais les propriétés non indicielles d'un
+  // tableau. Or c'est exactement le canal par lequel l'humain lit ce résultat — la ronde le
+  // passe à `JSON.stringify`. La garantie écrite DEUX FOIS dans ce commentaire ne franchissait
+  // donc pas le premier `JSON.stringify`.
+  //
+  // ⚠️ ET L'ESSAI QUI LA GARDAIT NE POUVAIT PAS LE VOIR : il lisait la propriété sur l'objet EN
+  // MÉMOIRE. Une contre-épreuve qui prouve la fonction, pas le canal par lequel on la lit.
+  // Relevé par une passe de fond ; le banc éprouve maintenant la sérialisation elle-même.
+  //
+  // `doublons` porte les noms partagés ; `muettes` porte ce qu'on N'A PAS PU LIRE. Un appelant
+  // qui ne regarderait que la liste verrait un vide sans savoir sur quelle population il porte.
+  return { doublons: doubles, muettes };
 }
