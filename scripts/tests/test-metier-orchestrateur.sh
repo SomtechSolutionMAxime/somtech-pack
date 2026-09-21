@@ -1357,8 +1357,22 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #   source prête, que le pipeline ne lisait pas. Ce lot fait lire ces 43
 #   citations, EN TÊTE de chaque chapitre concerné, sans toucher au récit.
 #
-#   171 024 → 182 043. MARGE ZÉRO, comme les précédentes. +11 019, exactement
-#   les 43 citations socle (aucun autre changement).
+#   171 024 → 181 657. MARGE ZÉRO, comme les précédentes. +10 633.
+#
+#   ⚠️ CE CHIFFRE A DÉJÀ ÉTÉ CORRIGÉ UNE FOIS DANS CE MÊME LOT, ET LA CORRECTION
+#   EST LE FAIT LE PLUS IMPORTANT DE CETTE ENTRÉE. Une première version citait
+#   les 43 items `regle` sans exclure ceux déjà `cardinale` (`dejaEnL1`), et
+#   avait mesuré 182 043 (+11 019). Une revue de fond — pas l'auteur — a trouvé
+#   que trois d'entre eux (RA-ORC-004, RA-ORC-006, RA-ORC-014, tous rattachés à
+#   `reflexes`) sont AUSSI des cardinales : ils étaient donc cités deux fois,
+#   mot pour mot, une fois dans L1 et une fois dans leur chapitre — exactement
+#   la duplication que ce modèle combat (voir le commentaire I7 dans
+#   `rendu.js`). Le correctif exclut ces 3 doublons (`!dejaEnL1.has(i.id)`,
+#   même garde que celle déjà posée sur `deroges` et `gardeFous`) ; `reflexes`
+#   perd 386 caractères par rapport à la première mesure, d'où 181 657 et non
+#   182 043. **Le nombre qui compte est celui mesuré APRÈS le correctif, pas
+#   celui du premier passage — une baseline posée sur un chiffre encore faux
+#   aurait figé le doublon comme normal pour tous les lots suivants.**
 #
 #   POURQUOI EN TÊTE ET PAS EN REMPLACEMENT DU RÉCIT — LE CHOIX EST MESURÉ, PAS
 #   SUBI. Une épreuve a été jouée AVANT de construire, sur UN SEUL chapitre
@@ -1375,18 +1389,22 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #   autre lieu où vivre. Arbitrage révisé en conséquence par `batiscan`
 #   (T-20260921-0032) : AJOUTER, jamais remplacer.
 #
-# DÉCOMPOSITION, mesurée par chapitre — les 7 chapitres portant des `regle` :
+# DÉCOMPOSITION, mesurée par chapitre APRÈS correctif — les 7 chapitres portant des `regle` :
 #   servicedesk        +1943   cadrer-concevoir   +1402   faire-appliquer +2495
-#   rendre-compte       +1454  rondes             +1457   reflexes         +757
+#   rendre-compte       +1454  rondes             +1457   reflexes         +371
 #   chefs-equipe        +1511
 #   (`continuite`, `mise-en-production`, `outils`, `anti-patterns` : aucun
 #   item `regle`, donc aucun changement — hors périmètre de ce ticket.)
+#   (`reflexes` porte 4 items `regle`, dont 3 cardinales désormais exclues :
+#   son delta n'est donc que celui de RA-ORC-042, le seul `regle` non cardinal
+#   du chapitre — cohérent avec un ratio récit/règles réellement au plus haut
+#   parmi tous, comme mesuré avant construction.)
 #
 # ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0, et
 # la séparation entre savoir opératoire et récit d'incident — nommée par cette
 # épreuve, jamais faite avant elle — reste un chantier ouvert (voir le ticket
 # qui la porte, cité dans le jalon).
-BASELINE=182043
+BASELINE=181657
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"

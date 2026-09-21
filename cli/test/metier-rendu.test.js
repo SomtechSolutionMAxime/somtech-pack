@@ -243,6 +243,25 @@ test('T-20260921-0028 — un garde-fou rattaché à un chapitre n est PAS re-cit
     'le socle d un garde-fou ne doit pas être dupliqué dans son chapitre — L1 le porte déjà en entier');
 });
 
+test('T-20260921-0028 — une règle CARDINALE rattachée à un chapitre n est PAS re-citée dans son chapitre : L1 la porte déjà en entier', () => {
+  // ⚠️ TROUVÉ PAR LA REVUE DE FOND, PAS PAR L AUTEUR. `reglesSocle` reprenait
+  // le filtre `nature === 'regle'` mais pas l exclusion `dejaEnL1` que le
+  // rendu applique déjà partout ailleurs (gardeFous, deroges) : une règle à
+  // la fois cardinale ET rattachée à un chapitre se citait deux fois, mot
+  // pour mot — exactement la duplication que ce modèle combat (cas réel sur
+  // l orchestrateur : RA-ORC-004/006/014).
+  const c = classementValide();
+  c.items[2].cardinale = 1; // RA-ORC-001 devient À LA FOIS cardinale ET rattachée à 'rendre-compte'
+  c.items[2].enonce_socle = 'Rends compte en une seule fois, en synthèse.';
+  const r = rendre(c);
+  assert.equal(r.ok, true);
+  assert.ok(r.artefacts['L1.md'].includes('Rends compte en une seule fois, en synthèse.'),
+    'la cardinale doit apparaître en entier dans L1 — c est ce qu une cardinale garantit');
+  const ch = r.artefacts['chapitres/rendre-compte.md'];
+  assert.ok(!ch.includes('Rends compte en une seule fois, en synthèse.'),
+    'et elle ne doit PAS être re-citée dans son chapitre — L1 la porte déjà en entier, la dupliquer est la faute que ce modèle combat');
+});
+
 test('le budget L2 est SOUPLE : un chapitre trop gros avertit, il ne fait pas échouer', () => {
   const c = classementValide();
   c.chapitres[0].contenu = 'z'.repeat(BUDGETS.L2 * 5);

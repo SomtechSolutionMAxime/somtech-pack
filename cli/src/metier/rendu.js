@@ -311,7 +311,15 @@ export function rendre(classement) {
     // savoir opératoire (commandes, incidents datés) sans trace ailleurs dans
     // l'ABC — arbitrage batiscan, T-20260921-0032. Les `garde-fou` ne sont pas
     // repris ici : L1 les rend déjà en entier, les re-citer dupliquerait.
-    const reglesSocle = regles.filter((i) => i.nature === 'regle');
+    //
+    // ⚠️ `dejaEnL1` EXCLUE AUSSI — trouvé par la revue de fond, pas par
+    // l'auteur. Une règle CARDINALE rattachée à un chapitre (cas réel :
+    // RA-ORC-004/006/014) est déjà citée en entier dans L1 (voir plus haut) ;
+    // sans cette exclusion elle se citait UNE SECONDE FOIS ici, mot pour mot —
+    // exactement la duplication que ce modèle combat (commentaire I7
+    // ci-dessous). Même garde que celle déjà posée sur `deroges` et
+    // `gardeFous` un peu plus haut dans ce fichier.
+    const reglesSocle = regles.filter((i) => i.nature === 'regle' && !dejaEnL1.has(i.id));
     artefacts[`chapitres/${c.nom}.md`] = [
       `# ${c.nom}`,
       '',
