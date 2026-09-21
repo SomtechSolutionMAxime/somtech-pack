@@ -207,6 +207,61 @@ test('un chapitre qui déclare un contenu le porte dans le fichier rendu, sous s
     'l en-tête (abrégé, fraîcheur) vient AVANT le contenu — c est ce qui permet de décider si on ouvre');
 });
 
+test('T-20260921-0028 — l énoncé socle d une règle de chapitre est LU par le rendu, en tête, sans effacer le récit', () => {
+  const c = classementValide();
+  c.items[2].enonce_socle = 'Rends compte en une seule fois, en synthèse.';
+  c.chapitres[0].contenu = '## Comment tu écris\n\nDes faits, pas ton raisonnement.\n';
+  const r = rendre(c);
+  assert.equal(r.ok, true);
+  const ch = r.artefacts['chapitres/rendre-compte.md'];
+  assert.ok(ch.includes('Rends compte en une seule fois, en synthèse.'),
+    'l énoncé socle de la règle doit apparaître dans le chapitre rendu — c est ce que ce ticket ferme');
+  assert.ok(ch.includes('Des faits, pas ton raisonnement.'),
+    'le récit narratif écrit à la main doit rester intact — option A, on ajoute, on ne remplace pas');
+  assert.ok(ch.indexOf('Rends compte en une seule fois') < ch.indexOf('Des faits, pas ton raisonnement.'),
+    'la citation socle vient EN TÊTE, avant le récit (option A arbitrée sur T-20260921-0028)');
+});
+
+test('T-20260921-0028 — sans enonce_socle, le rendu se rabat sur enonce, jamais un vide', () => {
+  const c = classementValide();
+  // items[2] (RA-ORC-001) n a pas d enonce_socle dans le fixture de base
+  const r = rendre(c);
+  assert.equal(r.ok, true);
+  const ch = r.artefacts['chapitres/rendre-compte.md'];
+  assert.ok(ch.includes('Des faits, jamais le raisonnement.'),
+    'à défaut de socle, le rendu cite l énoncé long — le même repli que puce()');
+});
+
+test('T-20260921-0028 — un garde-fou rattaché à un chapitre n est PAS re-cité ici, il est déjà rendu en L1', () => {
+  const c = classementValide();
+  c.items[0].chapitre = 'rendre-compte'; // GF-ORC-001, deja cite integralement en L1
+  const r = rendre(c);
+  assert.equal(r.ok, true);
+  const ch = r.artefacts['chapitres/rendre-compte.md'];
+  const occurrences = ch.split('Tu ne construis jamais.').length - 1;
+  assert.equal(occurrences, 0,
+    'le socle d un garde-fou ne doit pas être dupliqué dans son chapitre — L1 le porte déjà en entier');
+});
+
+test('T-20260921-0028 — une règle CARDINALE rattachée à un chapitre n est PAS re-citée dans son chapitre : L1 la porte déjà en entier', () => {
+  // ⚠️ TROUVÉ PAR LA REVUE DE FOND, PAS PAR L AUTEUR. `reglesSocle` reprenait
+  // le filtre `nature === 'regle'` mais pas l exclusion `dejaEnL1` que le
+  // rendu applique déjà partout ailleurs (gardeFous, deroges) : une règle à
+  // la fois cardinale ET rattachée à un chapitre se citait deux fois, mot
+  // pour mot — exactement la duplication que ce modèle combat (cas réel sur
+  // l orchestrateur : RA-ORC-004/006/014).
+  const c = classementValide();
+  c.items[2].cardinale = 1; // RA-ORC-001 devient À LA FOIS cardinale ET rattachée à 'rendre-compte'
+  c.items[2].enonce_socle = 'Rends compte en une seule fois, en synthèse.';
+  const r = rendre(c);
+  assert.equal(r.ok, true);
+  assert.ok(r.artefacts['L1.md'].includes('Rends compte en une seule fois, en synthèse.'),
+    'la cardinale doit apparaître en entier dans L1 — c est ce qu une cardinale garantit');
+  const ch = r.artefacts['chapitres/rendre-compte.md'];
+  assert.ok(!ch.includes('Rends compte en une seule fois, en synthèse.'),
+    'et elle ne doit PAS être re-citée dans son chapitre — L1 la porte déjà en entier, la dupliquer est la faute que ce modèle combat');
+});
+
 test('le budget L2 est SOUPLE : un chapitre trop gros avertit, il ne fait pas échouer', () => {
   const c = classementValide();
   c.chapitres[0].contenu = 'z'.repeat(BUDGETS.L2 * 5);
@@ -478,19 +533,27 @@ test('un hook sans outil déclaré ne porte PAS de « matcher » — la forme es
   assert.deepEqual(Object.keys(h[1]), ['matcher', 'hooks'], 'avec outil : le matcher reste');
 });
 
-test('un chapitre NOMME les items dont il répond, il ne recopie pas leur énoncé entier', () => {
-  // ⚠️ Recopier le texte d'ABC dans chaque chapitre est la duplication même que
-  // ce modèle combat : mesuré le 2026-08-20, ces sections pesaient 19 949 des
-  // 27 862 octets dont le métier rendu avait grossi. L'ABC est la source ; le
-  // chapitre dit de QUOI il répond, la forme courte suffit à le reconnaître.
+test('un chapitre NOMME les items dont il répond, il ne recopie JAMAIS leur énoncé LONG', () => {
+  // ⚠️ Recopier le texte LONG d'ABC dans chaque chapitre est la duplication
+  // même que ce modèle combat : mesuré le 2026-08-20, ces sections pesaient
+  // 19 949 des 27 862 octets dont le métier rendu avait grossi. Ça reste vrai.
+  //
+  // ⚠️ CE QUI A CHANGÉ (T-20260921-0028) — la FORME COURTE, elle, est désormais
+  // citée. Avant ce ticket, ce test exigeait qu'elle N'apparaisse PAS : l'item
+  // n'était reconnu que par son ID, son `enonce_socle` restait écrit dans le
+  // classement sans jamais être rendu à un orchestrateur né. L'arbitrage
+  // (T-20260921-0032, batiscan) a tranché : on AJOUTE la citation socle en
+  // tête du chapitre plutôt que de continuer à la taire — une épreuve sur
+  // `chefs-equipe` a montré que la REMPLACER (au lieu de l'ajouter) détruirait
+  // 94 % de savoir opératoire sans trace ailleurs dans l'ABC.
   const c = classementValide();
   c.items[2].enonce = 'un énoncé d ABC très long qui ne doit pas être recopié ici';
   c.items[2].enonce_socle = 'La forme courte.';
   const ch = rendre(c).artefacts['chapitres/rendre-compte.md'];
   assert.ok(ch.includes('RA-ORC-001'), "l item doit être CITÉ — c'est I7, la traçabilité");
-  assert.ok(!ch.includes('un énoncé d ABC très long'), "l'énoncé d'ABC ne se recopie pas");
-  assert.ok(!ch.includes('La forme courte.'),
-    "ni sa forme courte : le chapitre CITE ses items, l'ABC reste la source de leur texte");
+  assert.ok(!ch.includes('un énoncé d ABC très long'), "l'énoncé LONG d'ABC ne se recopie jamais");
+  assert.ok(ch.includes('La forme courte.'),
+    "sa forme courte, elle, est désormais lue et citée — c'est ce que T-20260921-0028 ferme");
 });
 
 test('le rendu ne produit AUCUN mot dépouillé de ses accents', () => {

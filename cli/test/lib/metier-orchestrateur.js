@@ -4293,8 +4293,20 @@ export const MUTATIONS = [
     // Ce n'est PAS un affaiblissement du contrôle : c'est la mutation qu'on rend
     // fidèle à ce qu'elle prétend faire — « le gabarit jette la règle ». Jeter la
     // prose ne jette plus la règle, et c'est une propriété du métier rendu.
+    //
+    // ⚠️ RE-CASSÉE PAR T-20260921-0028, ET RÉPARÉE DANS LE MÊME LOT. Depuis ce
+    // ticket, `puce(RA-ORC-010)` écrit DEUX lignes — le texte du socle, PUIS sa
+    // traçabilité en commentaire sur la ligne suivante (`  <!-- RA-ORC-010 · … -->`).
+    // Le filtre ci-dessous ne cherchait « RA-ORC-010 » que sur UNE ligne : il
+    // retirait le commentaire de traçabilité et laissait intacte la phrase
+    // « tu portes un nom de rivière — ton lieu garde le code du mandat » juste
+    // au-dessus, qui ne contient pas l'ID. La mutation survivait — trouvé en
+    // jouant ce lot, pas en le relisant. On retire maintenant le COUPLE de lignes.
     muter: (t) => {
-      const sansEnonce = t.split('\n').filter((l) => !l.includes('RA-ORC-010')).join('\n');
+      const sansCitationSocle = t.replace(
+        /^- .*\n {2}<!-- RA-ORC-010 · [^\n]*-->\n?/m, '',
+      );
+      const sansEnonce = sansCitationSocle.split('\n').filter((l) => !l.includes('RA-ORC-010')).join('\n');
       const debut = sansEnonce.indexOf("### ⚠️ Et TOI, orchestrateur, tu portes un nom de RIVIÈRE");
       if (debut === -1) return sansEnonce;
       const fin = sansEnonce.indexOf('\n## ', debut);

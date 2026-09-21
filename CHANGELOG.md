@@ -18,6 +18,13 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 - Aucun artefact rendu ni distribué ne change (vérifié par exécution) : `enonce_socle` d'un item de nature `regle` n'est lu par aucun des 4 sites d'appel de `puce()` dans `cli/src/metier/rendu.js` aujourd'hui — c'est le matériau de `T-20260921-0028`.
 
+### Corrige
+
+- **`enonce_socle` d'une règle de chapitre est désormais LU par le rendu** (`T-20260921-0028`) — la source écrite ci-dessus est maintenant distribuée : citée en TÊTE de chaque chapitre concerné, jamais en remplacement du récit narratif écrit à la main. Une épreuve mesurée sur `chefs-equipe` a montré qu'un remplacement perdrait 94 % de savoir opératoire sans trace ailleurs dans le classement — arbitrage `T-20260921-0032`.
+- **Une règle CARDINALE rattachée à un chapitre n'est plus citée deux fois** — trouvé par une revue de fond indépendante : `RA-ORC-004/006/014` étaient citées à la fois dans le socle (`L1.md`) et dans leur chapitre.
+- Rôle `gestionnaire-client` également affecté (le correctif est dans le moteur de rendu, générique à tous les rôles) : 19 items, 3 chapitres, +6478 caractères.
+- Banc de taille de l'orchestrateur re-baseliné : 171024 → 181657 caractères, motif documenté dans `scripts/tests/test-metier-orchestrateur.sh`.
+
 
 ## [Non-versionne] - 2026-09-20
 

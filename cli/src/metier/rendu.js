@@ -302,6 +302,24 @@ export function rendre(classement) {
 
   for (const c of chapitres) {
     const regles = items.filter((i) => i.chapitre === c.nom);
+    // T-20260921-0028 — un item `regle` avait son `enonce_socle` écrit mais
+    // jamais LU par ce rendu : le chapitre ne citait que son ID (ligne
+    // « Répond de » ci-dessous), le texte réellement chargé par un
+    // orchestrateur né restait le seul `contenu` écrit à la main. Ajoutée EN
+    // TÊTE, jamais en remplacement : une épreuve sur `chefs-equipe` a mesuré
+    // qu'y remplacer le récit par ces seules citations perd 94 % et détruit du
+    // savoir opératoire (commandes, incidents datés) sans trace ailleurs dans
+    // l'ABC — arbitrage batiscan, T-20260921-0032. Les `garde-fou` ne sont pas
+    // repris ici : L1 les rend déjà en entier, les re-citer dupliquerait.
+    //
+    // ⚠️ `dejaEnL1` EXCLUE AUSSI — trouvé par la revue de fond, pas par
+    // l'auteur. Une règle CARDINALE rattachée à un chapitre (cas réel :
+    // RA-ORC-004/006/014) est déjà citée en entier dans L1 (voir plus haut) ;
+    // sans cette exclusion elle se citait UNE SECONDE FOIS ici, mot pour mot —
+    // exactement la duplication que ce modèle combat (commentaire I7
+    // ci-dessous). Même garde que celle déjà posée sur `deroges` et
+    // `gardeFous` un peu plus haut dans ce fichier.
+    const reglesSocle = regles.filter((i) => i.nature === 'regle' && !dejaEnL1.has(i.id));
     artefacts[`chapitres/${c.nom}.md`] = [
       `# ${c.nom}`,
       '',
@@ -312,6 +330,7 @@ export function rendre(classement) {
       // texte. L'ABC est leur source, et le socle porte les cardinales. Recopier
       // ici pesait 19 949 octets, la duplication même que ce modèle combat.
       ...(regles.length ? [`> **Répond de** ${regles.map((i) => i.id).join(' · ')}`, ''] : []),
+      ...(reglesSocle.length ? [...reglesSocle.map((i) => puce(i)), ''] : []),
       ...(c.contenu ? [c.contenu, ''] : []),
     ].join('\n');
   }
