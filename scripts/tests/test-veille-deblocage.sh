@@ -2155,12 +2155,48 @@ OUT="$(env PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_SEQ_FILE="$SSEQ" \
        bash "$VEILLE" test-pane test-agent 12 --dry-run 2>&1)"
 case "$OUT" in *"debloque (#1)"*) ok "elle a survécu à la limite et débloqué l'agent qui reprenait" ;; *) ko "retirée pendant la coupure : $OUT" ;; esac
 
-echo "→ 51f. deux coupures SÉPARÉES par une reprise : elle le dit chaque fois (le dire une seule fois par veille tairait la seconde)"
-printf '%s\n' "$ECRAN_LIMITE" > "$SCREEN_FILE"
-printf 'working\ndone\nworking\ndone\n' > "$SEQ_FILE"
-run_cfg registre-51f 4 VD_REPOS_TOURS=3
+echo "→ 51f. deux coupures SÉPARÉES par une reprise, heures de reprise DIFFÉRENTES : annoncées chacune, jamais plus"
+ECR_A="${WORK}/ecr-51f-a.txt"; ECR_B="${WORK}/ecr-51f-b.txt"
+printf "  ⎿  You've hit your session limit · resets 12:30pm\n     Continuing automatically at 12:30pm\n" > "$ECR_A"
+printf "  ⎿  You've hit your session limit · resets 5:00pm\n     Continuing automatically at 5:00pm\n" > "$ECR_B"
+SS51F="${WORK}/screen_seq_51f.txt"; rm -f "${SS51F}.ridx"
+# Chaque relevé de repos lit l'écran DEUX fois (travail_en_vol, puis la limite) :
+# trois relevés A (même épisode), un working (aucune lecture), trois relevés B.
+for _ in 1 2 3 4 5 6; do printf '%s\n' "$ECR_A"; done > "$SS51F"
+for _ in 1 2 3 4 5 6; do printf '%s\n' "$ECR_B"; done >> "$SS51F"
+printf 'working\ndone\ndone\ndone\nworking\ndone\ndone\ndone\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx"
+: > "$WITNESS"
+OUT="$(env PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_SEQ_FILE="$SS51F" FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" \
+       FAKE_HERDR_WITNESS="$WITNESS" VD_REGISTRE_DIR="${WORK}/registre-51f" VD_SLEEP=0 VD_SLEEP_POSE=0 \
+       VD_SLEEP_APRES_DEBLOCAGE=0 VD_REPOS_TOURS=50 bash "$VEILLE" test-pane test-agent 8 --dry-run 2>&1)"
 N51F=$(printf '%s\n' "$OUT" | grep -c "coupé par une limite d'usage")
-[ "$N51F" -eq 2 ] && ok "annoncée à chaque coupure (2 fois)" || ko "annonces de coupure : $N51F au lieu de 2 : $OUT"
+[ "$N51F" -eq 2 ] && ok "annoncée une fois par épisode (2 pour 6 relevés de repos)" || ko "annonces de coupure : $N51F au lieu de 2 : $OUT"
+
+echo "→ 51i. VESTIGE : le message de limite reste à l'écran APRÈS la reprise → le repos redevient ordinaire (revue de fond)"
+printf '%s\n' "$ECRAN_LIMITE" > "$SCREEN_FILE"
+printf 'working\ndone\nworking\nworking\nidle\n' > "$SEQ_FILE"
+run_cfg registre-51i 40 VD_REPOS_TOURS=3
+case "$OUT" in *"MOTIF: repos-prolonge"*) ok "un vieux message de limite ne retient plus l'agent revenu au repos" ;; *) ko "un message de limite PÉRIMÉ retient la veille jusqu'à épuisement : $OUT" ;; esac
+
+echo "→ 51j. chacune des DEUX phrases de l'outil suffit seule"
+for PH in "  ⎿  You've hit your session limit · resets 12:30pm" "     Continuing automatically at 12:30pm" "  ⎿  You've reached your usage limit. Resets at 3pm" "  ⎿  YOU'VE HIT YOUR SESSION LIMIT"; do
+  printf '%s\n' "$PH" > "$SCREEN_FILE"; printf 'working\ndone\n' > "$SEQ_FILE"
+  run_cfg registre-51j 12 VD_REPOS_TOURS=3
+  case "$OUT" in *"MOTIF: tours-epuises"*) ok "« ${PH## } » retient l'agent" ;; *) ko "phrase seule non reconnue (« $PH ») : $OUT" ;; esac
+done
+
+echo "→ 51k. la limite REMET LES COMPTEURS À ZÉRO : repos compté avant la coupure ne s'additionne pas au repos d'après"
+ECR_R="${WORK}/ecr-51k-r.txt"; : > "$ECR_R"
+ECR_L="${WORK}/ecr-51k-l.txt"; printf '%s\n' "$ECRAN_LIMITE" > "$ECR_L"
+SS51K="${WORK}/screen_seq_51k.txt"; rm -f "${SS51K}.ridx"
+# repos ordinaire ×2 (vide) → limite ×3 → repos ordinaire ×2 ; borne de repos = 3.
+# Deux lectures d'écran par relevé de repos (travail_en_vol, puis la limite).
+for E in "$ECR_R" "$ECR_R" "$ECR_L" "$ECR_L" "$ECR_L" "$ECR_R" "$ECR_R"; do printf '%s\n%s\n' "$E" "$E"; done > "$SS51K"
+printf 'working\nidle\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx"
+OUT="$(env PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_SEQ_FILE="$SS51K" FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" \
+       FAKE_HERDR_WITNESS="$WITNESS" VD_REGISTRE_DIR="${WORK}/registre-51k" VD_SLEEP=0 VD_SLEEP_POSE=0 \
+       VD_SLEEP_APRES_DEBLOCAGE=0 VD_REPOS_TOURS=3 bash "$VEILLE" test-pane test-agent 8 --dry-run 2>&1)"
+case "$OUT" in *"MOTIF: repos-prolonge"*) ko "le repos d'avant la coupure s'ajoute à celui d'après : $OUT" ;; *) ok "la limite remet le compteur de repos à zéro" ;; esac
 
 echo "→ 51e. l'écran de limite vu en état blocked n'est pas « un écran non reconnu » (3 relevés → arrêt)"
 printf '%s\n' "$ECRAN_LIMITE" > "$SCREEN_FILE"
@@ -2212,6 +2248,13 @@ if [ -n "$J52" ] && [ -f "$J52" ]; then ok "le journal que --list affiche existe
 case "$OUT52" in *"déblocages : $J52"*) ok "la pose annonce ce même chemin, étiqueté « déblocages »" ;; *) ko "la pose annonce un autre chemin que --list : $OUT52 / $LIST52" ;; esac
 case "$OUT52" in *"$LOG52"*) ok "la pose annonce aussi le fichier de sortie" ;; *) ko "fichier de sortie non annoncé : $OUT52" ;; esac
 case "$LIST52" in *"sortie=$LOG52"*) ok "--list affiche aussi le fichier de sortie" ;; *) ko "--list ne dit pas où est la sortie : $LIST52" ;; esac
+# La variante --dry-run du détachement passe AUSSI la sortie au registre.
+REG52B="${WORK}/registre-52b"; rm -rf "$REG52B"; LOG52B="${WORK}/detach-52b.log"
+PATH="${BINDIR}:${PATH}" FAKE_HERDR_STATUS=working FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+  VD_REGISTRE_DIR="$REG52B" VD_LOG="$LOG52B" VD_SLEEP=1 bash "$VEILLE" w9:pFF agent-52b 40 --detach --dry-run >/dev/null 2>&1
+LIST52B="$(VD_REGISTRE_DIR="$REG52B" bash "$VEILLE" --list 2>&1)"
+case "$LIST52B" in *"sortie=$LOG52B"*) ok "--detach --dry-run porte aussi la sortie au registre" ;; *) ko "sortie absente en --dry-run : $LIST52B" ;; esac
+kill "$(printf '%s\n' "$LIST52B" | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1)" 2>/dev/null
 PID52="$(printf '%s\n' "$LIST52" | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1)"
 [ -n "$PID52" ] && kill "$PID52" 2>/dev/null; sleep 0.3
 
