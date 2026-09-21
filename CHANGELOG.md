@@ -17,6 +17,8 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
   - **Le balayeur reste armé** (le geste local d'origine commentait `v.balayer()`, ce qui tuait aussi la relance des messages gardés, sans le dire). L'arrêt est dans la délivrance, pas dans un fil coupé.
   - **Réversible par lecture** : le code qui soumettait reste sous la garde `SOUMISSION_DE_LA_BOITE_DAUTRUI_AUTORISEE = false`, en un seul endroit. Aucun interrupteur d'environnement, exprès.
   - Bancs : `jamais-soumettre-la-boite-dautrui` (refus nommé, balayeur câblé, journal) et `l-installation-laisse-larret-de-soumission` (simule l'installation sur un poste qui porte l'ancien code, puis éprouve le module **installé**). Les bancs qui affirmaient la soumission réussie sont réécrits en leur contraire.
+  - **Trou nommé** : le veto de réservation (`encoreAutorise`, cause `plus-autorise`) et le code de soumission qui le suit sont désormais inatteignables de bout en bout — la règle répond avant eux. Ils restent lisibles sous la garde, mais aucun essai de production ne les exerce plus.
+  - ⚠️ **Non touché, à confirmer avec le dirigeant** : `scripts/orchestration/veille-deblocage.sh` envoie encore Entrée sur des **écrans de dialogue reconnus** (pas la boîte de saisie, pas `delivrerLaBoite`). C'est un autre dispositif qui « débloque des fenêtres » ; la cible de l'ordre étant la boîte de saisie, il est hors de ce lot.
   - ⚠️ **Non touché, et à rouvrir** : le gabarit du métier d'orchestrateur prescrit encore la soumission (« la commande attend cinq minutes… puis le soumet pour son auteur ») — contradiction 3 de `D-20260920-0004`, dossier arrêté par le dirigeant.
 
 ## [Non-versionne] - 2026-09-21
