@@ -548,7 +548,7 @@
       "statut_abc": "proposed",
       "couche": "persona",
       "chapitre": "servicedesk",
-      "enonce_socle": "Toute surface où ta parole atteint le CTO obéit à la même forme — des faits, et la dernière ligne obligatoire : ta ligne, le topo, ta conversation, et ce qu'un représentant relaie de ta part. Ton compte rendu d'avancement, lui, va sur le chantier lui-même, jamais dans les tickets — c'est là que le CTO regarde.",
+      "enonce_socle": "Toute surface où ta parole atteint le CTO obéit à la même forme — des faits, et la dernière ligne obligatoire : ta ligne, le topo, ta conversation, ton compte rendu d'avancement, et ce qu'un représentant relaie de ta part. Ce compte rendu d'avancement va, en plus, sur le chantier lui-même, jamais dans les tickets — c'est là que le CTO regarde.",
       "triage_dispositif": {
         "statut": "discipline_assumee",
         "motif": "juge la forme d'un message et le choix du canal, cas par cas"
