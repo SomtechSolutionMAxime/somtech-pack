@@ -58,31 +58,33 @@ process.env.HOME = FAKE_HOME;
 
 const tmp = (p) => mkdtempSync(join(tmpdir(), p));
 
-test('TEST DE FORME — setup.js importe client.js/identite-du-code.js depuis destDir, JAMAIS depuis payloadRoot', () => {
-  // ⚠️ C'EST UN TEST DE FORME, ET LE BRIEF LE DIT EXPLICITEMENT : lire le SOURCE plutôt que
-  // d'observer un comportement. Il ferme quand même le défaut réel — `reveillerVeilleur()`
-  // (client.js) fait naître le veilleur depuis SON PROPRE dossier (`ICI`), donc importer la
-  // copie du payload (répertoire temporaire de npx) ferait naître un veilleur voué à
-  // disparaître avec ce dossier, exactement le veilleur éphémère mesuré le 2026-08-20.
+test('TEST DE FORME — setup.js confie la vérification à releve-veilleur.js en lui passant destDir, jamais payloadRoot', () => {
+  // ⚠️ CE TEST A ÉTÉ REFAIT APRÈS AVOIR ROUGI POUR LA BONNE RAISON. Il lisait dans `setup.js`
+  // la composition littérale du chemin de `client.js` ; le geste a depuis DÉMÉNAGÉ dans
+  // `releve-veilleur.js` (pour que ses deux garanties deviennent éprouvables), et le test a
+  // rougi en pointant un lieu où la chose n'est plus. C'est la limite d'un test de forme : il
+  // garde un ENDROIT, pas une propriété — et il se périme au premier déménagement.
+  //
+  // Ce qu'il garde donc maintenant, c'est la seule chose que `setup.js` décide encore : QUELLE
+  // racine il confie. La propriété réelle — les imports partent de cette racine — est éprouvée
+  // par le COMPORTEMENT dans `releve-veilleur.test.js` (« LES CHEMINS IMPORTÉS VIENNENT DE
+  // destDir »), où un importeur injecté relève les chemins réellement demandés.
+  //
+  // Le fait gardé reste le même : `reveillerVeilleur()` (client.js) fait naître le veilleur
+  // depuis SON PROPRE dossier. Importer depuis `payloadRoot` — le répertoire temporaire que
+  // `npx` dézippe — ferait naître un veilleur voué à disparaître avec lui : le veilleur
+  // éphémère mesuré le 2026-08-20 (T-20260818-0035).
   const source = readFileSync(join(HERE, '..', 'src', 'commands', 'setup.js'), 'utf8');
 
-  assert.ok(
-    source.includes("join(destDir, 'ligne-directe', 'src', 'client.js')"),
-    'setup.js doit composer le chemin de client.js à partir de destDir (la copie INSTALLÉE)'
+  assert.match(
+    source,
+    /verifierFraicheurDuVeilleur\(\{[\s\S]*?destDir,/,
+    'setup.js doit confier destDir — la copie INSTALLÉE — à la vérification de fraîcheur'
   );
   assert.ok(
-    source.includes("join(destDir, 'ligne-directe', 'src', 'identite-du-code.js')"),
-    'setup.js doit composer le chemin de identite-du-code.js à partir de destDir (la copie INSTALLÉE)'
+    !/verifierFraicheurDuVeilleur\(\{[\s\S]*?destDir:\s*payloadRoot/.test(source),
+    'la racine confiée ne doit JAMAIS être payloadRoot'
   );
-  // Les DEUX imports dynamiques doivent viser les variables composées ci-dessus — jamais
-  // `payloadRoot`. Le mutant m5 du brief consiste précisément à substituer `destDir` par
-  // `payloadRoot` dans la composition du chemin ; ce test rougirait alors sur l'assertion
-  // du dessus, ET celui-ci rougirait si le chemin était recomposé en ligne, sous l'`import`,
-  // directement à partir de `payloadRoot`.
-  assert.match(source, /await import\(cheminClient\)/, 'setup.js doit importer client.js dynamiquement, depuis le chemin composé sur destDir');
-  assert.match(source, /await import\(cheminIdentite\)/, 'setup.js doit importer identite-du-code.js dynamiquement, depuis le chemin composé sur destDir');
-  assert.ok(!/cheminClient\s*=\s*join\(payloadRoot/.test(source), 'cheminClient ne doit JAMAIS être composé sur payloadRoot');
-  assert.ok(!/cheminIdentite\s*=\s*join\(payloadRoot/.test(source), 'cheminIdentite ne doit JAMAIS être composé sur payloadRoot');
 });
 
 test("run setup : après installation de ligne-directe, le veilleur est vérifié — poste neuf, « aucun en cours »", async () => {
