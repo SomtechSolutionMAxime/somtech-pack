@@ -17,7 +17,8 @@
 #       « Yes, and tell Claude what to do differently » (le piège nommé).
 #   G3. Devant un écran non reconnu, elle ne répond pas, le dit, et
 #       s'arrête après 3 relevés non reconnus consécutifs.
-#   G4. done|idle n'est annoncé qu'après confirmation sur deux relevés.
+#   G4. done|idle ne concluent JAMAIS une fin : un repos est compté, borné, et nommé
+#       repos-prolonge (T-20260921-0077 — done = « tour fini, pane non regardé »).
 #
 # Un faux `herdr` est posé en tête de PATH ; il rend des réponses scriptées
 # via FAKE_HERDR_STATUS / FAKE_HERDR_SCREEN_FILE et journalise chaque appel
@@ -307,12 +308,16 @@ case "$OUT" in *"3 blocages non reconnus"*) ok "le bilan final compte 3 blocages
 # =================================================================
 # 6. Agent done confirmé sur DEUX relevés → elle sort en annonçant son bilan.
 # =================================================================
-echo "→ 6. done confirmé sur deux relevés"
+echo "→ 6. done confirmé sur deux relevés → ce n'est PLUS une fin (T-20260921-0077)"
+# `done` = « il a fini son TOUR, personne n'a regardé le pane » : l'état normal
+# d'un agent qui attend le message suivant. Deux relevés concordants ne
+# prouvent qu'un repos — c'était le défaut mesuré (482 veilles mortes).
 : > "$SCREEN_FILE"
-FAKE_HERDR_STATUS=done run 1
+FAKE_HERDR_STATUS=done run 3
 
-case "$OUT" in *"TERMINE apres 0 deblocages"*) ok "elle annonce la fin après confirmation" ;; *) ko "pas d'annonce de fin : $OUT" ;; esac
-case "$OUT" in *"bilan : 0 deblocages, 0 blocages non reconnus"*) ok "bilan final cohérent (0/0)" ;; *) ko "bilan final incorrect : $OUT" ;; esac
+case "$OUT" in *"TERMINE"*) ko "DÉFAUT : « TERMINE » annoncé sur deux relevés done : $OUT" ;; *) ok "deux relevés done n'annoncent plus la fin" ;; esac
+case "$OUT" in *"MOTIF: agent-termine"*) ko "DÉFAUT : motif agent-termine sur un agent qui se repose : $OUT" ;; *) ok "aucun motif agent-termine" ;; esac
+case "$OUT" in *"bilan : 0 deblocages, 0 blocages non reconnus"*) ok "bilan final cohérent (0/0), atteint par épuisement des tours" ;; *) ko "bilan final incorrect : $OUT" ;; esac
 
 # =================================================================
 # 7. Agent « done » TRANSITOIRE : le premier relevé dit done, le second
@@ -388,14 +393,16 @@ case "$OUT" in *"MOTIF: tours-epuises"*) ok "elle a veillé jusqu'à épuisement
 #    lui, SURVIENT vraiment (3 agents sur 85 le portaient au même relevé).
 #    Le cas `idle` prolongé a son propre scénario : 47c.
 # =================================================================
-echo "→ 9. working puis done confirmé → elle s'arrête (motif agent-termine)"
+echo "→ 9. done ARME la détection de repos sans avoir vu travailler (il ne survient pas à la naissance)"
+# Contraste avec le scénario 8 : `idle` constant à la naissance → tours-epuises
+# (il attend son brief). `done` constant → un tour a eu lieu : le repos compte.
 : > "$SCREEN_FILE"
-printf 'working\ndone\ndone\n' > "$SEQ_FILE"
-run 4
+rm -f "$SEQ_FILE"
+FAKE_HERDR_STATUS=done VD_REPOS_TOURS=3 run 10
 
-case "$OUT" in *"TERMINE"*) ok "un agent qui a travaillé puis fini libère sa veille" ;; *) ko "elle ne s'arrête pas sur un agent réellement terminé : $OUT" ;; esac
-case "$OUT" in *"MOTIF: agent-termine"*) ok "motif « agent-termine » nommé" ;; *) ko "motif attendu « agent-termine », obtenu : $OUT" ;; esac
-[ "$RC" -eq 0 ] && ok "code de sortie 0 pour un agent terminé (rc=$RC)" || ko "code de sortie attendu 0, obtenu $RC"
+case "$OUT" in *"MOTIF: repos-prolonge"*) ok "done armé : elle part sur repos-prolonge, en nommant ce qu'elle a vu" ;; *) ko "motif attendu repos-prolonge : $OUT" ;; esac
+case "$OUT" in *"MOTIF: agent-termine"*) ko "elle affirme une fin qu'elle n'a pas mesurée : $OUT" ;; *) ok "jamais agent-termine" ;; esac
+[ "$RC" -eq 12 ] && ok "code de sortie 12 — distinct de 0 (rc=$RC)" || ko "code de sortie attendu 12, obtenu $RC"
 
 echo "→ 9b. LA CONTRE-ÉPREUVE : la même séquence avec idle au lieu de done ne conclut RIEN"
 # C'est l'assertion qui empêche le défaut ① de revenir par cette porte-ci.
@@ -404,7 +411,7 @@ printf 'working\nidle\nidle\n' > "$SEQ_FILE"
 run 4
 case "$OUT" in
   *"MOTIF: agent-termine"*) ko "DÉFAUT ① REVENU : deux relevés idle suffisent de nouveau à déclarer l'agent fini : $OUT" ;;
-  *) ok "deux relevés idle ne déclarent plus la fin — seul done le fait" ;;
+  *) ok "deux relevés idle ne déclarent pas la fin" ;;
 esac
 
 # =================================================================
@@ -414,12 +421,14 @@ esac
 # ⚠️ SÉQUENCE CHANGÉE POUR LA MÊME RAISON QUE LE SCÉNARIO 9 : la fin se dit
 #    par `done`, jamais par deux `idle`. Ce qu'il éprouve — que `blocked`
 #    arme la détection de fin au même titre que `working` — est intact.
-echo "→ 10. blocked (donc au travail) puis done confirmé → elle s'arrête"
+echo "→ 10. blocked (donc au travail) ARME la détection de repos, au même titre que working"
+# Contraste avec le scénario 8 : `idle` seul à la naissance ne compte pas ;
+# après un `blocked`, il compte.
 printf '%s\n' "$ECRAN_PERMISSION" > "$SCREEN_FILE"
-printf 'blocked\ndone\ndone\n' > "$SEQ_FILE"
-run 4
+printf 'blocked\nidle\n' > "$SEQ_FILE"
+VD_REPOS_TOURS=3 run 12
 
-case "$OUT" in *"MOTIF: agent-termine"*) ok "blocked arme la détection de fin" ;; *) ko "blocked n'arme pas la détection : $OUT" ;; esac
+case "$OUT" in *"MOTIF: repos-prolonge"*) ok "blocked arme la détection : le repos qui suit compte" ;; *) ko "blocked n'arme pas la détection : $OUT" ;; esac
 case "$OUT" in *"debloque (#1)"*) ok "le déblocage a bien eu lieu au tour blocked" ;; *) ko "aucun déblocage au tour blocked : $OUT" ;; esac
 
 # =================================================================
@@ -1431,15 +1440,16 @@ case "$OUT" in
   *) ok "elle n'affirme pas que l'agent a fini" ;;
 esac
 
-echo "→ 47b. LA CONTRE-ÉPREUVE : l'état terminal EXPLICITE done conclut toujours"
+echo "→ 47b. AUCUNE suite done/idle ne produit plus jamais « agent-termine » ni « TERMINE »"
 : > "$SCREEN_FILE"
-printf 'working\ndone\ndone\n' > "$SEQ_FILE"
-run 6
-case "$OUT" in
-  *"MOTIF: agent-termine"*) ok "un done confirmé conclut toujours agent-termine — le correctif n'a pas emporté la fin légitime" ;;
-  *) ko "LE CORRECTIF A TROP PRIS : un done explicite et confirmé ne conclut plus : $OUT" ;;
-esac
-[ "$RC" -eq 0 ] && ok "et son code de sortie reste 0" || ko "code de sortie $RC sur une fin légitime"
+for SEQ47B in 'working\ndone\ndone\n' 'working\ndone\nidle\nidle\n' 'done\ndone\ndone\ndone\n' 'working\nidle\nidle\ndone\ndone\n'; do
+  printf "$SEQ47B" > "$SEQ_FILE"
+  run 8
+  case "$OUT" in
+    *"MOTIF: agent-termine"*|*"TERMINE"*) ko "une suite d'états lit encore une fin (« $SEQ47B ») : $OUT" ;;
+    *) ok "« $(printf "$SEQ47B" | tr '\n' ' ')» ne conclut aucune fin" ;;
+  esac
+done
 
 echo "→ 47c. Le repos PROLONGÉ s'arrête — mais en nommant ce qu'elle a vu, jamais « il a fini »"
 : > "$SCREEN_FILE"
@@ -1557,10 +1567,10 @@ case "$OUT" in
   *) ok "elle n'annonce pas « TERMINE »" ;;
 esac
 
-echo "→ 48b. LA CONTRE-ÉPREUVE : le MÊME écran SANS la marque du but conclut toujours"
-# Sans elle, un correctif qui cesserait purement et simplement de conclure
-# passerait le scénario 48. C'est l'assertion qui mesure ce que le correctif
-# a PRIS en plus de ce qu'il a fermé.
+echo "→ 48b. LA CONTRE-ÉPREUVE : le MÊME écran SANS la marque du but s'arrête sur repos-prolonge"
+# Sans elle, un correctif qui retiendrait TOUT agent au repos passerait le
+# scénario 48. Ici la borne de repos (3) s'applique : la marque du but est ce
+# qui distingue « mandat ouvert » (48 : elle reste) d'un repos ordinaire.
 cat > "$SCREEN_FILE" <<'ECRAN48B'
   ⎿  Login successful
 
@@ -1570,12 +1580,12 @@ cat > "$SCREEN_FILE" <<'ECRAN48B'
   ⏵⏵ auto mode on (shift+tab to cycle)
 ECRAN48B
 printf 'working\ndone\nidle\nidle\nidle\nidle\n' > "$SEQ_FILE"
-run 6
+VD_REPOS_TOURS=3 run 12
 case "$OUT" in
-  *"MOTIF: agent-termine"*) ok "sans but actif, done+idle conclut toujours la fin — le correctif n'a pas emporté la fin légitime" ;;
-  *) ko "LE CORRECTIF A TROP PRIS : plus aucune fin n'est conclue, même sans but actif : $OUT" ;;
+  *"MOTIF: repos-prolonge"*) ok "sans but actif, le repos borné s'applique — le correctif n'a pas rendu la veille éternelle" ;;
+  *) ko "LA VEILLE NE PART PLUS : un repos sans but actif ne s'arrête pas : $OUT" ;;
 esac
-[ "$RC" -eq 0 ] && ok "et son code de sortie reste 0" || ko "code de sortie $RC sur une fin légitime"
+[ "$RC" -eq 12 ] && ok "code de sortie 12" || ko "code de sortie $RC (attendu 12)"
 
 echo "→ 48c. L'EFFET EMPÊCHÉ : elle est ENCORE LÀ quand l'agent reprend et se bloque"
 # ⚠️ On éprouve l'effet, pas le message. Un correctif qui renommerait le motif
@@ -1662,12 +1672,12 @@ cat > "$SCREEN_FILE" <<'ECRAN48F'
 ❯
 ECRAN48F
 printf 'working\ndone\ndone\ndone\n' > "$SEQ_FILE"
-run 4
+VD_REPOS_TOURS=3 VD_BUT_TOURS=3 run 12
 case "$OUT" in
-  *"MOTIF: agent-termine"*) ok "un écran qui PARLE de goal sans porter la marque conclut toujours la fin" ;;
-  *) ko "SONDE TROP LARGE : elle refuse de conclure sur un agent fini qui a seulement écrit le mot « goal » : $OUT" ;;
+  *"MOTIF: repos-prolonge"*) ok "un écran qui PARLE de goal sans porter la marque reste un repos ordinaire" ;;
+  *) ko "SONDE TROP LARGE : elle prend le mot « goal » pour la marque du but : $OUT" ;;
 esac
-[ "$RC" -eq 0 ] && ok "et son code de sortie reste 0" || ko "code de sortie $RC sur une fin légitime"
+[ "$RC" -eq 12 ] && ok "code de sortie 12 (repos-prolonge)" || ko "code de sortie $RC (attendu 12)"
 
 echo "→ 48g. La FENÊTRE de lecture est assez large pour atteindre la marque"
 # ⚠️ LA MARQUE N'EST PAS LA DERNIÈRE LIGNE DE L'ÉCRAN. Mesuré le 2026-08-26 sur
@@ -1753,8 +1763,8 @@ Do you want to proceed?
 
                                                ◎ /goal active (2h)
 ECRAN48I
-# done→idle (compte 1) · blocked (déblocage RÉEL) · done→idle (doit RECOMPTER de 1)
-printf 'working\ndone\nidle\nblocked\ndone\nidle\nworking\nworking\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx"
+# done (compte 1) · blocked (déblocage RÉEL) · done (doit RECOMPTER de 1)
+printf 'working\ndone\nblocked\ndone\nworking\nworking\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx"
 OUT48I="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
           FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_WITNESS="$WITNESS" \
           VD_REGISTRE_DIR="${WORK}/registre-48i" VD_BUT_TOURS=2 \
@@ -2007,6 +2017,297 @@ case "$OUT49D" in
   *"MOTIF: but-inacheve"*) ko "elle abandonne un agent qui a du travail en vol : $OUT49D" ;;
   *) ok "le travail en vol prime : elle ne conclut rien du tout" ;;
 esac
+
+# =================================================================
+# ===== T-20260921-0077 — LA VEILLE ABANDONNAIT TOUT AGENT À SA PREMIÈRE
+# ===== PAUSE. herdr documente `done` comme « l'agent a fini SON TOUR et
+# ===== personne n'a encore regardé ce pane » : c'est l'état NORMAL d'un
+# ===== agent qui a répondu et attend le message suivant. Mesuré le
+# ===== 2026-09-21 sur un vrai agent à nous (réponse « ok », puis 8 relevés :
+# ===== `done` à chacun) — la veille, posée dessus, sortait `agent-termine`
+# ===== en deux relevés. 482 veilles mortes de cette façon, 101 agents.
+# =================================================================
+run_cfg() {   # run_cfg <registre> <tours> [VAR=val …] — réglages explicites
+  local reg="$1" tours="$2"; shift 2
+  : > "$WITNESS"; rm -f "${SEQ_FILE}.idx"
+  OUT="$(env PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+         FAKE_HERDR_STATUS="${FAKE_HERDR_STATUS:-blocked}" \
+         FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_WITNESS="$WITNESS" \
+         VD_REGISTRE_DIR="${WORK}/$reg" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 \
+         VD_SLEEP_APRES_DEBLOCAGE=0 VD_SLEEP_POSE=0 "$@" \
+         bash "$VEILLE" test-pane test-agent "$tours" --dry-run 2>&1)"
+  RC=$?
+}
+
+echo "→ 50. DÉFAUT MESURÉ : l'agent répond, passe par done, PUIS reçoit le message suivant → elle est encore là"
+cat > "$SCREEN_FILE" <<'ECRAN50'
+ Bash command
+
+   git status
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and always allow access
+   3. No
+ECRAN50
+# working (il répond) → done ×4 (il attend le message suivant, non vu) →
+# blocked (le message est arrivé, il travaille, il demande une permission).
+printf 'working\ndone\ndone\ndone\ndone\nblocked\nblocked\nblocked\n' > "$SEQ_FILE"
+run_cfg registre-50 12
+case "$OUT" in
+  *"MOTIF: agent-termine"*) ko "DÉFAUT VIVANT : done entre deux messages est lu comme « l'agent a fini » : $OUT" ;;
+  *) ok "done entre deux messages ne conclut plus une fin" ;;
+esac
+case "$OUT" in
+  *"debloque (#1)"*) ok "elle était ENCORE LÀ au message suivant et a débloqué l'agent" ;;
+  *) ko "elle n'était plus là quand l'agent a reçu le message suivant : $OUT" ;;
+esac
+
+echo "→ 50b. done PUIS idle (l'humain a regardé le pane) puis réveil → encore là"
+printf 'working\ndone\nidle\nidle\nblocked\nblocked\nblocked\n' > "$SEQ_FILE"
+run_cfg registre-50b 12
+case "$OUT" in *"debloque (#1)"*) ok "le passage done→idle ne la retire pas non plus" ;; *) ko "retirée entre done et idle : $OUT" ;; esac
+
+echo "→ 50c. LA CONTRE-ÉPREUVE : un agent qui a RÉELLEMENT fini (done sans fin, aucun but, rien en vol) la libère toujours"
+: > "$SCREEN_FILE"
+printf 'working\ndone\n' > "$SEQ_FILE"
+run_cfg registre-50c 50 VD_REPOS_TOURS=3
+case "$OUT" in
+  *"MOTIF: repos-prolonge"*) ok "elle part, en nommant ce qu'elle a VU (un repos prolongé), jamais « il a fini »" ;;
+  *) ko "une veille sur un agent fini ne part plus : $OUT" ;;
+esac
+case "$OUT" in *"MOTIF: tours-epuises"*) ko "elle brûle tous ses tours sur un agent fini" ;; *) ok "elle conclut avant d'épuiser ses tours" ;; esac
+[ "$RC" -eq 12 ] && ok "code de sortie 12 (repos-prolonge), distinct de 0" || ko "code attendu 12, obtenu $RC"
+
+echo "→ 50d. un done qui se prolonge SANS jamais dépasser la borne n'arrache rien à la veille"
+printf 'working\ndone\n' > "$SEQ_FILE"
+run_cfg registre-50d 5 VD_REPOS_TOURS=100
+case "$OUT" in *"MOTIF: tours-epuises"*) ok "sous la borne de repos, elle veille jusqu'au bout" ;; *) ko "elle part avant la borne : $OUT" ;; esac
+
+echo "→ 50e. done avec du TRAVAIL EN VOL n'est jamais un repos qui compte"
+cat > "$SCREEN_FILE" <<'ECRAN50E'
+  · 2 shells · /tasks to see subagents
+ECRAN50E
+printf 'working\ndone\n' > "$SEQ_FILE"
+run_cfg registre-50e 12 VD_REPOS_TOURS=3
+case "$OUT" in *"MOTIF: repos-prolonge"*) ko "elle abandonne un agent en done avec du travail en vol : $OUT" ;; *) ok "le travail en vol remet le compteur à zéro sur le chemin done aussi" ;; esac
+
+# ── La limite d'usage : l'agent est coupé, la reprise est AUTOMATIQUE ────────
+ECRAN_LIMITE="  ⎿  You've hit your session limit · resets 12:30pm (America/Toronto)
+     Continuing automatically at 12:30pm
+
+────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────"
+
+for ETAT_LIM in done idle; do
+  echo "→ 51 ($ETAT_LIM). coupé par une limite d'usage, reprise annoncée → elle RESTE, bien au-delà des bornes de repos"
+  printf '%s\n' "$ECRAN_LIMITE" > "$SCREEN_FILE"
+  printf 'working\n%s\n' "$ETAT_LIM" > "$SEQ_FILE"
+  run_cfg registre-51-$ETAT_LIM 12 VD_REPOS_TOURS=3 VD_BUT_TOURS=3
+  case "$OUT" in
+    *"MOTIF: tours-epuises"*) ok "elle a tenu ses 12 tours sur un agent coupé (bornes à 3)" ;;
+    *) ko "elle a lâché un agent coupé par une limite d'usage : $OUT" ;;
+  esac
+  case "$OUT" in *"limite"*) ok "elle DIT pourquoi elle reste" ;; *) ko "elle reste sans le dire : $OUT" ;; esac
+done
+
+echo "→ 51b. LA CONTRE-ÉPREUVE : le même écran SANS la mention de limite → elle part sur repos-prolonge"
+cat > "$SCREEN_FILE" <<'ECRAN51B'
+  ⎿  Login successful
+
+────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────
+ECRAN51B
+printf 'working\ndone\n' > "$SEQ_FILE"
+run_cfg registre-51b 12 VD_REPOS_TOURS=3 VD_BUT_TOURS=3
+case "$OUT" in *"MOTIF: repos-prolonge"*) ok "sans limite à l'écran, la borne de repos s'applique" ;; *) ko "la sonde de limite retient un agent qui n'est pas coupé : $OUT" ;; esac
+
+echo "→ 51c. PARLER de limite n'est pas être coupé par une limite"
+cat > "$SCREEN_FILE" <<'ECRAN51C'
+  Le limiteur de débit (rate limit) est documenté ; la session limit du plan
+  est décrite au chapitre 3, et on continue automatiquement les reprises.
+
+────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────
+ECRAN51C
+printf 'working\ndone\n' > "$SEQ_FILE"
+run_cfg registre-51c 12 VD_REPOS_TOURS=3 VD_BUT_TOURS=3
+case "$OUT" in *"MOTIF: repos-prolonge"*) ok "un texte qui parle de limite ne retient pas l'agent" ;; *) ko "un simple mot « limit » retient l'agent : $OUT" ;; esac
+
+echo "→ 51d. la reprise automatique : coupé, puis il repart et se bloque → elle est encore là"
+printf '%s\n' "$ECRAN_LIMITE" > "$SCREEN_FILE"
+printf 'working\ndone\ndone\ndone\nblocked\n' > "$SEQ_FILE"
+# L'écran change à la reprise : les trois premiers relevés portent la limite,
+# le suivant une vraie demande de permission.
+ECR_PERM="${WORK}/ecran-perm-51d.txt"
+printf ' Do you want to proceed?\n ❯ 1. Yes\n   2. Yes, and always allow access\n   3. No\n' > "$ECR_PERM"
+ECR_LIM="${WORK}/ecran-lim-51d.txt"; printf '%s\n' "$ECRAN_LIMITE" > "$ECR_LIM"
+SSEQ="${WORK}/screen_seq_51d.txt"; rm -f "${SSEQ}.ridx"
+printf '%s\n%s\n%s\n%s\n%s\n' "$ECR_LIM" "$ECR_LIM" "$ECR_LIM" "$ECR_LIM" "$ECR_PERM" > "$SSEQ"
+: > "$WITNESS"; rm -f "${SEQ_FILE}.idx"
+OUT="$(env PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_SEQ_FILE="$SSEQ" \
+       FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" FAKE_HERDR_WITNESS="$WITNESS" \
+       VD_REGISTRE_DIR="${WORK}/registre-51d" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 \
+       VD_SLEEP_APRES_DEBLOCAGE=0 VD_SLEEP_POSE=0 VD_REPOS_TOURS=2 VD_BUT_TOURS=2 \
+       bash "$VEILLE" test-pane test-agent 12 --dry-run 2>&1)"
+case "$OUT" in *"debloque (#1)"*) ok "elle a survécu à la limite et débloqué l'agent qui reprenait" ;; *) ko "retirée pendant la coupure : $OUT" ;; esac
+
+echo "→ 51f. deux coupures SÉPARÉES par une reprise, heures de reprise DIFFÉRENTES : annoncées chacune, jamais plus"
+ECR_A="${WORK}/ecr-51f-a.txt"; ECR_B="${WORK}/ecr-51f-b.txt"
+printf "  ⎿  You've hit your session limit · resets 12:30pm\n     Continuing automatically at 12:30pm\n" > "$ECR_A"
+printf "  ⎿  You've hit your session limit · resets 5:00pm\n     Continuing automatically at 5:00pm\n" > "$ECR_B"
+SS51F="${WORK}/screen_seq_51f.txt"; rm -f "${SS51F}.ridx"
+# Chaque relevé de repos lit l'écran DEUX fois (travail_en_vol, puis la limite) :
+# trois relevés A (même épisode), un working (aucune lecture), trois relevés B.
+for _ in 1 2 3 4 5 6; do printf '%s\n' "$ECR_A"; done > "$SS51F"
+for _ in 1 2 3 4 5 6; do printf '%s\n' "$ECR_B"; done >> "$SS51F"
+printf 'working\ndone\ndone\ndone\nworking\ndone\ndone\ndone\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx"
+: > "$WITNESS"
+OUT="$(env PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_SEQ_FILE="$SS51F" FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" \
+       FAKE_HERDR_WITNESS="$WITNESS" VD_REGISTRE_DIR="${WORK}/registre-51f" VD_SLEEP=0 VD_SLEEP_POSE=0 \
+       VD_SLEEP_APRES_DEBLOCAGE=0 VD_REPOS_TOURS=50 bash "$VEILLE" test-pane test-agent 8 --dry-run 2>&1)"
+N51F=$(printf '%s\n' "$OUT" | grep -c "coupé par une limite d'usage")
+[ "$N51F" -eq 2 ] && ok "annoncée une fois par épisode (2 pour 6 relevés de repos)" || ko "annonces de coupure : $N51F au lieu de 2 : $OUT"
+
+echo "→ 51i. VESTIGE : le message de limite reste à l'écran APRÈS la reprise → le repos redevient ordinaire (revue de fond)"
+printf '%s\n' "$ECRAN_LIMITE" > "$SCREEN_FILE"
+printf 'working\ndone\nworking\nworking\nidle\n' > "$SEQ_FILE"
+run_cfg registre-51i 40 VD_REPOS_TOURS=3
+case "$OUT" in *"MOTIF: repos-prolonge"*) ok "un vieux message de limite ne retient plus l'agent revenu au repos" ;; *) ko "un message de limite PÉRIMÉ retient la veille jusqu'à épuisement : $OUT" ;; esac
+
+echo "→ 51j. chacune des DEUX phrases de l'outil suffit seule"
+for PH in "  ⎿  You've hit your session limit · resets 12:30pm" "     Continuing automatically at 12:30pm" "  ⎿  You've reached your usage limit. Resets at 3pm" "  ⎿  YOU'VE HIT YOUR SESSION LIMIT"; do
+  printf '%s\n' "$PH" > "$SCREEN_FILE"; printf 'working\ndone\n' > "$SEQ_FILE"
+  run_cfg registre-51j 12 VD_REPOS_TOURS=3
+  case "$OUT" in *"MOTIF: tours-epuises"*) ok "« ${PH## } » retient l'agent" ;; *) ko "phrase seule non reconnue (« $PH ») : $OUT" ;; esac
+done
+
+echo "→ 51k. la limite REMET LES COMPTEURS À ZÉRO : repos compté avant la coupure ne s'additionne pas au repos d'après"
+ECR_R="${WORK}/ecr-51k-r.txt"; : > "$ECR_R"
+ECR_L="${WORK}/ecr-51k-l.txt"; printf '%s\n' "$ECRAN_LIMITE" > "$ECR_L"
+SS51K="${WORK}/screen_seq_51k.txt"; rm -f "${SS51K}.ridx"
+# repos ordinaire ×2 (vide) → limite ×3 → repos ordinaire ×2 ; borne de repos = 3.
+# Deux lectures d'écran par relevé de repos (travail_en_vol, puis la limite).
+for E in "$ECR_R" "$ECR_R" "$ECR_L" "$ECR_L" "$ECR_L" "$ECR_R" "$ECR_R"; do printf '%s\n%s\n' "$E" "$E"; done > "$SS51K"
+printf 'working\nidle\n' > "$SEQ_FILE"; rm -f "${SEQ_FILE}.idx"
+OUT="$(env PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_SEQ_FILE="$SS51K" FAKE_HERDR_STATUS_SEQ_FILE="$SEQ_FILE" \
+       FAKE_HERDR_WITNESS="$WITNESS" VD_REGISTRE_DIR="${WORK}/registre-51k" VD_SLEEP=0 VD_SLEEP_POSE=0 \
+       VD_SLEEP_APRES_DEBLOCAGE=0 VD_REPOS_TOURS=3 bash "$VEILLE" test-pane test-agent 8 --dry-run 2>&1)"
+case "$OUT" in *"MOTIF: repos-prolonge"*) ko "le repos d'avant la coupure s'ajoute à celui d'après : $OUT" ;; *) ok "la limite remet le compteur de repos à zéro" ;; esac
+
+echo "→ 51e. l'écran de limite vu en état blocked n'est pas « un écran non reconnu » (3 relevés → arrêt)"
+printf '%s\n' "$ECRAN_LIMITE" > "$SCREEN_FILE"
+rm -f "$SEQ_FILE"
+FAKE_HERDR_STATUS=blocked run_cfg registre-51e 6
+case "$OUT" in *"MOTIF: ecran-non-reconnu"*) ko "elle abandonne un agent coupé par la limite sous prétexte d'un écran inconnu : $OUT" ;; *) ok "l'écran de limite n'épuise pas le compteur d'écrans inconnus" ;; esac
+
+echo "→ 51g. REJET du portail : un dialogue INCONNU qui CITE la phrase de limite n'est pas retenu sans borne, en silence"
+cat > "$SCREEN_FILE" <<'ECRAN51G'
+ Bash command
+
+   grep -r "You've hit your session limit" logs/
+
+ Do you want to proceed?
+ ❯ 1. Yes
+ECRAN51G
+rm -f "$SEQ_FILE"
+: > "${WORK}/j51g.log"
+FAKE_HERDR_STATUS=blocked run_cfg registre-51g 30 VD_BUT_TOURS=3 VD_JOURNAL="${WORK}/j51g.log"
+case "$OUT" in *"MOTIF: ecran-non-reconnu"*) ok "la retenue est BORNÉE : elle finit par dire qu'une intervention est requise" ;; *) ko "retenue sans borne devant un dialogue inconnu : $OUT" ;; esac
+grep -q "grep -r" "${WORK}/j51g.log" && ok "l'écran retenu est journalisé (le refus se relit)" || ko "aucun refus journalisé pendant la retenue"
+case "$OUT" in *"réponds pas"*) ok "elle DIT qu'elle ne répond pas" ;; *) ko "elle retient en silence : $OUT" ;; esac
+
+echo "→ 51h. un déblocage réel remet la retenue de limite à zéro (sinon deux plages séparées s'additionnent)"
+ECR_L51H="${WORK}/ecran-l-51h.txt"
+printf ' Bash command\n   grep "hit your session limit"\n Do you want to proceed?\n ❯ 1. Yes\n' > "$ECR_L51H"
+ECR_P51H="${WORK}/ecran-p-51h.txt"; printf ' Do you want to proceed?\n ❯ 1. Yes\n   2. No\n' > "$ECR_P51H"
+SS51H="${WORK}/screen_seq_51h.txt"; rm -f "${SS51H}.ridx"
+printf '%s\n%s\n%s\n%s\n%s\n' "$ECR_L51H" "$ECR_L51H" "$ECR_P51H" "$ECR_L51H" "$ECR_L51H" > "$SS51H"
+rm -f "$SEQ_FILE" "${SEQ_FILE}.idx"; : > "$WITNESS"
+OUT="$(env PATH="${BINDIR}:${PATH}" FAKE_HERDR_SCREEN_SEQ_FILE="$SS51H" FAKE_HERDR_STATUS=blocked \
+       FAKE_HERDR_WITNESS="$WITNESS" VD_REGISTRE_DIR="${WORK}/registre-51h" VD_SLEEP=0 VD_SLEEP_CONFIRM=0 \
+       VD_SLEEP_APRES_DEBLOCAGE=0 VD_SLEEP_POSE=0 VD_BUT_TOURS=3 \
+       bash "$VEILLE" test-pane test-agent 5 --dry-run 2>&1)"
+case "$OUT" in *"debloque (#1)"*) ok "le déblocage a eu lieu" ;; *) ko "aucun déblocage : $OUT" ;; esac
+case "$OUT" in *"MOTIF: ecran-non-reconnu"*) ko "deux plages séparées par un déblocage s'additionnent : $OUT" ;; *) ok "la retenue repart de zéro après un déblocage" ;; esac
+
+# ── Passe portail sur le delta a55f70e..a935855 (T-20260921-0077) ────────────
+echo "→ 51l. RÉGRESSION : une phrase ORDINAIRE qui cite « usage limit reached » ne retient pas un agent au repos"
+printf '%s\n' '  L API renvoie parfois "usage limit reached" quand le quota est depasse.' > "$SCREEN_FILE"
+printf 'working\ndone\n' > "$SEQ_FILE"
+run_cfg registre-51l 40 VD_REPOS_TOURS=3
+case "$OUT" in *"MOTIF: repos-prolonge"*) ok "sans heure de reprise annoncée, la phrase citée ne retient pas la veille" ;; *) ko "une phrase ordinaire retient la veille jusqu'à épuisement (borne de repos perdue) : $OUT" ;; esac
+
+echo "→ 51m. une 2ᵉ coupure RÉELLE de même signature (même heure, jour suivant) est retenue, pas oubliée comme vestige"
+printf '%s\n' "$ECRAN_LIMITE" > "$SCREEN_FILE"
+printf 'working\ndone\ndone\nworking\ndone\n' > "$SEQ_FILE"
+run_cfg registre-51m 40 VD_REPOS_TOURS=3 VD_LIMITE_MEMOIRE=0
+case "$OUT" in *"MOTIF: tours-epuises"*) ok "la signature n'est un vestige que dans sa fenêtre de mémoire" ;; *) ko "une coupure réelle de même signature est oubliée : $OUT" ;; esac
+
+echo "→ 51q. CHAQUE branche de l'heure de reprise suffit seule (le banc garde les deux, pas leur réunion)"
+for PH in "  ⎿  You've reached your usage limit. Resets on Friday" "  ⎿  usage limit reached, back at 3pm"; do
+  printf '%s\n' "$PH" > "$SCREEN_FILE"; printf 'working\ndone\n' > "$SEQ_FILE"
+  run_cfg registre-51q 12 VD_REPOS_TOURS=3
+  case "$OUT" in *"MOTIF: tours-epuises"*) ok "« ${PH## } » retient l'agent" ;; *) ko "branche seule non reconnue (« $PH ») : $OUT" ;; esac
+done
+
+# La fenêtre de mémoire se mesure depuis la PREMIÈRE vue de la signature (temps réel,
+# VD_SLEEP=1 : un tour = ~1 s).
+echo "→ 51r. la fenêtre part de la PREMIÈRE vue : revoir la même signature ne la rafraîchit pas"
+printf '%s\n' "$ECRAN_LIMITE" > "$SCREEN_FILE"
+printf 'working\ndone\ndone\ndone\ndone\nworking\ndone\ndone\ndone\n' > "$SEQ_FILE"
+run_cfg registre-51r 9 VD_SLEEP=1 VD_REPOS_TOURS=3 VD_LIMITE_MEMOIRE=3
+case "$OUT" in *"MOTIF: tours-epuises"*) ok "coupure vue depuis plus que la fenêtre : retenue, pas oubliée" ;; *) ko "la fenêtre est mesurée depuis la DERNIÈRE vue (revue rafraîchit T) : $OUT" ;; esac
+
+echo "→ 51s. après une coupure acceptée, la fenêtre REPART : le vestige suivant est oublié, pas retenu"
+printf 'working\ndone\ndone\ndone\ndone\ndone\nworking\ndone\nworking\ndone\ndone\ndone\n' > "$SEQ_FILE"
+run_cfg registre-51s 12 VD_SLEEP=1 VD_REPOS_TOURS=2 VD_LIMITE_MEMOIRE=4
+case "$OUT" in *"MOTIF: repos-prolonge"*) ok "le vestige qui suit une coupure acceptée est oublié" ;; *) ko "T n'est pas réécrit à l'acceptation : le vestige suivant est retenu : $OUT" ;; esac
+
+echo "→ 51n. done/idle rompt la série de retenues : trois relevés bloqués NON consécutifs ne s'additionnent pas"
+printf ' Bash command\n   grep "hit your session limit"\n Do you want to proceed?\n ❯ 1. Yes\n' > "$SCREEN_FILE"
+printf 'blocked\nblocked\nidle\nblocked\nblocked\n' > "$SEQ_FILE"
+run_cfg registre-51n 5 VD_BUT_TOURS=3
+case "$OUT" in *"MOTIF: ecran-non-reconnu"*) ko "un tour au repos n'a pas remis la retenue à zéro : $OUT" ;; *) ok "done/idle remet la retenue de limite à zéro" ;; esac
+
+echo "→ 51o. un tour de travail rompt aussi la série de retenues (la remise à zéro de la branche working est GARDÉE)"
+printf 'blocked\nblocked\nworking\nblocked\nblocked\n' > "$SEQ_FILE"
+run_cfg registre-51o 5 VD_BUT_TOURS=3
+case "$OUT" in *"MOTIF: ecran-non-reconnu"*) ko "un tour de travail n'a pas remis la retenue à zéro : $OUT" ;; *) ok "working remet la retenue de limite à zéro" ;; esac
+
+echo "→ 51p. le journal de retenue porte le VRAI numéro de relevé, pas « REFUS #0 »"
+printf 'blocked\nblocked\nblocked\n' > "$SEQ_FILE"
+: > "${WORK}/j51p.log"
+run_cfg registre-51p 5 VD_BUT_TOURS=5 VD_JOURNAL="${WORK}/j51p.log"
+grep -q "REFUS #0" "${WORK}/j51p.log" && ko "étiquette fausse dans le journal : REFUS #0" || ok "aucun « REFUS #0 » dans le journal de retenue"
+grep -q "REFUS #2" "${WORK}/j51p.log" && ok "le 2ᵉ relevé retenu est étiqueté #2" || ko "numérotation absente du journal de retenue"
+
+# ── Défaut secondaire : le journal annoncé est celui qu'on trouve ────────────
+echo "→ 52. le chemin de journal de --list EXISTE dès la pose, et la pose annonce les deux fichiers"
+REG52="${WORK}/registre-52"; rm -rf "$REG52"
+: > "$SCREEN_FILE"; rm -f "$SEQ_FILE"
+LOG52="${WORK}/detach-52.log"
+OUT52="$(PATH="${BINDIR}:${PATH}" FAKE_HERDR_STATUS=working FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+         VD_REGISTRE_DIR="$REG52" VD_LOG="$LOG52" VD_SLEEP=1 VD_SLEEP_CONFIRM=0 \
+         bash "$VEILLE" w9:pEE agent-52 40 --detach 2>&1)"
+LIST52="$(VD_REGISTRE_DIR="$REG52" bash "$VEILLE" --list 2>&1)"
+J52="$(printf '%s\n' "$LIST52" | sed -n 's/.*journal=\([^ ]*\).*/\1/p' | head -1)"
+if [ -n "$J52" ] && [ -f "$J52" ]; then ok "le journal que --list affiche existe : $J52"; else ko "le journal affiché par --list n'existe pas (« $J52 ») : $LIST52"; fi
+case "$OUT52" in *"déblocages : $J52"*) ok "la pose annonce ce même chemin, étiqueté « déblocages »" ;; *) ko "la pose annonce un autre chemin que --list : $OUT52 / $LIST52" ;; esac
+case "$OUT52" in *"$LOG52"*) ok "la pose annonce aussi le fichier de sortie" ;; *) ko "fichier de sortie non annoncé : $OUT52" ;; esac
+case "$LIST52" in *"sortie=$LOG52"*) ok "--list affiche aussi le fichier de sortie" ;; *) ko "--list ne dit pas où est la sortie : $LIST52" ;; esac
+# La variante --dry-run du détachement passe AUSSI la sortie au registre.
+REG52B="${WORK}/registre-52b"; rm -rf "$REG52B"; LOG52B="${WORK}/detach-52b.log"
+PATH="${BINDIR}:${PATH}" FAKE_HERDR_STATUS=working FAKE_HERDR_SCREEN_FILE="$SCREEN_FILE" \
+  VD_REGISTRE_DIR="$REG52B" VD_LOG="$LOG52B" VD_SLEEP=1 bash "$VEILLE" w9:pFF agent-52b 40 --detach --dry-run >/dev/null 2>&1
+LIST52B="$(VD_REGISTRE_DIR="$REG52B" bash "$VEILLE" --list 2>&1)"
+case "$LIST52B" in *"sortie=$LOG52B"*) ok "--detach --dry-run porte aussi la sortie au registre" ;; *) ko "sortie absente en --dry-run : $LIST52B" ;; esac
+kill "$(printf '%s\n' "$LIST52B" | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1)" 2>/dev/null
+PID52="$(printf '%s\n' "$LIST52" | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1)"
+[ -n "$PID52" ] && kill "$PID52" 2>/dev/null; sleep 0.3
 
 # ── Bilan ────────────────────────────────────────────────────────────────────
 P=$(wc -l < "$PASS_FILE"); F=$(wc -l < "$FAIL_FILE")
