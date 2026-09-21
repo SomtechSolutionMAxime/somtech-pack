@@ -411,11 +411,11 @@ test('le balayeur passe ZÉRO au geste, collé ou tapé — la soumission est é
   // un COLLÉ ». Tant que la soumission est éteinte, le balayeur ne paie plus aucune attente (elle servait à
   // s'assurer qu'un texte ne bouge pas AVANT de le soumettre). La distinction tapé/collé reste écrite dans
   // `fenetreDImmobilite` et éprouvée là ; elle est DORMANTE ici, et ce banc dit qu'elle l'est.
-  // ⚠️ CET ESSAI NE MESURE PAS LE GESTE, IL MESURE CE QU'ON LUI DIT. C'est le seul endroit où
-  // la troisième fenêtre est éprouvée : partout ailleurs le banc la neutralise pour rester
-  // court, ce qui la rendrait invisible — un réglage qu'aucun essai ne touche est un réglage
-  // qu'on peut remplacer par celui d'un autre chemin sans rien faire rougir. C'est exactement
-  // le défaut de T-20260818-0076.
+  // ⚠️ CET ESSAI NE MESURE PAS LE GESTE, IL MESURE CE QU'ON LUI DIT : la fenêtre que le balayeur passe à
+  // la délivrance. Un réglage qu'aucun essai ne touche est un réglage qu'on peut remplacer par celui
+  // d'un autre chemin sans rien faire rougir (T-20260818-0076) — d'où ce banc, qui exige ZÉRO tant que la
+  // soumission est éteinte. ⚠️ Le chemin « soumission rallumée » (fenêtre du balayage pour un tapé) n'est
+  // éprouvé par personne : il faudrait rallumer la constante.
   const vues = [];
   const espion = async ({ immobiliteMs }) => {
     vues.push(immobiliteMs);
