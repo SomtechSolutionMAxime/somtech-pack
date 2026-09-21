@@ -1,5 +1,15 @@
 // UNE BOÎTE OCCUPÉE NE COUPE PLUS LA PAROLE DU DIRIGEANT (T-20260818-0049).
 //
+// ⚠️ CONVERTI PAR D-20260921-0003 — LIRE CECI AVANT TOUT LE RESTE. Le rattrapage que ce fichier
+// éprouvait (« on soumet le texte de l'autre, puis on écrit ») est ÉTEINT : la délivrance ne soumet
+// plus JAMAIS la boîte d'autrui (ordre du dirigeant : « je veux que ça cesse » — une de ses phrases est
+// partie coupée, deux fois, le 2026-09-21). Devant une boîte occupée, `remettre` refuse donc de
+// nouveau, mais avec une cause NOMMÉE (`soumission-interdite`) : aucune touche d'envoi, aucune
+// écriture, le texte de l'autre reste où son auteur l'a laissé. Les essais ci-dessous gardent ce
+// qu'ils protégeaient d'AUTRE que la soumission — la fenêtre d'observation, le dialogue apparu pendant
+// l'attente, les textes jamais fusionnés — et n'exigent plus que la parole PASSE : elle ne passe pas, et
+// le refus le dit. L'historique du défaut d'origine (2026-08-18) reste ci-dessous, tel qu'écrit.
+//
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // LE DÉFAUT, DANS LES MOTS DU DIRIGEANT
 //
@@ -118,54 +128,52 @@ after(() => {
 
 // ═══ LE ROUGE QUI PORTE LE DÉFAUT ══════════════════════════════════════════════════════
 
-test('UNE BOÎTE OCCUPÉE PAR UN TEXTE COLLÉ NE REFUSE PLUS — on soumet, puis on écrit', async () => {
-  const { remettre } = await import('../src/herdr.js');
+test('UNE BOÎTE OCCUPÉE PAR UN TEXTE COLLÉ REFUSE, NOMMÉMENT — on ne soumet pas la boîte d’un autre, on n’écrit pas par-dessus', async () => {
+  const { remettre, RemiseEchouee } = await import('../src/herdr.js');
   // Le texte exact que le dirigeant a vu dans son refus, le 2026-08-18.
   const journal = fauxHerdr({ occupePar: '[Pasted text #83 +7 lines]' });
 
-  const preuve = await remettre('w5:p8', 'Message du dirigeant, reçu par Slack.');
+  await assert.rejects(
+    () => remettre('w5:p8', 'Message du dirigeant, reçu par Slack.'),
+    (err) => {
+      assert.ok(err instanceof RemiseEchouee, `attendu RemiseEchouee, reçu ${err?.name}`);
+      // ⚠️ LA CAUSE NOMMÉE, pas seulement un refus : un `remettre` qui n'aurait plus de délivrance du tout
+      // refuserait aussi — mais pour une autre raison, que l'expéditeur ne saurait pas lire.
+      assert.match(err.message, /on ne soumet JAMAIS/i, `le refus doit nommer la règle — reçu : ${err.message}`);
+      assert.ok(err.message.includes('w5:p8'), 'et le pane');
+      return true;
+    }
+  );
 
   const gestes = appels(journal).map((a) => a.slice(0, 2).join(' '));
-  assert.ok(gestes.includes('agent send-keys'), 'la boîte d’autrui doit avoir été SOUMISE');
-  assert.ok(gestes.includes('agent prompt'), 'et notre message doit être parti ensuite');
-  assert.ok(
-    gestes.indexOf('agent send-keys') < gestes.indexOf('agent prompt'),
-    'L’ORDRE EST LE CORRECTIF : on soumet d’abord, on écrit ensuite. L’inverse les colle.'
-  );
-  assert.ok(preuve, 'et la remise rend sa preuve');
+  assert.ok(gestes.includes('agent read'), 'la boîte a bien été OBSERVÉE — sinon l’absence de geste ne prouve rien');
+  assert.ok(!gestes.includes('agent send-keys'), 'la boîte d’autrui ne doit JAMAIS être soumise');
+  assert.ok(!gestes.includes('agent prompt'), 'et notre message n’est pas écrit par-dessus : ils partiraient collés');
 });
 
 test('LES DEUX TEXTES NE SONT JAMAIS FUSIONNÉS — c’est ce que la garde protégeait', async () => {
-  // ⚠️ CET ESSAI A ÉTÉ CORRIGÉ SUR REJET D'UNE PASSE DE REVUE DE FOND, et le rejet visait
-  // l'essai lui-même : sa première forme exigeait que le texte écrit vaille EXACTEMENT la
-  // parole du dirigeant, rien de plus. **Elle gravait donc comme correcte l'absence d'avis au
-  // destinataire** — c'est-à-dire le silence qu'on venait de réintroduire.
+  // ⚠️ CET ESSAI A ÉTÉ CORRIGÉ SUR REJET D'UNE PASSE DE REVUE DE FOND (le 2026-08-18) : ce qu'il faut
+  // interdire n'est pas « un caractère de plus », c'est LA FUSION DE DEUX AUTEURS — le texte d'un tiers
+  // abouté au nôtre, partant comme un seul message que personne n'a écrit ensemble.
   //
-  // Un essai peut verrouiller un défaut aussi sûrement qu'il en attrape un. Ce qu'il faut
-  // interdire n'est pas « un caractère de plus », c'est LA FUSION DE DEUX AUTEURS : le texte
-  // d'un tiers abouté au nôtre, partant comme un seul message que personne n'a écrit ensemble.
-  // Notre propre avis, lui, est signé de l'émetteur et vient APRÈS — ce n'est pas la même chose.
+  // ⚠️ CONVERTI PAR D-20260921-0003 : la fusion était évitée en soumettant d'abord le texte du tiers.
+  // Elle l'est maintenant en n'écrivant RIEN. Aucun `prompt` ne part, donc aucun message — fusionné ou
+  // non — ne peut partir ; et le refus dit pourquoi (`soumission-interdite`), sinon l'expéditeur croit
+  // avoir parlé.
   const journal = fauxHerdr({ occupePar: '[Pasted text #83 +7 lines]' });
   const { remettre } = await import('../src/herdr.js');
 
-  await remettre('w5:p8', 'Message du dirigeant, reçu par Slack.');
+  await assert.rejects(
+    () => remettre('w5:p8', 'Message du dirigeant, reçu par Slack.'),
+    (err) => /on ne soumet JAMAIS/i.test(err.message)
+  );
 
-  const ecrits = appels(journal).filter((a) => a[0] === 'agent' && a[1] === 'prompt');
-  assert.equal(ecrits.length, 1, 'un seul message écrit — le nôtre');
-  const livre = String(ecrits[0][3]);
+  const tous = appels(journal);
+  const ecrits = tous.filter((a) => a[0] === 'agent' && a[1] === 'prompt');
+  assert.equal(ecrits.length, 0, 'AUCUN message écrit : ni le nôtre seul, ni le nôtre abouté à celui du tiers');
   assert.ok(
-    livre.includes('Message du dirigeant, reçu par Slack.'),
-    'la parole du dirigeant part ENTIÈRE'
-  );
-  assert.ok(
-    !livre.startsWith('[Pasted text'),
-    'et le texte du tiers n’est PAS abouté devant : ce serait la fusion, un message que personne n’a écrit'
-  );
-  // La preuve que le tiers est parti SÉPARÉMENT : sa touche d'envoi a précédé notre écriture.
-  const gestes = appels(journal).map((a) => a.slice(0, 2).join(' '));
-  assert.ok(
-    gestes.indexOf('agent send-keys') < gestes.indexOf('agent prompt'),
-    'deux messages, dans cet ordre — jamais un seul'
+    !tous.some((a) => a[0] === 'agent' && a[1] === 'send-keys'),
+    'et la touche d’envoi n’est pas partie : le texte du tiers reste dans SA boîte, séparé du nôtre'
   );
 });
 
@@ -275,7 +283,10 @@ test('UNE BOÎTE QU’ON N’A PAS LIBÉRÉE NE REÇOIT RIEN — on n’écrit p
   const journal = fauxHerdr({ occupePar: '[Pasted text #83 +7 lines]', sourd: true });
   const { remettre, RemiseEchouee } = await import('../src/herdr.js');
 
-  await assert.rejects(() => remettre('w5:p8', 'Message du dirigeant.'), (err) => err instanceof RemiseEchouee);
+  await assert.rejects(
+    () => remettre('w5:p8', 'Message du dirigeant.'),
+    (err) => err instanceof RemiseEchouee && /on ne soumet JAMAIS/i.test(err.message) // ⚠️ D-20260921-0003 : la cause est nommée, même sur une boîte « sourde »
+  );
 
   const ecrits = appels(journal).filter((a) => a[0] === 'agent' && a[1] === 'prompt');
   assert.equal(
@@ -448,43 +459,48 @@ process.stdout.write(JSON.stringify({ result: { ok: true } }));
 //     DESTINATAIRE de ce qui est parti en son nom. L'incident devient CONSTATABLE au lieu
 //     d'être inexplicable — c'est ce qui rend le geste réparable.
 
-test('UN TEXTE TAPÉ ET IMMOBILE NE LAISSE PLUS LE DIRIGEANT PRIS — son message part', async () => {
+test('UN TEXTE TAPÉ ET IMMOBILE N’EST PAS SOUMIS NON PLUS — le message ne part pas, et le refus le dit', async () => {
+  // ⚠️ CONVERTI PAR D-20260921-0003. Ce texte-là était le cas où la soumission passait pour sûre
+  // (« son auteur est parti ») ; le dirigeant a tranché que ça ne l'est jamais. Il reste éprouvé que
+  // la fenêtre est observée (le texte est lu plusieurs fois) et que le refus est NOMMÉ.
   const journal = fauxHerdr({ occupePar: 'je reprends la migration demain matin si' });
-  const { remettre } = await import('../src/herdr.js');
+  const { remettre, RemiseEchouee } = await import('../src/herdr.js');
 
-  const preuve = await remettre('w5:p8', 'Message du dirigeant, reçu par Slack.');
-  assert.ok(preuve, 'son message doit PARTIR — « va voir l’écran » n’est pas un geste qu’il peut poser depuis Slack');
+  await assert.rejects(
+    () => remettre('w5:p8', 'Message du dirigeant, reçu par Slack.'),
+    (err) => {
+      assert.ok(err instanceof RemiseEchouee, `attendu RemiseEchouee, reçu ${err?.name}`);
+      assert.match(err.message, /on ne soumet JAMAIS/i, `la cause nommée — reçu : ${err.message}`);
+      return true;
+    }
+  );
 
   const gestes = appels(journal).map((a) => a.slice(0, 2).join(' '));
-  assert.ok(gestes.includes('agent send-keys'), 'le texte immobile a été soumis pour son auteur');
-  assert.ok(
-    gestes.indexOf('agent send-keys') < gestes.indexOf('agent prompt'),
-    'et dans cet ordre — soumettre puis écrire, jamais fusionner'
-  );
+  assert.ok(gestes.filter((g) => g === 'agent read').length >= 2, 'le texte a bien été OBSERVÉ avant le refus');
+  assert.ok(!gestes.includes('agent send-keys'), 'le texte immobile n’est PAS soumis pour son auteur');
+  assert.ok(!gestes.includes('agent prompt'), 'et la parole n’est pas écrite par-dessus');
 });
 
-test('LE DESTINATAIRE EST PRÉVENU DE CE QUI EST PARTI EN SON NOM — sinon l’incident est inexplicable', async () => {
-  // ⚠️ LA MÊME PORTE SUR DEUX, TROUVÉE À CÔTÉ. `avisDeBoiteBloquee` existe depuis
-  // T-20260816-0114 et n'était posé que par `livrerBrief`. Sur CE chemin, on soumettait le
-  // texte d'un tiers en son nom sans jamais le lui dire : il voyait un travail partir de chez
-  // lui sans pouvoir dire lequel. Une boîte pleine ne se signale pas toute seule.
+test('AUCUN AVIS NE PART POUR UN GESTE QUI N’A PAS EU LIEU — le refus dit ce qui est resté dans la boîte', async () => {
+  // ⚠️ CONVERTI PAR D-20260921-0003. L'avis « votre boîte était bloquée, un texte est parti sous votre
+  // signature » voyageait avec le message livré. Il n'y a plus de geste, donc plus de message ni d'avis :
+  // annoncer un texte soumis qui ne l'a pas été serait mentir. Ce qui remplace l'avis est le REFUS fait à
+  // l'expéditeur : il nomme la règle, et il cite ce qui est resté dans la boîte, pour qu'on sache où aller.
   const journal = fauxHerdr({ occupePar: '[Pasted text #83 +7 lines]' });
   const { remettre } = await import('../src/herdr.js');
 
-  await remettre('w5:p8', 'Message du dirigeant, reçu par Slack.');
+  await assert.rejects(
+    () => remettre('w5:p8', 'Message du dirigeant, reçu par Slack.'),
+    (err) => {
+      assert.match(err.message, /on ne soumet JAMAIS/i, 'la règle est nommée');
+      assert.match(err.message, /\[Pasted text #83/, 'et ce qui est resté dans la boîte est CITÉ');
+      assert.doesNotMatch(err.message, /a été soumis pour son auteur/, 'aucune soumission n’est annoncée');
+      return true;
+    }
+  );
 
   const ecrits = appels(journal).filter((a) => a[0] === 'agent' && a[1] === 'prompt');
-  assert.equal(ecrits.length, 1, 'un seul message écrit');
-  const livre = String(ecrits[0][3]);
-  assert.match(livre, /BOÎTE DE SAISIE ÉTAIT BLOQUÉE/, 'l’avis doit voyager avec le message');
-  assert.match(livre, /\[Pasted text #83 \+7 lines\]/, 'et NOMMER ce qui est parti en son nom');
-  assert.ok(
-    livre.includes('Message du dirigeant, reçu par Slack.'),
-    'la parole du dirigeant est livrée entière, l’avis vient en plus — jamais à sa place'
-  );
-  // ⚠️ CE N'EST PAS UNE FUSION : le texte ajouté est le NÔTRE, pas celui du tiers. La fusion
-  // interdite, c'est deux messages d'AUTEURS DIFFÉRENTS collés en un.
-  assert.ok(!livre.startsWith('[Pasted text'), 'le texte du tiers n’est pas abouté à notre message');
+  assert.equal(ecrits.length, 0, 'rien n’est écrit, donc aucun avis « BOÎTE DE SAISIE ÉTAIT BLOQUÉE » ne voyage');
 });
 
 test('UNE LIVRAISON ORDINAIRE NE PORTE PAS UN MOT DE PLUS — on n’annonce pas un incident qui n’a pas eu lieu', async () => {
@@ -610,12 +626,19 @@ process.stdout.write(JSON.stringify({ result: { ok: true } }));
 // (mesuré) et sa boîte a pu se remplir à nouveau entre-temps. Le refus se re-décide sur ce
 // qu'on voit maintenant, jamais sur le fait qu'on a agi. » Encore une moitié, encore la même.
 
-test('UN DIALOGUE APPARU PENDANT LA DÉLIVRANCE ARRÊTE TOUT — on n’écrit pas sur une confirmation', async () => {
+test('UN DIALOGUE APPARU PENDANT L’ATTENTE ARRÊTE TOUT — on n’écrit pas sur une confirmation', async () => {
+  // ⚠️ CONVERTI PAR D-20260921-0003. Le scénario d'origine — notre touche d'envoi soumet une commande, et
+  // c'est CETTE soumission qui provoque le dialogue — ne peut plus se produire : la touche ne part plus.
+  // Ce qui reste éprouvable, et qui protégeait la même chose (écrire sur un dialogue CONFIRME l'action), est
+  // le dialogue qui apparaît PENDANT l'attente d'observation : la boîte d'autrui porte un texte, puis
+  // l'écran se couvre d'une demande de permission. On s'arrête sur le dialogue — cause `dialogue`, plus
+  // précise que la règle générale — et rien n'est soumis ni écrit.
+  //
+  // ⚠️ CET ESSAI NE PEUT PAS NOMMER `soumission-interdite` : la garde du dialogue passe AVANT la règle,
+  // exprès — un dialogue est le cas où même l'écriture est dangereuse, pas seulement la touche. Il éprouve
+  // donc cette ANTÉRIORITÉ : c'est `dialogue` qui doit répondre, pas la règle.
   const journal = join(bac, 'appels.jsonl');
   writeFileSync(journal, '');
-  // Le texte coincé était une commande. Notre Entrée la soumet, et l'agent demande la
-  // permission de l'exécuter. La boîte est VIDE et LISIBLE sous le dialogue — c'est exactement
-  // le cas que `boiteEstVide` seul ne voit pas.
   const script = `#!/usr/bin/env node
 const fs = require('fs');
 const JOURNAL = ${JSON.stringify(journal)};
@@ -624,17 +647,16 @@ const passes = fs.readFileSync(JOURNAL, 'utf8').trim().split('\\n').filter(Boole
 fs.appendFileSync(JOURNAL, JSON.stringify(args) + '\\n');
 const cmd = args.slice(0, 2).join(' ');
 const SEP = '\\u2500'.repeat(20);
-const entrees = passes.filter((a) => a[1] === 'send-keys').length;
+const lectures = passes.filter((a) => a[0] === 'agent' && a[1] === 'read').length;
 if (cmd === 'agent read') {
-  if (entrees === 0) {
-    // Avant la délivrance : une boîte occupée par un texte COLLÉ, aucun dialogue.
+  if (lectures < 1) {
+    // Première lecture (avant l'attente) : une boîte occupée par un texte COLLÉ, aucun dialogue.
     process.stdout.write(['~/x', SEP, '\\u276f [Pasted text #83 +7 lines]', SEP, '  auto mode on'].join('\\n'));
   } else {
-    // APRÈS notre Entrée : la commande est partie, l'agent demande la permission. La boîte est
-    // vide et lisible SOUS le dialogue — rien dans la boîte ne trahit le danger.
+    // PENDANT l'attente : l'agent demande une permission. La boîte garde son texte, lisible sous le dialogue.
     process.stdout.write([
       '~/x', 'Bash(rm -rf /tmp/travaux)', '', 'Do you want to proceed?', '\\u276f 1. Yes',
-      '  2. No, and tell Claude what to do differently', SEP, '\\u276f ', SEP, '  auto mode on',
+      '  2. No, and tell Claude what to do differently', SEP, '\\u276f [Pasted text #83 +7 lines]', SEP, '  auto mode on',
     ].join('\\n'));
   }
   process.exit(0);
@@ -652,27 +674,19 @@ process.stdout.write(JSON.stringify({ result: { ok: true } }));
     () => remettre('w5:p8', 'Message du dirigeant, reçu par Slack.'),
     (err) => {
       assert.ok(err instanceof RemiseEchouee, `attendu RemiseEchouee, reçu ${err?.name}`);
-      assert.match(err.message, /DIALOGUE|choix/i, 'le refus doit nommer le dialogue');
-      // ⚠️ ET IL AVOUE LE GESTE DÉJÀ POSÉ. Sans cet aveu, le lecteur voit « dialogue » et ignore
-      // qu'une touche d'envoi est DÉJÀ partie vers ce pane, sur le texte d'un AUTRE, qui lui est
-      // bien parti. C'est une action irréversible qu'on lui cacherait ; il la découvrirait par
-      // ses effets sans pouvoir la relier à ce refus. Le module frère porte déjà cet aveu.
-      assert.match(
-        err.message,
-        /DÉJÀ SOUMIS/,
-        `le refus doit dire qu'une touche d'envoi est déjà partie sur un autre texte — reçu : ${err.message}`
-      );
+      assert.match(err.message, /DIALOGUE/i, `le refus doit nommer le dialogue — reçu : ${err.message}`);
+      assert.doesNotMatch(err.message, /on ne soumet JAMAIS/i, 'la garde du dialogue répond AVANT la règle générale');
+      // Et il n'avoue AUCUN geste posé : aucune touche n'est partie, un « DÉJÀ SOUMIS » serait faux.
+      assert.doesNotMatch(err.message, /DÉJÀ SOUMIS/, 'aucune touche d’envoi n’est partie, le refus ne l’affirme pas');
       return true;
     },
     'écrire devant un dialogue CONFIRME l’action affichée — le message n’est même pas reçu'
   );
 
   const gestes = appels(journal).map((a) => a.slice(0, 2).join(' '));
-  assert.ok(gestes.includes('agent send-keys'), 'la délivrance a bien eu lieu — c’est elle qui a levé le dialogue');
-  assert.ok(
-    !gestes.includes('agent prompt'),
-    'ET RIEN N’A ÉTÉ ÉCRIT : une écriture ici aurait APPROUVÉ « rm -rf », pas livré un message'
-  );
+  assert.ok(gestes.filter((g) => g === 'agent read').length >= 2, 'l’écran a bien été relu APRÈS l’attente — c’est ce chemin qu’on éprouve');
+  assert.ok(!gestes.includes('agent send-keys'), 'aucune touche d’envoi devant un dialogue');
+  assert.ok(!gestes.includes('agent prompt'), 'ET RIEN N’A ÉTÉ ÉCRIT : une écriture ici aurait APPROUVÉ « rm -rf », pas livré un message');
 });
 
 // ═══ LA FENÊTRE DE CE CHEMIN-CI EST À LUI, ET RIEN NE LA GARDAIT (T-20260818-0076) ═══
@@ -752,14 +766,16 @@ process.stdout.write(JSON.stringify({ result: { ok: true } }));
 
   const { remettre } = await import('../src/herdr.js');
   const debut = Date.now();
-  await remettre('w5:p8', 'Message du dirigeant.');
+  // ⚠️ CONVERTI PAR D-20260921-0003 : la remise se termine maintenant par le refus nommé, et non par la
+  // soumission. La durée mesurée reste celle de l'OBSERVATION — le refus n'arrive qu'après elle.
+  await assert.rejects(() => remettre('w5:p8', 'Message du dirigeant.'), (err) => /on ne soumet JAMAIS/i.test(err.message));
   const duree = Date.now() - debut;
   if (fenetreAvant === undefined) delete process.env.LIGNE_IMMOBILITE_MS;
   else process.env.LIGNE_IMMOBILITE_MS = fenetreAvant;
 
   assert.ok(
-    appels(journal).map((a) => a.slice(0, 2).join(' ')).includes('agent send-keys'),
-    'le texte immobile doit avoir été SOUMIS — sans quoi la durée ne dirait rien'
+    !appels(journal).map((a) => a.slice(0, 2).join(' ')).includes('agent send-keys'),
+    'la touche d’envoi ne part pas — la durée mesure l’observation, pas un geste'
   );
   assert.ok(
     duree >= FENETRE_LIGNE_DU_DIRIGEANT_MS,
@@ -806,11 +822,13 @@ process.stdout.write(JSON.stringify({ result: { ok: true } }));
 
   const { remettre } = await import('../src/herdr.js');
   const debut = Date.now();
-  await remettre('w5:p8', 'Message du dirigeant.');
+  // ⚠️ CONVERTI PAR D-20260921-0003 : l'attente précède désormais un REFUS nommé, plus une soumission.
+  await assert.rejects(() => remettre('w5:p8', 'Message du dirigeant.'), (err) => /on ne soumet JAMAIS/i.test(err.message));
   const duree = Date.now() - debut;
 
   const gestes = appels(journal).map((a) => a.slice(0, 2).join(' '));
-  assert.ok(gestes.includes('agent send-keys'), 'le texte immobile doit avoir été SOUMIS');
+  assert.ok(!gestes.includes('agent send-keys'), 'aucune touche d’envoi : l’attente n’aboutit plus à une soumission');
+  assert.ok(gestes.filter((g) => g === 'agent read').length >= 2, 'la boîte a été relue après l’attente');
   assert.ok(
     duree >= FENETRE_MS,
     `la fenêtre demandée (${FENETRE_MS} ms) doit avoir été RÉELLEMENT observée — ` +

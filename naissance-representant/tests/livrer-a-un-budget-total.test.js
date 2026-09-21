@@ -162,9 +162,13 @@ test('LE BUDGET PAR DÉFAUT EST DE 5 MIN — sans option, le pire cas ne dépass
   assert.ok(ecoule <= 300000, `${ecoule} ms pour un défaut de 300 000 ms`);
 });
 
-test('UNE BOÎTE OCCUPÉE QUI NE SE LIBÈRE JAMAIS — le refus dit qu’une touche d’envoi est déjà partie', async () => {
-  // La délivrance passe par `delivrerLaBoite`, qui a SA propre boucle de lectures : le budget
-  // doit la traverser aussi, sans qu'on la réécrive.
+// converti par D-20260921-0003 : ce test affirmait « une touche d'envoi est déjà partie » avant
+// l'épuisement du budget. La délivrance ne soumet plus JAMAIS la boîte d'autrui : devant ce texte
+// coincé elle rend un refus nommé `soumission-interdite`, sans presser aucune touche. Ce qui reste
+// éprouvé : le budget traverse la boucle de lectures de la délivrance (rendu dans le budget), le
+// refus est nommé en champ ET en prose, et rien n'est écrit. Le second essai garde l'autre moitié :
+// un budget trop court pour finir la délivrance rend toujours `budget-epuise`, jamais un silence.
+test('UNE BOÎTE OCCUPÉE QUI NE SE LIBÈRE JAMAIS — refus nommé `soumission-interdite`, aucune touche d’envoi', async () => {
   const p = poste({ boiteInitiale: '[Pasted text #33]', priseJamais: true });
   const budgetMs = 300000;
   const debut = p.horloge.t;
@@ -183,12 +187,47 @@ test('UNE BOÎTE OCCUPÉE QUI NE SE LIBÈRE JAMAIS — le refus dit qu’une tou
   });
   const ecoule = p.horloge.t - debut;
   assert.equal(r.ok, false);
+  assert.ok(ecoule <= budgetMs, `${ecoule} ms pour un budget de ${budgetMs} ms`);
+  assert.equal(r.causeDelivre, 'soumission-interdite', `la cause de la délivrance est NOMMÉE — reçu ${r.causeDelivre} : ${r.message}`);
+  assert.match(r.message, /RIEN soumis/, 'le texte du refus dit ce qui n’a pas été fait');
+  assert.match(r.message, /jamais la bo[iî]te d’un autre/, 'et pourquoi');
+  assert.equal(r.delivre, false, 'rien n’est soumis : `delivre` ne peut pas dire le contraire');
+  assert.ok(
+    !p.journal.some((c) => Array.isArray(c) && c[0] === 'agent' && c[1] === 'send-keys'),
+    `aucune touche d’envoi ne part sur la boîte d’un autre — ${JSON.stringify(p.journal.filter((c) => c[1] === 'send-keys'))}`
+  );
+  assert.ok(
+    !p.journal.some((c) => Array.isArray(c) && c[0] === 'agent' && c[1] === 'prompt'),
+    'et le brief n’a jamais été écrit'
+  );
+  assert.ok(!(r.gestes ?? []).includes('soumettre'), 'aucun geste « soumettre » n’est rapporté');
+});
+
+test('UNE BOÎTE OCCUPÉE ET UN BUDGET TROP COURT — le budget traverse la délivrance, sans touche d’envoi', async () => {
+  const p = poste({ boiteInitiale: '[Pasted text #33]', priseJamais: true });
+  const budgetMs = 100000;
+  const debut = p.horloge.t;
+  const r = await livrerBrief({
+    pane: 'w9:p1',
+    texte: 'mon brief',
+    ...REGLAGES_DU_BIN,
+    pairOccupe: true,
+    immobiliteMs: 6000,
+    appelHerdr: p.appelHerdr,
+    lireEcran: p.lireEcran,
+    dormir: p.dormir,
+    maintenant: p.maintenant,
+    sonderActivite: sondeMuette,
+    budgetMs,
+  });
+  const ecoule = p.horloge.t - debut;
+  assert.equal(r.ok, false);
   assert.equal(r.cause, CAUSE_BUDGET_EPUISE, r.message);
   assert.ok(ecoule <= budgetMs, `${ecoule} ms pour un budget de ${budgetMs} ms`);
-  assert.ok(r.gestes.includes('soumettre'), `la touche d’envoi est partie avant l’épuisement — ${JSON.stringify(r.gestes)}`);
-  assert.ok(!r.gestes.includes('livrer'), 'et le brief, lui, n’a jamais été écrit');
-  assert.match(r.message, /touche d’envoi/i);
-  assert.equal(r.delivre, false, 'rien n’est confirmé : `delivre` ne peut pas dire le contraire');
+  assert.ok(
+    !p.journal.some((c) => Array.isArray(c) && c[0] === 'agent' && c[1] === 'send-keys'),
+    'même à court de budget, aucune touche d’envoi ne part'
+  );
 });
 
 test('UN APPEL COUPÉ PAR LE BUDGET NE SE LIT PAS COMME UN ÉCRAN ILLISIBLE', async () => {

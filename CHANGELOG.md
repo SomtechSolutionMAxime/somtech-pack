@@ -7,6 +7,24 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-21
 
+*Livraison `J-20260814-0002`, demande `D-20260921-0003` — ordre du dirigeant : « je ne sais pas qui envoie le déblocage des fenêtres de texte mais je veux que ça cesse ». Code seulement : le métier des orchestrateurs n'est pas touché.*
+
+### Corrige
+
+- **🔴 Plus aucun dispositif ne soumet la boîte de saisie d'un autre — et l'arrêt survit à une installation.** Deux mécanismes envoyaient la touche d'envoi à la place de l'auteur d'un texte coincé : le balayeur des boîtes oubliées et la délivrance de `livrer.js` (`delivrerLaBoite`). Ils avaient été arrêtés **à la main** sur le poste (une ligne commentée dans `veilleur.js`, un `return` inséré dans `delivrance.js`) — un correctif **local**, écrasé par la prochaine installation, qui bloquait l'installation de deux lots déjà fusionnés. La règle vit maintenant dans le code versionné : **un message devant une boîte pleine attend, ou est rendu à l'expéditeur ; il ne soumet jamais.**
+  - **Refus explicite, jamais un silence.** `delivrerLaBoite` rend `soumission-interdite` (nouvelle issue, avec son mot dans la table des issues). Le balayeur journalise `NON DÉLIVRÉ … [soumission-interdite]` ; `livrer.js` refuse le message en disant pourquoi. Ce n'est pas `plus-autorise` (« on m'a retiré le droit », qui se règle en attendant) : ici le geste n'existe pas, et attendre n'y change rien.
+  - **L'attente reste.** Si l'auteur soumet lui-même pendant la fenêtre d'observation, la boîte se vide et le message passe ; un texte qui bouge garde son refus `bouge`.
+  - **Le balayeur reste armé** (le geste local d'origine commentait `v.balayer()`, ce qui tuait aussi la relance des messages gardés, sans le dire). L'arrêt est dans la délivrance, pas dans un fil coupé.
+  - **Réversible par lecture** : le code qui soumettait reste sous la garde `SOUMISSION_DE_LA_BOITE_DAUTRUI_AUTORISEE = false`, en un seul endroit. Aucun interrupteur d'environnement, exprès.
+  - Bancs : `jamais-soumettre-la-boite-dautrui` (refus nommé, balayeur câblé, journal) et `l-installation-laisse-larret-de-soumission` (simule l'installation sur un poste qui porte l'ancien code, puis éprouve le module **installé**). Les bancs qui affirmaient la soumission réussie sont réécrits en leur contraire.
+  - **Le balayeur ne paie plus l'attente devant un refus certain** (revue de fond) : une boîte abandonnée reste candidate à vie, et sa fenêtre d'immobilité (jusqu'à 10 s, trois boîtes par tour) retardait la relance des messages gardés, qui passe après le tour. Il passe zéro à la délivrance tant que la soumission est éteinte ; le refus reste rendu par la vraie délivrance et journalisé. **Portée exacte : le balayeur seulement.** `remettre()` (relance des messages gardés) et `livrer` gardent leur fenêtre — l'attente y est le « ATTEND » de la règle (un auteur qui soumet lui-même libère la boîte et le message passe) ; son coût par relance reste à mesurer.
+  - **Tension signalée, non tranchée** : un message Slack devant une boîte pleine est refusé et gardé (relancé à chaque ronde) ; le mot du refus dit « libère la boîte », ce qu'un dirigeant qui n'a que Slack ne peut pas faire. L'ordre de 2026-08-18 (« jamais bloqué via Slack ») est écarté sur ce point par celui du 2026-09-21.
+  - **Trou nommé** : le veto de réservation (`encoreAutorise`, cause `plus-autorise`) et le code de soumission qui le suit sont désormais inatteignables de bout en bout — la règle répond avant eux. Ils restent lisibles sous la garde, mais aucun essai de production ne les exerce plus.
+  - ⚠️ **Non touché, et c'est tranché (batiscan, orchestrateur de `J-20260814-0002`)** : `scripts/orchestration/veille-deblocage.sh` envoie encore Entrée sur des **écrans de dialogue reconnus** (permission, confiance) — pas la boîte de saisie, pas `delivrerLaBoite`. Ce n'est PAS la cible de l'ordre : soumettre un texte que quelqu'un a **écrit** est une usurpation (un auteur qu'on dépossède) ; répondre à une **question que le système pose** n'en est pas une (pas d'auteur, rien à écraser). Les deux se ressemblent de loin : ne pas arrêter la veille en croyant obéir à cet ordre.
+  - ⚠️ **Non touché, et à rouvrir** : le gabarit du métier d'orchestrateur prescrit encore la soumission (« la commande attend cinq minutes… puis le soumet pour son auteur ») — contradiction 3 de `D-20260920-0004`, dossier arrêté par le dirigeant.
+
+## [Non-versionne] - 2026-09-21
+
 *Lot « Veilleur et gardes », livraison `J-20260814-0002` — tickets `T-20260914-0004` et `T-20260818-0035`. Deux défauts de la même famille : un dispositif qui **ne distingue pas** deux situations opposées, et un autre qui **ne dit pas** ce qu'il sert. Aucun tag, aucune installation dans ce lot — voir « Ce que ce lot ne ferme pas ».*
 
 ### Ajoute

@@ -47,6 +47,7 @@ import {
   fenetreDImmobilite,
   avisDeBoiteBloquee,
   motDeLIssue,
+  SOUMISSION_DE_LA_BOITE_DAUTRUI_AUTORISEE,
 } from './delivrance.js';
 
 /**
@@ -369,7 +370,14 @@ export async function unTourDeBalayage({
         nom: d.nom,
         socket: d.socket,
         texteCoince: d.contenu,
-        immobiliteMs: fenetreMs,
+        // ⚠️ LE BALAYEUR N'ATTEND PLUS : IL NE PEUT RIEN DÉLIVRER (D-20260921-0003). La fenêtre
+        // d'immobilité servait à s'assurer qu'un texte ne bouge pas AVANT de le soumettre. Or la
+        // délivrance refuse désormais de soumettre — `soumission-interdite`, rendu quoi qu'on ait
+        // vu. La payer (jusqu'à dix secondes par boîte, trois boîtes par tour) retardait la relance
+        // des messages gardés, qui passe APRÈS ce tour, pour obtenir un refus qu'on connaît déjà.
+        // On passe donc zéro tant que la soumission est éteinte — le refus reste rendu par la VRAIE
+        // délivrance (une seule écriture de la règle), et le journal le dit toujours.
+        immobiliteMs: SOUMISSION_DE_LA_BOITE_DAUTRUI_AUTORISEE ? fenetreMs : 0,
       });
     } catch (err) {
       // Un geste qui jette ne fait pas tomber le tour : les autres panes attendent encore.

@@ -1040,6 +1040,10 @@ async function livrerSousBudget({
     if (!obstacle) break;
     if (i < Math.max(1, essaisDisponible) - 1) await dormir(delaiMs);
   }
+  // ⛔ DEPUIS D-20260921-0003, ELLE NE SOUMET PLUS : `delivrerLaBoite` rend `soumission-interdite` pour
+  // tout texte coincé immobile, `livrer` REFUSE alors le message (rendu à l'expéditeur, avec le mot) et
+  // n'y préfixe plus aucun avis « soumis pour son auteur ». Ce qui suit décrit la conception d'origine.
+  //
   // ═══ LA DÉLIVRANCE — le blocage doit FINIR, et c'est ici que ça se joue (T-20260816-0114).
   //
   // ⚠️ UNE SEULE CAUSE SE TRAITE : la boîte encombrée. Un statut indisponible et un écran

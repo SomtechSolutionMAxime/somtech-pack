@@ -44,6 +44,9 @@ const SIGNATURES = {
   'vide-cause-inconnue': /sans que je sache comment/i,
   bouge: /a boug[ée]/i,
   'plus-autorise': /plus autoris[ée]/i,
+  // ⚠️ converti par D-20260921-0003 : la délivrance ne soumet plus JAMAIS la boîte d'autrui — cette issue
+  // dit la règle, et aucune des autres ne porte ce mot-là.
+  'soumission-interdite': /on ne soumet JAMAIS/i,
   soumis: /a été soumis/i,
   'sans-effet': /sans effet/i,
 };

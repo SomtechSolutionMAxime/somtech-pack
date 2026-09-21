@@ -181,28 +181,55 @@ test('refusé AVANT toute écriture : la cause dit qu’on n’a rien écrit, do
   assert.deepEqual(appels.filter((c) => c[1] === 'prompt'), [], 'et surtout : rien n’a été écrit par-dessus');
 });
 
-test('la délivrance a soumis le texte d’un autre : `causeDelivre` laisse sortir la cause DÉJÀ calculée', async () => {
-  // `delivrerLaBoite` nomme sa cause sur neuf branches. Aucune ne sortait de `livrerBrief`.
+// converti par D-20260921-0003 : ce test affirmait « la délivrance a SOUMIS le texte d'un autre,
+// `causeDelivre` = soumis, `delivre` = true ». On ne soumet plus jamais la boîte d'autrui. L'objet
+// du test — `causeDelivre` laisse SORTIR la cause déjà calculée par `delivrerLaBoite`, il ne la
+// refait pas — est gardé sur la nouvelle cause : `soumission-interdite`, nommée, et aucune touche.
+test('la délivrance REFUSE le texte d’un autre : `causeDelivre` laisse sortir la cause DÉJÀ calculée', async () => {
+  // `delivrerLaBoite` nomme sa cause sur dix branches. Aucune ne sortait de `livrerBrief`.
   const appels = [];
-  let soumis = false;
-  let ecrit = false;
+  const r = await livrerBrief({
+    ...socle,
+    texte: 'mon compte rendu',
+    essais: 3,
+    appelHerdr: herdrOrdinaire(appels),
+    // La boîte porte le texte d'un autre, immobile, et rien ne la libère : on ne la soumet pas.
+    lireEcran: async () => boiteAvec('le reste d’un autre'),
+    immobiliteMs: 6000,
+  });
+
+  assert.equal(r.ok, false, 'on refuse de livrer par-dessus le texte d’un autre');
+  assert.equal(r.causeDelivre, 'soumission-interdite', 'la cause de la délivrance remonte telle qu’elle est calculée');
+  assert.equal(r.delivre, false, 'rien n’a été soumis : `delivre` ne peut pas dire le contraire');
+  assert.match(r.message, /RIEN soumis/, 'le texte du refus dit ce qui n’a pas été fait');
+  assert.match(r.message, /jamais la bo[iî]te d’un autre/, 'et pourquoi');
+  assert.deepEqual(appels.filter((c) => c[1] === 'send-keys'), [], 'aucune touche d’envoi sur la boîte d’un autre');
+  assert.deepEqual(appels.filter((c) => c[1] === 'prompt'), [], 'et le message n’est pas passé');
+});
+
+test('la cause de la délivrance n’est pas une constante : une boîte que son auteur libère seul rend une AUTRE cause', async () => {
+  // Contre-épreuve du test précédent — sans elle, `causeDelivre: 'soumission-interdite'` écrit en
+  // dur passerait. Ici l'auteur soumet lui-même pendant l'observation : on n'a rien fait, et la
+  // cause nommée n'est pas celle du refus.
+  const appels = [];
+  let lectures = 0;
   const r = await livrerBrief({
     ...socle,
     texte: 'mon compte rendu',
     essais: 3,
     appelHerdr: async (c) => {
       appels.push(c);
-      if (c[1] === 'send-keys') soumis = true;
-      if (c[1] === 'prompt') ecrit = true;
-      return { ok: true, reponse: { result: { agent: { agent_status: ecrit ? 'working' : 'idle' } } }, message: '' };
+      return { ok: true, reponse: { result: { agent: { agent_status: 'idle' } } }, message: '' };
     },
-    // La boîte porte le texte d'un autre, immobile ; la touche d'envoi la libère.
-    lireEcran: async () => (soumis ? boiteVide() : boiteAvec('le reste d’un autre')),
+    lireEcran: async () => {
+      lectures += 1;
+      return lectures <= 1 ? boiteAvec('le reste d’un autre') : boiteVide();
+    },
     immobiliteMs: 6000,
   });
-
-  assert.equal(r.delivre, true, 'la boîte a bien été délivrée');
-  assert.equal(r.causeDelivre, 'soumis', 'et la cause de la délivrance remonte telle qu’elle est calculée');
+  assert.equal(r.causeDelivre, 'vide-cause-inconnue', 'la boîte s’est libérée seule : cause nommée, et ce n’est pas un refus');
+  assert.equal(r.delivre, false, 'on n’a rien soumis');
+  assert.deepEqual(appels.filter((c) => c[1] === 'send-keys'), [], 'aucune touche d’envoi');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════

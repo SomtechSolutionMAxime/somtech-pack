@@ -327,7 +327,16 @@ export async function remettre(pane, texte, { socket } = {}) {
     );
   }
   if (dejaLa !== '') {
-    // ═══ ON NE REFUSE PLUS : ON DÉLIVRE, PUIS ON ÉCRIT (T-20260818-0049).
+    // ⛔ DEPUIS D-20260921-0003, CETTE BRANCHE NE DÉLIVRE PLUS — ELLE REFUSE, ET NOMME POURQUOI.
+    // `delivrerLaBoiteDuPane` rend `soumission-interdite` : la touche d'envoi ne part JAMAIS sur le
+    // texte d'un autre. Ce qui suit décrit la conception d'origine (T-20260818-0049) ; sa règle —
+    // « on ne doit jamais être bloqué via le Slack » — est ÉCARTÉE sur ce point par l'ordre du
+    // dirigeant du 2026-09-21, plus récent et explicite (« je veux que ça cesse »). Le message n'est
+    // pas perdu pour autant : le refus part à l'expéditeur et le veilleur garde le message, relancé
+    // à chaque ronde. Reste la tension — un refus qui dit « libère la boîte » à quelqu'un qui n'a que
+    // Slack — signalée à l'orchestrateur du lot, pas tranchée ici.
+    //
+    // ═══ (ORIGINE) ON NE REFUSE PLUS : ON DÉLIVRE, PUIS ON ÉCRIT (T-20260818-0049).
     //
     // ⚠️ LA RÈGLE VIENT DU DIRIGEANT, ET ELLE EST DE CONCEPTION, pas de confort :
     //

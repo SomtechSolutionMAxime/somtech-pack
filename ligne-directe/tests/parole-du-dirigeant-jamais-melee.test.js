@@ -97,6 +97,16 @@ function poste(options) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// ⚠️ CONVERTI PAR D-20260921-0003 : la délivrance ne SOUMET PLUS JAMAIS la boîte d'autrui (ordre du
+// dirigeant : « je veux que ça cesse » — mesuré deux fois le 2026-09-21, une phrase du dirigeant partie
+// coupée). Devant une boîte occupée, `remettre` REFUSE de nouveau, comme avant le 2026-08-18, mais pour
+// une raison NOMMÉE (`soumission-interdite`) : aucune touche d'envoi, aucun `prompt`, le texte de l'autre
+// reste où son auteur l'a laissé. Les essais ci-dessous gardent ce que le 2026-08-18 avait posé — les deux
+// textes ne sont jamais fusionnés — et n'exigent plus que le message du dirigeant PASSE devant une boîte
+// pleine : il ne passe pas, et le dit. Chaque refus est éprouvé sur sa CAUSE : une abstention muette
+// serait aussi satisfaite par une fonction supprimée.
+//
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // ⚠️ CES TROIS ESSAIS ONT CHANGÉ DE CONTRAT LE 2026-08-18, SUR ARBITRAGE DU DIRIGEANT
 // (T-20260818-0049). Ils ne sont pas « mis au vert » : ils sont RECLASSÉS PAR FONCTION, et
 // ce qu'ils gardaient est redistribué. Le lecteur doit savoir QUI a changé la règle et POURQUOI.
@@ -125,62 +135,68 @@ function poste(options) {
 // phrase inachevée, et le geste ne se défait pas. Le discriminant n'est pas le TYPE du texte,
 // c'est qu'il BOUGE — immobile veut dire que son auteur est parti.
 
-test('LES DEUX TEXTES PARTENT SÉPARÉMENT, JAMAIS COLLÉS EN UN SEUL MESSAGE', async () => {
+test('LES DEUX TEXTES NE SONT JAMAIS COLLÉS EN UN SEUL MESSAGE — et rien ne part devant la boîte d’un autre', async () => {
   // ⚠️ CE QUE CET ESSAI GARDE EST INCHANGÉ, et c'est le cœur de la garde d'origine : deux
   // textes que personne n'a écrits ensemble ne doivent pas partir comme UN message. Un ordre
   // mêlé à autre chose et soumis est un ordre que personne n'a donné, et il est exécuté.
   //
-  // ⚠️ CE QU'IL A CESSÉ D'EXIGER, ET POURQUOI. Sa seconde assertion interdisait que le
-  // destinataire voie les deux textes — `!(recu.includes(TIERS) && recu.includes(PAROLE))`.
-  // Sous le contrat neuf, il les voit LES DEUX, en deux tours distincts, et c'est le but même
-  // du correctif. Cette assertion mesurait donc « les deux présents » en croyant mesurer
-  // « les deux fusionnés » : deux choses différentes que l'ancien contrat rendait équivalentes.
+  // ⚠️ CE QUI A CHANGÉ (D-20260921-0003) : la fusion n'est plus évitée en soumettant d'abord le
+  // texte de l'autre, mais en NE RIEN ÉCRIRE du tout. L'assertion porte sur ce que l'agent a reçu
+  // (rien), sur les gestes (ni `prompt` ni touche d'envoi), et sur la CAUSE du refus.
   const p = poste({ statut: 'idle', boite: TEXTE_DUN_TIERS });
 
-  await remettre('w9:p1', PAROLE_DU_DIRIGEANT).catch(() => null);
+  await assert.rejects(
+    () => remettre('w9:p1', PAROLE_DU_DIRIGEANT),
+    (err) => {
+      assert.ok(err instanceof RemiseEchouee, `attendu RemiseEchouee, reçu ${err.name}`);
+      assert.match(err.message, /on ne soumet JAMAIS/i, 'la cause `soumission-interdite` est NOMMÉE dans le refus');
+      return true;
+    }
+  );
 
   const recu = p.recu('w9:p1') || '';
   assert.ok(
     !recu.includes(TEXTE_DUN_TIERS + PAROLE_DU_DIRIGEANT),
     `l'agent a reçu les deux textes COLLÉS en un seul message : « ${recu.slice(0, 120)} »`
   );
+  assert.equal(p.recu('w9:p1'), null, 'et il n’a rien reçu du tout : ni le texte de l’autre soumis, ni la parole');
+  const gestes = p.gestes('w9:p1');
+  assert.ok(!gestes.some((g) => g[1] === 'send-keys'), 'AUCUNE touche d’envoi : la boîte d’un autre n’est jamais soumise');
+  assert.ok(!gestes.some((g) => g[1] === 'prompt'), 'et rien n’est écrit par-dessus');
 });
 
-test('LE TEXTE IMMOBILE D’UN AUTRE EST SOUMIS POUR LUI — et le destinataire en est PRÉVENU', async () => {
-  // ⚠️ CET ESSAI DIT L'INVERSE DE CE QU'IL DISAIT, ET C'EST UN ARBITRAGE, PAS UNE CORRECTION.
-  // Son ancien titre : « ET LE TEXTE DE SON AUTEUR N'EST PAS SOUMIS À SA PLACE — on ne parle
-  // pour personne ». Le dirigeant a renversé cette règle, en connaissance du risque :
+test('LE TEXTE IMMOBILE D’UN AUTRE N’EST PAS SOUMIS — la parole ne passe pas, et le refus le DIT', async () => {
+  // ⚠️ CET ESSAI DIT L'INVERSE DE CE QU'IL DISAIT LE 2026-08-18 (« le texte immobile est soumis pour
+  // lui — et le destinataire en est prévenu »), ET C'EST UN NOUVEL ARBITRAGE DU DIRIGEANT. Le
+  // raisonnement d'alors — « le message avait déjà été envoyé et aurait dû être reçu » — a été
+  // rattrapé par deux mesures du 2026-09-21 : une phrase du dirigeant est partie coupée, soumise par
+  // le geste même qui devait la libérer. Il n'y a donc plus d'avis « boîte bloquée » à porter : rien
+  // n'est parti en son nom.
   //
-  //   « le message avait déjà été envoyé et aurait dû être reçu »
-  //
-  // Il a raison sur le fait : un texte laissé dans une boîte a DÉJÀ été envoyé par quelqu'un
-  // qui croit l'avoir remis. Le soumettre n'invente rien — ça achève un geste commencé. Et
-  // mesuré : quatre blocages réels en une nuit, QUATRE messages d'agent, zéro brouillon humain.
-  //
-  // ⚠️ CE QUI REND L'ARBITRAGE TENABLE EST L'AVIS. On ne soumet pas en silence : le
-  // destinataire reçoit, avec le message, ce qui est parti en son nom. Sans lui, il verrait un
-  // travail quitter sa boîte sans pouvoir dire lequel — un incident inexplicable au lieu d'un
-  // incident constatable.
+  // ⚠️ CE QUI RESTE ÉPROUVÉ : la boîte n'est pas touchée (texte intact, aucune touche), la parole
+  // n'est PAS écrite par-dessus, et l'émetteur n'est pas laissé croire qu'il a parlé — il reçoit un
+  // refus qui nomme la règle.
   const p = poste({ statut: 'idle', boite: TEXTE_DUN_TIERS, colle: true, cede: true });
 
-  await remettre('w9:p1', PAROLE_DU_DIRIGEANT).catch(() => null);
+  await assert.rejects(
+    () => remettre('w9:p1', PAROLE_DU_DIRIGEANT),
+    (err) => {
+      assert.ok(err instanceof RemiseEchouee, `attendu RemiseEchouee, reçu ${err.name}`);
+      assert.match(err.message, /on ne soumet JAMAIS/i, 'la cause `soumission-interdite` est NOMMÉE');
+      assert.ok(err.message.includes('w9:p1'), 'et le pane est nommé');
+      return true;
+    }
+  );
 
-  const recu = p.recu('w9:p1') || '';
-  assert.ok(
-    recu.includes(PAROLE_DU_DIRIGEANT),
-    `la parole du dirigeant doit ARRIVER — c'est tout l'objet du lot : « ${recu.slice(0, 200)} »`
-  );
-  assert.match(
-    recu,
-    /BOÎTE DE SAISIE ÉTAIT BLOQUÉE/,
-    'et le destinataire doit être prévenu de ce qui est parti en son nom'
-  );
+  assert.equal(p.recu('w9:p1'), null, 'RIEN n’est arrivé au destinataire : ni le texte de l’autre, ni la parole');
+  const gestes = p.gestes('w9:p1');
+  assert.ok(!gestes.some((g) => g[1] === 'send-keys'), 'la touche d’envoi n’est pas partie — même sur une boîte qui CÈDERAIT');
+  assert.ok(!gestes.some((g) => g[1] === 'prompt'), 'et la parole n’a pas été écrite par-dessus');
 });
 
 test('LE REFUS, QUAND IL RESTE, DIT CE QU’IL A VU ET NOMME LE PANE', async () => {
-  // ⚠️ IL RESTE DES REFUS, ET ILS DOIVENT RESTER LISIBLES. Le veto a sauté sur la boîte
-  // occupée ; il subsiste là où aucun geste sûr n'existe — ici, une boîte que la touche
-  // d'envoi ne libère pas. Un refus qui ne nomme pas le pane laisse son lecteur sans prise.
+  // ⚠️ IL RESTE DES REFUS, ET ILS DOIVENT RESTER LISIBLES. Depuis D-20260921-0003 la boîte
+  // occupée refuse de nouveau, nommément (`soumission-interdite`) — qu'elle cède ou non à la touche. Un refus qui ne nomme pas le pane laisse son lecteur sans prise.
   poste({ statut: 'idle', boite: TEXTE_DUN_TIERS, colle: true });
 
   await assert.rejects(
@@ -188,6 +204,7 @@ test('LE REFUS, QUAND IL RESTE, DIT CE QU’IL A VU ET NOMME LE PANE', async () 
     (err) => {
       assert.ok(err instanceof RemiseEchouee, `attendu RemiseEchouee, reçu ${err.name}`);
       assert.match(err.message, /bo[iî]te/i, 'le refus nomme ce qui bloque');
+      assert.match(err.message, /on ne soumet JAMAIS/i, 'et la CAUSE : la règle, pas une touche restée sans effet');
       assert.ok(
         err.message.includes('w9:p1'),
         'et il nomme le pane réel — sans quoi personne ne sait où aller regarder'

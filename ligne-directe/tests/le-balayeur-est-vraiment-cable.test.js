@@ -136,7 +136,13 @@ test('LE VEILLEUR BRANCHE L’INVENTAIRE — un tour à zéro pane vu n’est pa
   assert.equal(rendu.vus, 2, 'le tour doit VOIR les agents que herdr rend — sinon il balaie le vide');
 });
 
-test('LE VEILLEUR BRANCHE LA LECTURE, LE GESTE ET L’AVIS — une boîte figée trois tours est délivrée', async () => {
+test('LE VEILLEUR BRANCHE LA LECTURE ET LE GESTE — une boîte figée trois tours est REFUSÉE, nommément, sans touche ni avis', async () => {
+  // ⚠️ CONVERTI PAR D-20260921-0003 : la délivrance ne soumet plus JAMAIS la boîte d'autrui. Ce
+  // banc éprouvait « le veilleur a branché le geste, donc la touche part et l'avis est remis » ; il
+  // éprouve maintenant que le veilleur a branché la lecture ET le geste — la délivrance est TENTÉE
+  // au troisième tour, elle arrive jusqu'à la règle, et c'est la règle qui répond. L'absence de touche
+  // ne suffirait pas (un veilleur qui ne délivre rien la satisfait aussi) : c'est la CAUSE NOMMÉE,
+  // rendue par le vrai `delivrerLaBoite` câblé par le veilleur, qui prouve le câblage.
   const p = poste('geste', [{ pane_id: 'w3:p3', name: 'oublie' }]);
   p.pane('w3:p3', { boite: COLLE });
 
@@ -145,25 +151,19 @@ test('LE VEILLEUR BRANCHE LA LECTURE, LE GESTE ET L’AVIS — une boîte figée
   let rendu;
   for (let i = 0; i < 3; i += 1) rendu = await v.unTour(t0 + i * 60_000);
 
-  assert.equal(rendu.debloques.length, 1, 'après trois tours du même texte, la boîte doit être délivrée');
-  assert.equal(rendu.debloques[0].pane, 'w3:p3');
+  assert.equal(rendu.debloques.length, 0, 'rien n’est débloqué : on ne soumet jamais la boîte d’un autre');
+  const refus = rendu.refus.find((r) => r.pane === 'w3:p3');
+  assert.ok(refus, `la délivrance devait être tentée au 3ᵉ tour (refus rendus : ${JSON.stringify(rendu.refus)})`);
+  assert.equal(refus.cause, 'soumission-interdite', 'le veilleur a branché le vrai geste, qui refuse par la règle');
+  assert.match(refus.mot, /on ne soumet JAMAIS/i, 'et le mot rendu dit la règle');
+  assert.equal(rendu.parCause['soumission-interdite'], 1);
   assert.ok(
-    p.gestes('w3:p3').some((a) => a[1] === 'send-keys'),
-    'la touche d’envoi doit réellement partir — sinon le veilleur décide sans agir'
+    !p.gestes('w3:p3').some((a) => a[1] === 'send-keys'),
+    'la touche d’envoi ne part JAMAIS — même une boîte figée depuis trois tours'
   );
-
-  // ⚠️ L'AVIS N'A AUCUN TRANSPORT À LUI, et c'est ce lot qui l'a découvert. Sur les deux autres
-  // chemins il est PRÉFIXÉ au message qu'on allait livrer de toute façon ; ici il n'y a pas de
-  // message qui suit, donc il voyage seul. Sans ce branchement, la boîte serait délivrée et son
-  // auteur n'apprendrait JAMAIS qu'un texte est parti sous sa signature.
-  assert.equal(rendu.debloques[0].avis, 'remis', 'l’avis doit être remis, pas perdu');
-  const arrive = p.recu('w3:p3') || '';
-  assert.match(arrive, /BOÎTE DE SAISIE ÉTAIT BLOQUÉE/i, 'l’agent doit apprendre que sa boîte était bloquée');
-  assert.match(
-    arrive,
-    /balayeur/i,
-    'et il doit apprendre PAR QUOI — c’est la seconde moitié du critère, et rien d’autre ne la porte'
-  );
+  // ⚠️ ET PAS D'AVIS « BOÎTE BLOQUÉE » : rien n'est parti sous la signature de personne, l'annoncer
+  // serait mentir. Le refus, lui, est au compte rendu et au journal du balayeur.
+  assert.equal(p.recu('w3:p3'), null, 'aucun avis, aucun texte : le destinataire n’a rien reçu');
 });
 
 test('LA MÉMOIRE SE REPORTE D’UN TOUR AU SUIVANT — sans ce report, aucun pane n’atteint jamais trois tours', async () => {
@@ -316,7 +316,13 @@ test('UN BAIL POSÉ PENDANT LA FENÊTRE ARRÊTE LA TOUCHE — décider et agir s
     'la touche ne doit PAS partir : le pane a été réservé entre la décision et le geste'
   );
   assert.equal(rendu.debloques.length, 0, 'et le tour ne doit pas compter ça comme un déblocage');
-  assert.equal(rendu.parCause['plus-autorise'], 1, 'le refus doit être NOMMÉ — un veto muet ne se distingue pas d’un geste raté');
+  // ⚠️ CONVERTI PAR D-20260921-0003 : la règle « on ne soumet jamais » est lue AVANT le dernier regard
+  // (`encoreAutorise`). Le refus rendu est donc `soumission-interdite`, et `plus-autorise` n'est plus
+  // atteignable de bout en bout tant que la constante est éteinte — le veto reste câblé sous la garde, et
+  // sa mutation ne rougit plus ici. La décision et l'agir restent séparés par la fenêtre : le bail posé
+  // pendant elle ne change RIEN au résultat, et le refus est nommé, pas muet.
+  assert.equal(rendu.parCause['soumission-interdite'], 1, 'le refus doit être NOMMÉ par sa vraie cause — un refus muet ne se distingue pas d’un geste raté');
+  assert.equal(rendu.parCause['plus-autorise'] ?? 0, 0, 'et `plus-autorise` n’est plus rendu : la règle répond avant le veto');
 });
 
 test('UNE LECTURE RATÉE NE REMET PAS LE COMPTEUR À ZÉRO — « je n’ai pas vu » n’est pas « ça a changé »', async () => {

@@ -158,6 +158,35 @@ process.stdout.write(JSON.stringify({ result: { ok: true } }));
 const appels = (journal) =>
   readFileSync(journal, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
 
+/**
+ * converti par D-20260921-0003 : la délivrance ne soumet JAMAIS la boîte d'autrui. Devant un texte
+ * coincé immobile, `livrer` REFUSE — et le refus doit être NOMMÉ, pas silencieux. Cette assertion
+ * porte donc les DEUX moitiés : aucune touche d'envoi n'est partie (l'absence), ET la cause
+ * `soumission-interdite` sort en champ avec le mot qui dit pourquoi (la présence). L'absence seule
+ * serait aussi satisfaite le jour où la fonction entière aurait disparu ; la cause nommée, non.
+ * Rien n'est écrit non plus : le message de l'émetteur n'est PAS passé — il lui est rendu.
+ */
+function assertRefusNomme(r, journal, msg = 'le refus') {
+  assert.notEqual(r.code, 0, `${msg} : on refuse de livrer, on ne livre pas par-dessus — stdout: ${r.stdout}`);
+  const rendu = JSON.parse(r.stdout);
+  assert.equal(rendu.ok, false);
+  assert.equal(rendu.causeDelivre, 'soumission-interdite', `${msg} : la cause doit être NOMMÉE en champ`);
+  assert.equal(rendu.delivre, false, `${msg} : rien n’a été soumis, la sortie ne doit pas dire le contraire`);
+  assert.match(r.stderr, /RIEN soumis/, `${msg} : le texte du refus dit ce qui n’a pas été fait`);
+  assert.match(r.stderr, /jamais la bo[iî]te d’un autre/, `${msg} : et POURQUOI`);
+  assert.match(r.stderr, /pas pass[ée]/, `${msg} : et que le message n’est pas passé`);
+  const a = appels(journal);
+  assert.ok(
+    !a.some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
+    `${msg} : aucune touche d’envoi ne part sur la boîte d’un autre — ${JSON.stringify(a.filter((x) => x[1] === 'send-keys'))}`
+  );
+  assert.ok(
+    !a.some((x) => x[0] === 'agent' && (x[1] === 'prompt' || x[1] === 'send-text')),
+    `${msg} : le message n’est pas passé — rien n’est écrit dans la boîte`
+  );
+  return rendu;
+}
+
 function livrer(...args) {
   try {
     const stdout = execFileSync(process.execPath, [BIN, ...args], {
@@ -302,35 +331,26 @@ test('une boîte NON VIDE qu’on n’a pas su libérer fait refuser la livraiso
 // Trois occurrences sur trois blocages mesurés, et une fois sur trois l’auteur du texte coincé
 // était DÉJÀ MORT : personne, jamais, n’allait le soumettre.
 
-test('un texte coincé IMMOBILE est soumis — on finit le geste de son auteur, on ne l’écrase pas', () => {
+// converti par D-20260921-0003 : ce test affirmait « le texte coincé est SOUMIS ». On ne soumet plus
+// jamais la boîte d'un autre (mesuré deux fois le 2026-09-21 : une phrase du dirigeant est partie
+// coupée). Il éprouve maintenant le CONTRAIRE : refus nommé `soumission-interdite`, aucune touche.
+test('un texte coincé IMMOBILE n’est JAMAIS soumis — refus nommé, on n’écrit pas la phrase d’un autre', () => {
   const journal = installerFauxHerdr({ boiteInitiale: 'compte rendu dun emetteur qui est mort depuis' });
   const r = livrer('w9:p1', '--texte', 'mon compte rendu a moi');
-  assert.equal(r.code, 0, `la boîte devait être délivrée puis la livraison aboutir — stderr: ${r.stderr}`);
-  const rendu = JSON.parse(r.stdout);
-  assert.equal(rendu.delivre, true, 'la commande doit DIRE qu’elle a délivré une boîte bloquée');
-
-  const a = appels(journal);
-  const iEnter = a.findIndex((x) => x[0] === 'agent' && x[1] === 'send-keys');
-  const iPrompt = a.findIndex((x) => x[0] === 'agent' && x[1] === 'prompt');
-  assert.ok(iEnter !== -1, 'la touche d’envoi doit partir : c’est le seul geste qui libère');
-  assert.deepEqual(a[iEnter], ['agent', 'send-keys', 'w9:p1', 'Enter'], 'on soumet, on n’écrit pas un caractère');
-  assert.ok(iPrompt !== -1 && iEnter < iPrompt, 'on ne livre qu’APRÈS avoir libéré la boîte');
-  // ⚠️ ET LE TEXTE COINCÉ N’EST JAMAIS RÉÉCRIT NI COMPLÉTÉ — le seul geste posé dessus est Enter.
-  assert.ok(
-    !a.some((x) => x[0] === 'agent' && x[1] === 'send-text'),
-    'on ne tape jamais à la place de quelqu’un — soumettre n’est pas écrire'
-  );
+  assertRefusNomme(r, journal, 'texte coincé immobile');
 });
 
-test('le destinataire APPREND que sa boîte avait bloqué — l’avis voyage avec le message livré', () => {
+// converti par D-20260921-0003 : « le destinataire APPREND que sa boîte avait bloqué (avis + message
+// livré) » n'existe plus, il n'y a plus de message livré. Réécrit en son contraire : c'est
+// l'EXPÉDITEUR qui apprend, dans le refus, que son message n'est pas passé et pourquoi ; le
+// destinataire ne reçoit RIEN, ni le message, ni un avis annonçant un geste qui n'a pas eu lieu.
+test('l’EXPÉDITEUR apprend que son message n’est pas passé — le destinataire ne reçoit ni message ni faux avis', () => {
   const journal = installerFauxHerdr({ boiteInitiale: 'un texte reste en plan' });
   const r = livrer('w9:p1', '--texte', 'MON-MESSAGE-A-MOI');
-  assert.equal(r.code, 0, r.stderr);
-  const prompt = appels(journal).find((x) => x[0] === 'agent' && x[1] === 'prompt');
-  assert.ok(prompt, 'le message doit bien être livré');
-  assert.match(prompt[3], /MON-MESSAGE-A-MOI/, 'le message de l’émetteur part en entier');
-  assert.match(prompt[3], /bo[iî]te/i, 'et il est précédé d’un avis qui dit que sa boîte bloquait');
-  assert.match(prompt[3], /soumis/i, 'l’avis dit ce qui a été fait du texte trouvé');
+  assertRefusNomme(r, journal, 'refus à l’expéditeur');
+  const tout = JSON.stringify(appels(journal));
+  assert.ok(!/MON-MESSAGE-A-MOI/.test(tout), 'le message de l’émetteur ne part dans aucun appel herdr');
+  assert.ok(!/a été soumis pour son auteur/.test(tout), 'aucun avis ne raconte un geste non posé');
 });
 
 test('une livraison ORDINAIRE ne porte aucun avis — on n’annonce que ce qui est arrivé', () => {
@@ -364,23 +384,12 @@ test('une boîte que son auteur libère TOUT SEUL pendant l’attente : on livre
   assert.ok(!a.some((x) => x[0] === 'agent' && x[1] === 'send-keys'), 'aucune touche envoyée : le texte est parti seul');
 });
 
-test('une délivrance SANS EFFET laisse le refus exactement où il était, et le dit', () => {
-  const journal = installerFauxHerdr({ boiteInitiale: 'un texte que rien ne deloge', enterInoperant: true });
-  const r = livrer('w9:p1', '--texte', 'mon compte rendu');
-  assert.notEqual(r.code, 0);
-  assert.match(r.stderr, /pas vide/, 'le refus d’origine est rendu intact');
-  // ⚠️ MÊME PIÈGE QUE PLUS HAUT : le vieux refus contient déjà le mot « soumettre ». Le motif
-  // doit porter sur le FAIT NEUF — qu’on a essayé, et que ça n’a rien libéré.
-  assert.match(
-    r.stderr,
-    /sans effet|n’a rien lib[ée]r[ée]|na rien lib/i,
-    'il dit que la soumission a été TENTÉE et n’a rien libéré — sinon on la retente à l’aveugle'
-  );
-  assert.ok(
-    !appels(journal).some((x) => x[0] === 'agent' && x[1] === 'prompt'),
-    'une tentative de délivrance ne donne AUCUN droit d’écrire par-dessus'
-  );
-});
+// converti par D-20260921-0003 : « une délivrance SANS EFFET » (touche d'envoi tentée, boîte non
+// libérée, refus d'origine + « sans effet ») est SUPPRIMÉ. Son objet n'existe plus : la délivrance
+// ne presse plus jamais la touche d'envoi, donc il n'y a plus de tentative dont l'effet puisse
+// manquer. Ce qui en reste vrai — un refus qui n'écrit rien par-dessus — est éprouvé par les tests
+// « texte coincé IMMOBILE » et « refus rendu par le binaire » : le scénario `enterInoperant` n'est
+// plus atteignable via `delivrerLaBoite`, et le garder serait un fantôme.
 
 test('une boîte ILLISIBLE n’est jamais délivrée — on ne soumet pas ce qu’on ne voit pas', () => {
   const journal = installerFauxHerdr({ lectureCassee: true });
@@ -437,19 +446,20 @@ test('un ÉCRAN CONNU par-dessus la boîte n’est jamais délivré — on ne te
 // « Ton garde d'immobilité couvre EN TRAIN DE TAPER ; il ne couvre PAS a tapé la moitié puis
 // est parti. » Deux exigences en découlent, et les deux sont éprouvées ici.
 
-test('l’avis porte CE QUI A ÉTÉ SOUMIS EN ENTIER — un incident constatable, pas inexplicable', () => {
-  // Sans le texte, le destinataire voit un travail partir de chez lui sans pouvoir dire lequel.
+// converti par D-20260921-0003 : l'avis « ce qui a été soumis en entier » n'existe plus (rien n'est
+// soumis). Ce que le test protégeait — que le destinataire ne soit pas laissé sans savoir — est
+// renversé : un texte coincé LONG n'est ni soumis, ni recopié ailleurs, ni relayé dans un message.
+test('un texte coincé LONG n’est ni soumis ni recopié — refus nommé, la boîte d’un autre reste intacte', () => {
   const coince =
     'reprends le dossier Belanger et refais la ventilation des heures du mois dernier en ' +
     'repartissant les surplus sur les trois chantiers ouverts, puis previens le controleur';
   assert.ok(coince.length > 120, 'le texte d’essai doit dépasser tout aperçu tronqué');
   const journal = installerFauxHerdr({ boiteInitiale: coince });
   const r = livrer('w9:p1', '--texte', 'mon compte rendu');
-  assert.equal(r.code, 0, r.stderr);
-  const prompt = appels(journal).find((x) => x[0] === 'agent' && x[1] === 'prompt');
+  assertRefusNomme(r, journal, 'texte coincé long');
   assert.ok(
-    prompt[3].includes(coince),
-    'l’avis doit porter le texte soumis EN ENTIER — un aperçu tronqué ne permet pas de dire lequel c’était'
+    !JSON.stringify(appels(journal)).includes(coince.slice(0, 40)),
+    'le texte coincé n’est repris dans aucun appel d’écriture — on n’y touche pas'
   );
 });
 
@@ -497,7 +507,10 @@ function lancerAvecPlafond(args, { plafondMs, env = {} }) {
   };
 }
 
-test('un COLLAGE immobile est délivré tout de suite — le critère du jalon est de 15 s, le poste en faisait 300', () => {
+// converti par D-20260921-0003 : le collage n'est plus « délivré » (soumis) — le refus nommé doit
+// tomber TOUT DE SUITE. Le budget (15 s) et l'absence d'attente de la fenêtre devant un collage,
+// que ce test gardait, restent éprouvés ; seule la fin change : refus `soumission-interdite`.
+test('un COLLAGE immobile est refusé tout de suite — le critère du jalon est de 15 s, le poste en faisait 300', () => {
   // ⚠️ LE CAS EXACT MESURÉ SUR LE POSTE le 2026-08-18 : une boîte portant `[Pasted text #33]`,
   // destinataire au repos, texte identique sur sept relevés. Cinq minutes d'attente avant le
   // geste — pour un texte devant lequel il n'y a, par construction, personne à attendre : un
@@ -505,7 +518,7 @@ test('un COLLAGE immobile est délivré tout de suite — le critère du jalon e
   const journal = installerFauxHerdr({ boiteInitiale: '[Pasted text #33 +12 lines]' });
   const r = lancerAvecPlafond(['w9:p1', '--texte', 'mon compte rendu'], { plafondMs: 25000 });
   assert.ok(!r.tue, `le binaire a dépassé son plafond — il attendait encore après ${r.dureeMs} ms`);
-  assert.equal(r.code, 0, r.stderr);
+  assertRefusNomme(r, journal, 'collage immobile');
   assert.ok(
     r.dureeMs < 15000,
     `le critère du jalon exige moins de 15 s de bout en bout — mesuré ${Math.round(r.dureeMs / 1000)} s`
@@ -519,15 +532,13 @@ test('un COLLAGE immobile est délivré tout de suite — le critère du jalon e
     `devant un collage, aucune fenêtre ne doit être observée — mesuré ${r.dureeMs} ms, ` +
       `soit au moins la fenêtre du texte tapé (${FENETRE_ATTENDUE_MS} ms)`
   );
-  // ET LE GESTE A BIEN EU LIEU — sans ça, « rapide » voudrait seulement dire « n'a rien fait ».
-  assert.ok(
-    appels(journal).some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
-    'la touche d’envoi doit être partie : une délivrance rapide qui ne délivre pas n’est pas une délivrance'
-  );
-  assert.match(r.stdout, /"delivre":true/);
+  // ET « RAPIDE » NE VEUT PAS DIRE « N'A RIEN FAIT » : le refus est NOMMÉ (assertRefusNomme plus
+  // haut) — une sortie rapide et muette n'aurait pas la cause `soumission-interdite`.
 });
 
-test('devant un COLLAGE, l’avis livré ne raconte pas une observation qui n’a pas eu lieu', () => {
+// converti par D-20260921-0003 : il n'y a plus d'avis livré. La même racine se garde sur le REFUS :
+// devant un collage on n'a pas observé de fenêtre, le refus ne doit pas dire qu'on l'a fait.
+test('devant un COLLAGE, le refus nommé ne raconte pas une observation qui n’a pas eu lieu', () => {
   // ⚠️ CETTE GARDE VIENT D'UNE MUTATION SURVIVANTE. Repasser `immobiliteMs` au lieu de la
   // fenêtre réellement appliquée laissait tous les essais verts — et faisait dire à l'avis
   // « resté immobile pendant les 6 s où je l'ai observée » devant un texte qu'on n'a PAS
@@ -535,16 +546,10 @@ test('devant un COLLAGE, l’avis livré ne raconte pas une observation qui n’
   // recevrait un compte rendu faux de ce qu'on a fait.
   const journal = installerFauxHerdr({ boiteInitiale: '[Pasted text #33 +12 lines]' });
   const r = livrer('w9:p1', '--texte', 'mon compte rendu');
-  assert.equal(r.code, 0, r.stderr);
-  const prompt = appels(journal).find((x) => x[0] === 'agent' && x[1] === 'prompt');
-  assert.ok(prompt, 'le message doit avoir été livré');
+  assertRefusNomme(r, journal, 'refus devant collage');
   assert.ok(
-    !/où je l’ai observée/.test(prompt[3]),
-    `aucune durée d’observation devant un collage — reçu : ${prompt[3].slice(0, 220)}`
-  );
-  assert.ok(
-    /collé|d’un seul coup/i.test(prompt[3]),
-    `l’avis doit dire POURQUOI il n’a pas observé — reçu : ${prompt[3].slice(0, 220)}`
+    !/où je l’ai observée|après \d+ s d’immobilité|pendant \d+ s/.test(r.stderr),
+    `aucune durée d’observation devant un collage — reçu : ${r.stderr.slice(0, 260)}`
   );
 });
 
@@ -552,16 +557,21 @@ test('devant un COLLAGE, un refus ne prétend pas non plus avoir attendu', () =>
   // Même racine, autre sortie : quand la touche d'envoi reste sans effet, le refus explique ce
   // qu'on a tenté. Il citait la fenêtre de l'appelant, pas celle qu'on a réellement observée —
   // « après 6 s d'immobilité » devant un collage qu'on n'a pas regardé.
-  installerFauxHerdr({ boiteInitiale: '[Pasted text #33 +12 lines]', enterInoperant: true });
+  // converti par D-20260921-0003 : la touche d'envoi ne part plus jamais, `enterInoperant` n'a plus
+  // d'effet ; le refus qu'on éprouve est désormais `soumission-interdite`, nommé.
+  const journal = installerFauxHerdr({ boiteInitiale: '[Pasted text #33 +12 lines]', enterInoperant: true });
   const r = livrer('w9:p1', '--texte', 'mon compte rendu');
-  assert.notEqual(r.code, 0);
+  assertRefusNomme(r, journal, 'refus devant collage');
   assert.ok(
     !/après \d+ s d’immobilité/.test(r.stderr),
     `le refus ne doit pas chiffrer une attente qui n’a pas eu lieu — reçu : ${r.stderr.slice(0, 260)}`
   );
 });
 
-test('un texte TAPÉ immobile est délivré sous le budget du critère — sa fenêtre reste observée', () => {
+// converti par D-20260921-0003 : le texte tapé n'est plus soumis à l'issue de sa fenêtre — il est
+// refusé (`soumission-interdite`). La fenêtre reste OBSERVÉE (borne basse) et tient dans le budget
+// (borne haute) : ce qui a changé est la fin du geste, pas l'observation qui la précède.
+test('un texte TAPÉ immobile est refusé sous le budget du critère — sa fenêtre reste observée', () => {
   // ⚠️ CELUI-CI GARDE L'AUTRE MOITIÉ. Un texte tapé peut avoir des doigts dessus : on l'observe
   // vraiment, et cette attente-là est le prix d'un geste irréversible. Ce qui est éprouvé ici
   // n'est pas qu'elle soit nulle — c'est qu'elle TIENNE DANS LE BUDGET annoncé. Cinq minutes n'y
@@ -569,7 +579,7 @@ test('un texte TAPÉ immobile est délivré sous le budget du critère — sa fe
   const journal = installerFauxHerdr({ boiteInitiale: 'un compte rendu que son auteur n’a pas soumis' });
   const r = lancerAvecPlafond(['w9:p1', '--texte', 'mon compte rendu'], { plafondMs: 25000 });
   assert.ok(!r.tue, `le binaire a dépassé son plafond — il attendait encore après ${r.dureeMs} ms`);
-  assert.equal(r.code, 0, r.stderr);
+  assertRefusNomme(r, journal, 'texte tapé immobile');
   assert.ok(
     r.dureeMs < 15000,
     `le critère du jalon exige moins de 15 s de bout en bout — mesuré ${Math.round(r.dureeMs / 1000)} s`
@@ -599,10 +609,6 @@ test('un texte TAPÉ immobile est délivré sous le budget du critère — sa fe
     r.dureeMs < FENETRE_ATTENDUE_MS + 4000,
     `le binaire doit observer SA fenêtre (${FENETRE_ATTENDUE_MS} ms) — mesuré ${r.dureeMs} ms, ` +
       `soit une attente qui n’est pas la sienne`
-  );
-  assert.ok(
-    appels(journal).some((x) => x[0] === 'agent' && x[1] === 'send-keys'),
-    'la touche d’envoi doit être partie'
   );
 });
 
