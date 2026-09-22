@@ -1,0 +1,57 @@
+# ops-discovery — {{ORGANIZATION_NAME}}
+
+Endpoint de discovery isomorphique du Departement IA `{{DEPARTMENT_NAME}}`, conforme a **STD-032** (Somcraft `/standards/STD-032-discovery-departement-ia.md`).
+
+Genere par le skill `/scaffold-ops-discovery` du `somtech-pack` — {{SCAFFOLDED_AT}}.
+
+## Ce que ce scaffold fournit
+
+- `GET /health` — health check
+- `GET /metrics` — metriques Prometheus (STD-032 SS2.8) : `agents_total`, `agents_online`, `agents_degraded`, `agents_offline`, `pull_errors_total`, `pull_duration_ms`, `sessions_total`, `sessions_live`, `sessions_stale`
+- `GET /.well-known/agents.json` — reponse agregee conforme au schema `isomorphic_version: "1.1"` (STD-032 SS2.4)
+
+## Ce que ce scaffold NE fournit PAS (hors perimetre, cf. T-20260922-0062)
+
+- **Aucun mecanisme de decouverte cable** — SS2.10 decrit 3 mecanismes (liste statique, pull manifeste curate, self-registration) ; seule la config `agents:` statique est lue ici. Tout agent y apparait avec `status: "unknown"` — aucun pull, aucune derivation depuis `sessions[]` n'est implementee.
+- **`sessions[]` reste toujours vide** — la self-registration (mecanisme #3, Phase F+) n'est pas cablee. C'est le lot de `koksoak` (`pack agent naitre`).
+- **Le deploiement** — ce depot fournit le code applicatif seul (STD-032 SS2.7). Le deploiement (Droplet DO TOR1 pour un Departement client, Mac Studio pour le Departement IA interne Somtech) est un lot separe.
+
+## Configuration
+
+Copier `config.example.yaml` en `config.yaml` et adapter :
+
+```yaml
+department:
+  name: "dept-ia-{votre-departement}"
+  organization: "Votre organisation"
+port: 8080
+ttl_seconds: 60
+auth:
+  mode: "public"   # "public" | "bearer" | "network" (Tailscale) — STD-032 SS2.5
+agents: []          # mecanisme #1 : liste statique, a completer
+```
+
+`auth.mode: "network"` ne se combine pas avec `api_key_env` (SS2.5) — pour un Departement IA interne Somtech sans IP publique (I11), le controle d'acces est l'ACL Tailscale, pas une cle applicative.
+
+## Lancer en local
+
+```bash
+npm test              # tests unitaires (zero dependance npm)
+node src/server.js     # demarre sur le port de config.yaml (8080 par defaut)
+curl http://localhost:8080/health
+curl http://localhost:8080/.well-known/agents.json
+```
+
+## Docker
+
+```bash
+docker build -t ops-discovery .
+docker run --rm -p 8080:8080 ops-discovery
+```
+
+## References
+
+- STD-032 — Discovery interne d'un Departement IA (Somcraft)
+- STD-028 — Organisation des repos GitHub pour les agents IA
+- ADR-030 — Cadre semantique du Departement IA Somtech
+- ADR-043 — 1 Droplet DO TOR1 par Departement IA

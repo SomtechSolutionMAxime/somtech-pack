@@ -1,0 +1,20 @@
+# Config ops-discovery — STD-032
+#
+# Copier en config.yaml et adapter. auth.mode : "public" (defaut) | "bearer" | "network"
+# (Tailscale). "network" ne se combine pas avec bearer/api_key_env (STD-032 SS2.5).
+
+department:
+  name: "{{DEPARTMENT_NAME}}"
+  organization: "{{ORGANIZATION_NAME}}"
+
+port: 8080
+ttl_seconds: 60
+
+auth:
+  mode: "{{AUTH_MODE}}"
+
+# Mecanisme #1 de decouverte (STD-032 SS2.10) : liste statique, provisionnee au
+# demarrage. Vide au scaffold initial — a completer par l'operateur du
+# Departement. Le mecanisme #2 (pull du manifeste curate) et le mecanisme #3
+# (self-registration) sont hors perimetre de ce scaffold (Phase F+).
+agents: []
