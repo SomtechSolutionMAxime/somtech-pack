@@ -7,6 +7,14 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-22
 
+*Ticket `T-20260922-0136` (priorité haute, coordonnateur `batiscan`, `J-20260814-0002`).*
+
+### Corrige
+
+- **`VERSION` figé à `1.64.0` depuis 37 tags (2026-08-17 → 2026-09-22) — l'installation legacy sortait en succès sans rien installer.** `scripts/somtech_pack_pull.sh` comparait la version installée au contenu brut de `VERSION`, jamais au tag Git réel : un projet dont le marqueur local concordait avec ce fichier figé recevait « déjà à jour » et l'installation sortait en `exit 0` sans avoir rien copié — 21 projets du poste concernés, mesuré indépendamment. Réalignement `VERSION`/`pack.json`/`cli/package.json` sur `v1.101.5`. Nouvelle fonction `resolve_pack_version()` (`scripts/lib/somtech_pack_common.sh`) qui corrobore `VERSION` contre le dernier tag Git atteignable — trois états (à jour / plus ancienne / **incohérent**) ; un état incohérent **échoue** désormais (jamais un no-op silencieux en succès), `--force` outrepasse avec avertissement explicite. Garde CI dédiée (`scripts/tests/test-version-tag-coherence.sh`, `fetch-depth: 0` sur le job `shell-tests`) qui audite le dépôt réel à chaque push — `version-consistency.test.js` restait vert car il ne comparait `VERSION`/`pack.json`/`cli/package.json` qu'entre eux, jamais au tag. `.claude/skills/merge/SKILL.md` bumpe et commite désormais `VERSION`/`pack.json`/`cli/package.json` avant `git tag` (conditionnel à la présence de ces fichiers), pour que la garde reste vraie aux prochaines releases. Deux passes de revue indépendantes (portail Haiku, fond Sonnet) ont chacune trouvé un défaut réel avant fusion : une syntaxe bash invalide dans le bloc de bump, puis — en cours de route, hors périmètre de ce ticket — une isolation partielle de `test-merge-mesure-distante.sh` qui exécutait ce même bloc pour de vrai contre la racine du dépôt (git simulé, pas `printf`/`node`), corrompant `VERSION` à chaque exécution de la suite ; corrigé en scindant le bump et la pose de tag en deux blocs bash distincts, sans changer le comportement testé (118/118, VERSION intact après coup). Banc dédié `scripts/tests/test-pull-version-incoherente.sh` (11 scénarios, rouge avant correctif, tué par 2 mutations distinctes).
+
+## [Non-versionne] - 2026-09-22
+
 *Livraison `J-20260814-0002`, demande `D-20260921-0017` (lot 4, garde 5/5 — la dernière) — ticket `T-20260922-0106`.*
 
 ### Ajoute
