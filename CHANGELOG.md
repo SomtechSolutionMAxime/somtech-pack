@@ -7,6 +7,14 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-22
 
+*Livraison `J-20260814-0002`, demande `D-20260921-0017` (lot 4, garde 4/5) — ticket `T-20260922-0098`.*
+
+### Ajoute
+
+- **Contrôle du brief de naissance d'un chef d'équipe** (`.claude/skills/orchestrer-chantier/lib/verifie-brief-chef.sh`, GF-ORC-013) — vérifie qu'un brief (description du ticket + commentaire de naissance) cite les 4 éléments obligatoires : ADR applicable (nommée, ou `[non établi]` **motivé** — les deux passent, un marqueur seul sans motif reste un refus), BRD au bon grain (module si `module_id`, application sinon), ontologie (quand le lot la touche — jugement du périmètre fourni par l'appelant, jamais déduit du texte), et la section « ce qui s'applique ici ». Signale seulement, jamais bloquant (arbitrage du dirigeant hors-scope). Aucun appel réseau/MCP. Verdict `[non mesuré]` distinct d'un `PASSE`/`REFUS` quand la source est cassée — y compris quand le script est sourcé ou exécuté directement sous un interpréteur non-bash (zsh, shell par défaut de ce poste), défaut critique trouvé et corrigé en cours de lot par deux tours de revue de fond indépendante. Bancs : 44/44 unitaire, 20/20 mutation (0 survivant), et un banc « corpus réel » qui rejoue les deux chiffres exigés à chaque exécution sur les 6 briefs de naissance existants dans ce dépôt (population complète, pas un échantillon) — 5/5 non conformes attrapés, 0/1 conforme refusé à tort.
+
+## [Non-versionne] - 2026-09-22
+
 *Livraison `J-20260814-0002`, demande `D-20260921-0017` (lot 4, garde 3/5) — ticket `T-20260922-0093`.*
 
 ### Ajoute
