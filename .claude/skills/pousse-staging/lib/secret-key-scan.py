@@ -23,6 +23,17 @@
 # Le message de refus NOMME le fichier et la ligne, JAMAIS la valeur de la
 # cle (STD-038 SS2.4 : « cle a droits eleves dans un log » est interdit).
 #
+# DEUX passes, pas une : une cle peut etre COUPEE par un retour a la ligne
+# LITTERAL (collage accidentel dans un fichier/doc, wrap dur d'un editeur) —
+# une regex ligne par ligne la rate (trouve en revue independante, cf. PR).
+# La passe 2 rejoue les memes motifs sur chaque PAIRE de lignes consecutives
+# concatenees, ce qui attrape une coupure sur UNE frontiere de ligne — le cas
+# reel plausible. Hors de portee, deliberement : une cle brisee par une
+# CONCATENATION APPLICATIVE ("eyJ..." + "OiJ...") — les caracteres ne sont
+# JAMAIS contigus dans le fichier source, donc invisible a un grep statique,
+# ce qui vaut aussi pour gitleaks/trufflehog. Un adversaire qui obfusque
+# deliberement une cle en dur est hors du perimetre de ce gate.
+#
 # Usage : python3 secret-key-scan.py <fichier...>
 # Sortie : une ligne par violation sur stdout ("fichier:ligne: motif — extrait
 #          tronque"), rc 0 si rien trouve, rc 1 si au moins une violation.
@@ -61,14 +72,39 @@ def _mask(value: str) -> str:
 
 
 def scan_text(text: str):
-    """Retourne [(lineno, motif, extrait_masque), ...] pour une chaine de texte."""
+    """Retourne [(lineno, motif, extrait_masque), ...] pour une chaine de texte.
+    lineno est soit un int (trouve sur une seule ligne), soit une str "i-i+1"
+    (trouve a cheval sur une frontiere de ligne, passe 2)."""
+    lines = text.splitlines()
     hits = []
-    for lineno, line in enumerate(text.splitlines(), start=1):
+    seen = set()  # (motif, prefixe_de_l_extrait) — deduplique les deux passes
+
+    def record(lineno, motif, token):
+        key = (motif.split(" ", 1)[0], token[:24])
+        if key in seen:
+            return
+        seen.add(key)
+        hits.append((lineno, motif, _mask(token)))
+
+    # Passe 1 : chaque ligne seule — le cas courant.
+    for i, line in enumerate(lines, start=1):
         for m in SB_SECRET_RE.finditer(line):
-            hits.append((lineno, "sb_secret_", _mask(m.group(0))))
+            record(i, "sb_secret_", m.group(0))
         for m in JWT_RE.finditer(line):
             if is_service_role_jwt(m.group(0)):
-                hits.append((lineno, "service_role-jwt", _mask(m.group(0))))
+                record(i, "service_role-jwt", m.group(0))
+
+    # Passe 2 : paires de lignes consecutives concatenees SANS separateur —
+    # attrape une cle coupee par un retour a la ligne litteral. Voir en-tete.
+    for i in range(len(lines) - 1):
+        joined = lines[i] + lines[i + 1]
+        loc = f"{i + 1}-{i + 2}"
+        for m in SB_SECRET_RE.finditer(joined):
+            record(loc, "sb_secret_ (coupee sur 2 lignes)", m.group(0))
+        for m in JWT_RE.finditer(joined):
+            if is_service_role_jwt(m.group(0)):
+                record(loc, "service_role-jwt (coupee sur 2 lignes)", m.group(0))
+
     return hits
 
 

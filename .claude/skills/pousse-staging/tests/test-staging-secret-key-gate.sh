@@ -20,6 +20,9 @@
 #      (c'est le filet qui proteg meme sans /pousse-staging).
 #   H. python3 introuvable (simule)                     -> rc=2, FAIL-CLOSED
 #      (jamais un skip silencieux sur un gate de securite).
+#   I. Vraie cle sb_secret_ COUPEE par un retour a la    -> rc=1, detectee
+#      ligne litteral (collage/wrap d'editeur — trouve      (2 passes : ligne
+#      en revue independante, pas dans le premier jet).      seule + paires).
 #
 # Usage : bash .claude/skills/pousse-staging/tests/test-staging-secret-key-gate.sh
 # Sortie : exit 0 si tous les scenarios passent, 1 sinon.
@@ -145,6 +148,18 @@ rc="$(cd "$REPO" && PATH="$(mktemp -d)" /bin/bash -c "source '${LIB_DIR}/staging
 [ "$rc" = "2" ] && ok "python3 absent -> FAIL-CLOSED (rc=2), pas un skip silencieux" \
   || ko "python3 absent aurait du rendre 2 (fail-closed), a rendu $rc"
 rm -rf "$REPO"
+
+echo "== Scenario I — cle sb_secret_ COUPEE par un retour a la ligne litteral (rc=1) =="
+F="$(mktemp)"
+HALF1="${FAKE_SB_SECRET:0:20}"
+HALF2="${FAKE_SB_SECRET:20}"
+printf '%s\n%s\n' "$HALF1" "$HALF2" > "$F"   # la cle coupee EXACTEMENT sur une frontiere de ligne
+python3 "${LIB_DIR}/secret-key-scan.py" "$F" >/tmp/skg_out_i 2>&1; rc=$?
+[ "$rc" = "1" ] && ok "cle coupee sur 2 lignes detectee (passe 2 — paires de lignes)" \
+  || ko "🚨 cle coupee sur 2 lignes NON detectee (rc=$rc) — defaut confirme par la revue portail"
+case "$(cat /tmp/skg_out_i)" in *"$FAKE_SB_SECRET"*) ko "🚨 la VALEUR complete de la cle coupee est imprimee" ;;
+               *) ok "la valeur de la cle coupee n'est pas imprimee en clair" ;; esac
+rm -f "$F" /tmp/skg_out_i
 
 PASS="$(wc -l < "$PASS_FILE" | tr -d ' ')"
 FAIL="$(wc -l < "$FAIL_FILE" | tr -d ' ')"
