@@ -125,7 +125,9 @@ old = '''    manquants = []
         if wid not in classement:
             manquants.append(f"{wid} absent du corpus")
         elif classement[wid] != "protege":
-            manquants.append(f"{wid} classe {classement[wid]} (attendu protege)")'''
+            manquants.append(f"{wid} classe {classement[wid]} (attendu protege)")
+        elif not audite_par_id.get(wid, False):
+            manquants.append(f"{wid} classe protege MAIS par l'heuristique generique non auditee (AUDITE=non) — pas une preuve valable pour un temoin")'''
 new = '''    manquants = []'''
 assert old in s
 s = s.replace(old, new)
@@ -183,6 +185,18 @@ old = '''                if ancien is not None and ancien != nouveau:
                     ecarts.append(f"{rid}:{ancien}->{nouveau}")'''
 new = '''                if False:
                     ecarts.append(f"{rid}:{ancien}->{nouveau}")'''
+assert old in s
+s = s.replace(old, new)
+PY
+
+echo "== (e) — RÉGRESSION (revue de fond, 3e tour) : AUDITE reste 'oui' pour un protege de l'heuristique generique =="
+essai 'AUDITE fige a True dans la branche heuristique generique — un protege par coincidence (repro reel : STD-030) se ferait passer pour un protege verifie' <<'PY'
+old = '''    if code_hits and test_hits:
+        return ("protege", code_hits[0], None, None, None, False)
+    return ("prose", None, None, None, None, False)'''
+new = '''    if code_hits and test_hits:
+        return ("protege", code_hits[0], None, None, None, True)
+    return ("prose", None, None, None, None, False)'''
 assert old in s
 s = s.replace(old, new)
 PY

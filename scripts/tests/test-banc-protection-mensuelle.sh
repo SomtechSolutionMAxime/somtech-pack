@@ -72,6 +72,7 @@ executer '{
 }'
 [ "$(champ REGLE_R_PROTEGE_CLASSE)" = "protege" ] && ok "mecanisme+banc+citation -> protege" || ko "attendu protege, obtenu $(champ REGLE_R_PROTEGE_CLASSE)"
 [ "$(champ REGLE_R_PROTEGE_MECANISME)" = ".claude/skills/x/lib/mecha.sh" ] && ok "REGLE_..._MECANISME cite le bon chemin" || ko "MECANISME manquant ou faux: $(champ REGLE_R_PROTEGE_MECANISME)"
+[ "$(champ REGLE_R_PROTEGE_AUDITE)" = "oui" ] && ok "AUDITE=oui pour un protege issu de mecanisme_connu (verifie, pas une coincidence)" || ko "attendu AUDITE=oui, obtenu $(champ REGLE_R_PROTEGE_AUDITE)"
 
 echo "== Discriminant 2 : prose (citation trouvee mais mecanisme incomplet — banc absent) =="
 executer '{
@@ -158,6 +159,10 @@ executer '{
   "citations_attendues": ["MARQUEUR_GENERIQUE"]
 }'
 [ "$(champ REGLE_R_GENERIQUE_PROTEGE_CLASSE)" = "protege" ] && ok "citation dans lib/ ET dans un test -> protege (heuristique generique)" || ko "attendu protege, obtenu $(champ REGLE_R_GENERIQUE_PROTEGE_CLASSE)"
+echo "   RÉGRESSION (3e tour de revue de fond) — un protege de l'heuristique generique peut etre une COINCIDENCE (repro reel : STD-030 du corpus)"
+[ "$(champ REGLE_R_GENERIQUE_PROTEGE_AUDITE)" = "non" ] \
+  && ok "AUDITE=non pour un protege de l'heuristique generique — jamais confondu avec un protege verifie" \
+  || ko "attendu AUDITE=non, obtenu $(champ REGLE_R_GENERIQUE_PROTEGE_AUDITE) (BUG : un protege par coincidence se ferait passer pour un protege prouve)"
 
 echo "== Discriminant 7 : heuristique generique — prose si citation seulement en prose =="
 executer '{

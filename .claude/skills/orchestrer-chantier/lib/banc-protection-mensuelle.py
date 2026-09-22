@@ -157,7 +157,23 @@ def date_git_dernier_commit(racine, chemin_relatif):
 
 def classer_entree(entree, racine, fichiers_cache):
     """Rend (classe, mecanisme_cite|None, date_a|None, date_b|None,
-    detail_note). classe in {protege, prose, contredit, non_etabli}."""
+    detail_note, audite). classe in {protege, prose, contredit, non_etabli}.
+
+    `audite` (bool) — DÉFAUT n°3 TROUVÉ AU 3e TOUR DE REVUE DE FOND, CORRIGÉ
+    ICI. L'heuristique générique (plus bas) peut rendre `protege` par pure
+    coïncidence : un fichier `lib/`+un fichier `test*.sh` qui citent tous
+    deux la chaîne cherchée, SANS AUCUN RAPPORT RÉEL entre eux ni avec la
+    règle. Reproduit concrètement sur STD-030 (générique) du corpus réel :
+    classé `protege` via `merge-closes-stories.sh` (qui protège en réalité
+    le sous-thème /merge, tracé séparément sous `STD-030-MERGE`) croisé avec
+    `test-verifie-brief-chef.sh` (sans rapport). Le docstring du module
+    promettait déjà que ces classements « ne comptent dans aucun chiffre
+    d'exactitude » — mais rien ne le rendait VISIBLE dans la sortie, et un
+    agrégat « N protege » mélangeait sans le dire des classements PROUVÉS
+    (mecanisme_connu/contredit_par, vérifiés à la main ou cités par chemin
+    précis) et des classements PAR COÏNCIDENCE (heuristique générique).
+    `audite=True` seulement pour les branches `contredit_par`/`mecanisme_connu`
+    — jamais pour l'heuristique générique, quel que soit son verdict."""
     contredit_par = entree.get("contredit_par")
     mecanisme_connu = entree.get("mecanisme_connu")
     citations = entree.get("citations_attendues") or [entree["id"]]
@@ -170,13 +186,13 @@ def classer_entree(entree, racine, fichiers_cache):
         fichier = contredit_par.get("fichier", "")
         if not os.path.isfile(os.path.join(racine, fichier)):
             return ("non_etabli", None, None, None,
-                    "le texte contredisant vit hors de ce depot, non verifiable par ce banc")
+                    "le texte contredisant vit hors de ce depot, non verifiable par ce banc", True)
         if grep_fichier(racine, fichier, citations):
             date_a = entree.get("date_source") or "[non mesure] (date_source absente de la source ADR/STD)"
             date_b = date_git_dernier_commit(racine, fichier)
-            return ("contredit", fichier, date_a, date_b, None)
+            return ("contredit", fichier, date_a, date_b, None, True)
         return ("non_etabli", None, None, None,
-                f"fichier {fichier} present mais aucune des citations attendues n'y a ete trouvee")
+                f"fichier {fichier} present mais aucune des citations attendues n'y a ete trouvee", True)
 
     if mecanisme_connu:
         chemin = mecanisme_connu.get("chemin", "")
@@ -203,25 +219,27 @@ def classer_entree(entree, racine, fichiers_cache):
         cite_dans_mecanisme = chemin_ok and grep_fichier(racine, chemin, citations)
         hits = grep_repo(racine, citations, fichiers_cache)
         if chemin_ok and banc_ok and cite_dans_mecanisme:
-            return ("protege", chemin, None, None, None)
+            return ("protege", chemin, None, None, None, True)
         if hits:
             manque = []
             if not chemin_ok:
                 manque.append(f"mecanisme absent du disque: {chemin}")
             if not banc_ok:
                 manque.append(f"banc absent du disque: {banc}")
-            return ("prose", None, None, None, "; ".join(manque) if manque else "citation trouvee, mecanisme incomplet")
-        return ("non_etabli", None, None, None, "aucune citation attendue trouvee dans le depot")
+            return ("prose", None, None, None, "; ".join(manque) if manque else "citation trouvee, mecanisme incomplet", True)
+        return ("non_etabli", None, None, None, "aucune citation attendue trouvee dans le depot", True)
 
     # Heuristique générique — entrées non auditées (verifie_a_la_main=false).
+    # `audite=False` INCONDITIONNELLEMENT ici, quel que soit le verdict rendu
+    # (y compris `protege` : voir le défaut n°3 documenté sur classer_entree).
     hits = grep_repo(racine, citations, fichiers_cache)
     if not hits:
-        return ("non_etabli", None, None, None, None)
+        return ("non_etabli", None, None, None, None, False)
     code_hits = [h for h in hits if CODE_HIT_RE.search(h)]
     test_hits = [h for h in hits if TEST_HIT_RE.search(os.path.basename(h)) or TEST_HIT_RE.search(h)]
     if code_hits and test_hits:
-        return ("protege", code_hits[0], None, None, None)
-    return ("prose", None, None, None, None)
+        return ("protege", code_hits[0], None, None, None, False)
+    return ("prose", None, None, None, None, False)
 
 
 def sanitiser_cle(id_regle):
@@ -299,26 +317,43 @@ def main():
     fichiers_cache = lister_fichiers(racine, exclus=exclus, dossiers_exclus=dossiers_exclus)
 
     classement = {}
+    audite_par_id = {}
     lignes = []
     for entree in entries:
         rid = entree["id"]
-        classe, mecanisme, date_a, date_b, _detail = classer_entree(entree, racine, fichiers_cache)
+        classe, mecanisme, date_a, date_b, _detail, audite = classer_entree(entree, racine, fichiers_cache)
         classement[rid] = classe
+        audite_par_id[rid] = audite
         cle = sanitiser_cle(rid)
         lignes.append(f"REGLE_{cle}_CLASSE={classe}")
+        # DÉFAUT n°3 (3e tour de revue de fond) : `AUDITE` rend visible ce que
+        # le docstring de classer_entree promettait sans le montrer — un
+        # `protege` de l'heuristique générique (AUDITE=non) peut être une
+        # coïncidence de deux fichiers sans rapport réel (repro réel : STD-030
+        # du corpus). Ne JAMAIS agréger un compte "N protege" sans distinguer
+        # AUDITE=oui de AUDITE=non — c'est exactement ce que ce champ existe
+        # pour empêcher de refaire.
+        lignes.append(f"REGLE_{cle}_AUDITE={'oui' if audite else 'non'}")
         if classe == "protege" and mecanisme:
             lignes.append(f"REGLE_{cle}_MECANISME={mecanisme}")
         if classe == "contredit":
             lignes.append(f"REGLE_{cle}_DATE_A={date_a}")
             lignes.append(f"REGLE_{cle}_DATE_B={date_b}")
 
-    # ---- Témoin positif ----
+    # ---- Témoin positif — exige AUSSI audite=True : un témoin du lot 4 vu
+    # "protege" par pure coïncidence de l'heuristique générique ne prouverait
+    # rien (structurellement impossible aujourd'hui, les 4 témoins ont tous
+    # un mecanisme_connu déclaré — gardé en défense explicite, pas en cas
+    # mort : un futur ajout au corpus pourrait retirer ce déclaratif par
+    # erreur, et ce contrôle doit alors le détecter).
     manquants = []
     for wid in WITNESS_IDS:
         if wid not in classement:
             manquants.append(f"{wid} absent du corpus")
         elif classement[wid] != "protege":
             manquants.append(f"{wid} classe {classement[wid]} (attendu protege)")
+        elif not audite_par_id.get(wid, False):
+            manquants.append(f"{wid} classe protege MAIS par l'heuristique generique non auditee (AUDITE=non) — pas une preuve valable pour un temoin")
     if manquants:
         lignes.append("TEMOIN_POSITIF=ECHEC")
         lignes.append("TEMOIN_POSITIF_DETAIL=" + " ; ".join(manquants))
