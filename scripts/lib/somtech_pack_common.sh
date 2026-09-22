@@ -114,6 +114,39 @@ get_pack_version() {
   fi
 }
 
+# Dernier tag Git atteignable depuis le HEAD checkté de $source (sans le 'v').
+# Vide si aucun tag n'est atteignable (dépôt sans tags, ou pas un dépôt git).
+get_pack_tag_version() {
+  local source="${1:-.}"
+  command -v git >/dev/null 2>&1 || return 0
+  git -C "$source" rev-parse --git-dir >/dev/null 2>&1 || return 0
+  local t
+  t="$(git -C "$source" describe --tags --abbrev=0 2>/dev/null || true)"
+  printf '%s' "${t#v}"
+}
+
+# Corrobore le fichier VERSION contre le dernier tag Git réellement atteint —
+# le tag est la SOURCE UNIQUE de version documentée pour ce dépôt (CLAUDE.md
+# racine du pack) ; un fichier VERSION qui ne le reflète plus ne peut fonder
+# aucune comparaison de confiance (T-20260922-0136 : VERSION figé à 1.64.0
+# pendant 37 tags, jamais détecté parce que rien ne le corroborait).
+#
+# Rend deux lignes : etat ("coherent"|"incoherent"), puis la version à retenir
+# (celle du fichier dans les deux cas — en incohérent, c'est un REPLI de
+# dernier recours que l'appelant doit traiter comme non fiable, jamais comme
+# un "à jour" silencieux).
+resolve_pack_version() {
+  local source="${1:-.}"
+  local file_version tag_version
+  file_version="$(get_pack_version "$source")"
+  tag_version="$(get_pack_tag_version "$source")"
+  if [[ -n "$tag_version" ]] && [[ "$tag_version" == "$file_version" ]]; then
+    printf 'coherent\n%s\n' "$file_version"
+  else
+    printf 'incoherent\n%s\n' "$file_version"
+  fi
+}
+
 # Read installed version from a project's .somtech-pack/version.json
 get_installed_version() {
   local target="${1:-.}"

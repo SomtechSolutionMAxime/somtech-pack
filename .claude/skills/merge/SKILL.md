@@ -484,9 +484,29 @@ l'humain, et le shell ne survit pas a cet arret. Un bloc qui compterait sur un
 `source` fait avant la Confirmation echouerait en `command not found` — a chaque
 fois, pas seulement en cas de course, et le message parlerait de disponibilite
 alors que la fonction est simplement absente.
+> 🔴 **Si un fichier `VERSION` existe a la racine du depot : le bumper ET LE
+> COMMITER AVANT de taguer, jamais apres.** Sans ca, le tag avance et `VERSION`
+> reste fige sur le dernier commit qui l'avait mis a jour — c'est exactement
+> ce qui a laisse `VERSION` a `1.64.0` pendant 37 tags sur somtech-pack
+> (T-20260922-0136, 2026-08-17 → 2026-09-22) : un mecanisme d'installation qui
+> compare la version installee a ce fichier sort alors en SUCCES sans avoir
+> RIEN installe, sans la moindre erreur. Un tag qui avance sans son fichier de
+> version n'est pas une optimisation, c'est le meme defaut differe.
+
 ```bash
 source .claude/skills/merge/lib/mesure-distante.sh
 md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }
+
+if [ -f VERSION ]; then
+  ver="${<version>#v}"
+  printf '%s\n' "$ver" > VERSION
+  [ -f pack.json ] && node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('pack.json','utf8'));p.version=process.argv[1];fs.writeFileSync('pack.json',JSON.stringify(p,null,2)+'\n')" "$ver"
+  [ -f cli/package.json ] && node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('cli/package.json','utf8'));p.version=process.argv[1];fs.writeFileSync('cli/package.json',JSON.stringify(p,null,2)+'\n')" "$ver"
+  git add VERSION pack.json cli/package.json 2>/dev/null
+  git commit -m "chore(release): v${ver} — VERSION suit le tag" || true
+  git push origin HEAD
+fi
+
 git tag <version>
 git push origin <version>
 ```
