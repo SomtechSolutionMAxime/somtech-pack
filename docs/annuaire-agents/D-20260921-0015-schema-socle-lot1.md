@@ -1,6 +1,6 @@
-# Annuaire des agents — projet de schéma (lot 1)
+# Annuaire des agents — schéma socle (lot 1)
 
-**Statut : PROJET, non figé.** Soumis à validation de l'architecte (Lionel) contre STD-032 avant fixation. Ne pas committer comme amendement au STD tant que non validé.
+**Statut : FIGÉ.** Validé par l'architecte (Lionel) contre STD-032, ajustement status/degraded intégré (cf. §« Décisions de l'architecte, intégrées »). L'amendement STD-032 peut suivre.
 
 Demande : D-20260921-0015 (lot 1/3). Chantier : J-20260814-0002. Coordonné par batiscan.
 
@@ -18,7 +18,7 @@ Sur 8 panes vérifiés dans l'inventaire de lot 2, 2 étaient morts (`wE:p13`, `
 
 1. **Rattachement au tableau `sessions[]` existant** (STD-032 §2.4, déjà présent, toujours `[]` côté clients) — pas de seconde structure. Chaque session référence son agent par **nom** (`sessions[].agent_name`), jamais l'inverse.
 2. **`agents[].url` et `agents[].agent_card_url` passent d'obligatoires à optionnels.** L'adresse vit sur la session (`sessions[].address`). Bump `isomorphic_version` → `"1.1"`.
-3. **Aucun champ propre à Somtech dans `agents[]`.** Un bloc d'extension optionnel et nommé accueille `chantier`, `dépôt`, `application`, `né le` / `fermé le` — **son contenu est défini par l'architecte dans l'amendement**, ce projet ne fait que réserver l'emplacement (`agents[].extensions.somtech`, clé isomorphe).
+3. **Aucun champ propre à Somtech dans `agents[]`.** Un bloc d'extension optionnel et nommé (`agents[].extensions.somtech`, clé isomorphe) accueille les champs propres à Somtech — contenu défini par l'architecte, cf. §« Décisions de l'architecte, intégrées ».
 
 ## Schéma proposé
 
@@ -30,11 +30,11 @@ Sur 8 panes vérifiés dans l'inventaire de lot 2, 2 étaient morts (`wE:p13`, `
 | `sector` | enum | ✅ | inchangé | `ing` / `ops` / `rh` / `vente` |
 | `url` | URL | ⬜ **optionnel** | 🔴 était obligatoire | URL HTTPS de l'agent, si joignable en HTTP |
 | `agent_card_url` | URL | ⬜ **optionnel** | 🔴 était obligatoire | URL du `/.well-known/agent-card.json`, si exposé |
-| `status` | enum | ✅ (sortie) | 🔴 **calculé, jamais stocké** | `online` si ≥ 1 session avec `state=live` et `last_seen` dans le TTL, sinon `offline`. Agrégé à la lecture depuis `sessions[]` filtré sur `agent_name = name`. |
-| `last_seen` | ISO 8601 | ✅ (sortie) | 🔴 **calculé, jamais stocké** | `max(sessions[].last_seen)` pour cet agent. Absent si l'agent n'a aucune session. |
-| `extensions.somtech` | object | ⬜ optionnel | 🆕 nouveau | Bloc nommé, isomorphe, hors standard A2A — **contenu à définir par l'architecte** (candidats relevés par l'inventaire : `chantier`, `depot`, `application`, `born_at`, `closed_at`) |
+| `status` | enum | ✅ (sortie) | 🔴 **calculé, jamais stocké — DEUX mécanismes concurrents (ajusté)** | Voir §« Décisions de l'architecte, intégrées » |
+| `last_seen` | ISO 8601 | ✅ (sortie) | 🔴 **calculé, jamais stocké** | `agent_card_url` présent → dernier pull réussi ; sinon `max(sessions[].last_seen)` pour cet agent. Absent si aucune des deux sources n'existe. |
+| `extensions.somtech` | object | ⬜ optionnel | 🆕 nouveau | Bloc nommé, isomorphe, hors standard A2A — contenu défini par l'architecte, cf. §« Décisions de l'architecte, intégrées » |
 
-`status` et `last_seen` restent dans la réponse agrégée pour la compatibilité des consommateurs existants, mais ne sont **plus une source** : ils n'existent dans aucune configuration ni base d'agent, uniquement dérivés de `sessions[]` au moment de la génération.
+`status` et `last_seen` restent dans la réponse agrégée pour la compatibilité des consommateurs existants, mais ne sont **plus une source** : ils n'existent dans aucune configuration ni base d'agent, uniquement dérivés (par pull ou par `sessions[]` selon l'agent) au moment de la génération.
 
 ### `sessions[]` — relation agent → session (existant, contenu jusqu'ici non spécifié)
 
@@ -49,11 +49,25 @@ Sur 8 panes vérifiés dans l'inventaire de lot 2, 2 étaient morts (`wE:p13`, `
 
 Un agent peut porter 0..N sessions (0 = déclaré mais jamais né ou totalement éteint ; N>1 = plusieurs sessions vivantes ou une histoire de renaissances, cf. `infra-ops`).
 
-## Point non tranché, porté à l'architecte
+## Décisions de l'architecte, intégrées
 
-**« Rétro-compatible »** (contrainte 2) a deux lectures : (a) un payload 1.0 valide reste valide en 1.1 — vrai, on ne fait qu'assouplir deux champs obligatoires ; (b) un consommateur 1.0 qui exigeait `url`/`agent_card_url` peut échouer sur un payload 1.1 qui les omet — ça, ce n'est pas couvert par l'assouplissement seul. Je retiens la lecture (a) par défaut (cohérente avec « bump mineur ») ; l'architecte tranche si (b) doit aussi être garantie (auquel cas il faudrait un champ de repli ou une période de double-publication).
+**`status` — deux mécanismes concurrents, pas un remplacement.** STD-032 I7 définit déjà un calcul par **pull** (`degraded` après 1 échec, `offline` après 3 échecs consécutifs) pour les agents qui exposent `agent_card_url`. La version précédente de ce projet faisait de `sessions[]` la seule source — ça écrasait ce mécanisme au lieu de le compléter. Réglé ainsi :
 
-Le nom de la clé d'extension (`extensions.somtech` proposé) et l'énumération de son contenu restent à sa main — ce projet ne les invente pas.
+- **Agent avec `agent_card_url`** → `status` calculé par **pull** (STD-032 §2.8/I7, inchangé) : `online` / `degraded` (1 échec) / `offline` (3 échecs consécutifs).
+- **Agent sans `agent_card_url`** (cas herdr/pane, sans endpoint HTTP) → `status` calculé depuis **`sessions[]`** : `online` si ≥ 1 session `state=live` avec `last_seen` dans le TTL, sinon `offline`.
+- `degraded` reste **atteignable uniquement par le mécanisme de pull** — `sessions[].state` (`live`/`closed`) ne cherche pas à le produire. Un agent sans `agent_card_url` n'a donc que deux états possibles (`online`/`offline`), ce qui est cohérent : sans pull, il n'y a pas de notion de « répond mais dégradé ».
+
+**Rétro-compatibilité** — lecture (a) retenue : un payload 1.0 valide reste valide en 1.1 (assouplissement de deux champs obligatoires). Aucun consommateur externe réel aujourd'hui ; `isomorphic_version` est l'échappatoire prévue par STD-032 §6. Pas de double-publication.
+
+**`extensions.somtech`** — contenu défini par l'architecte, tous les champs optionnels :
+
+| Champ | Type | Description |
+|---|---|---|
+| `mandate` | string? | `D-…` / `P-…` / `J-…` — chantier actif (décision du dirigeant, 21 sept.) |
+| `repo` | string? | Dépôt du chantier (STD-028) |
+| `application_id` | string? | Pointeur vers l'application ServiceDesk (D-20260921-0018) |
+| `born_at` | ISO 8601? | Naissance de l'agent |
+| `closed_at` | ISO 8601? | Fermeture de l'agent |
 
 ## Hors de ce lot (rappel)
 

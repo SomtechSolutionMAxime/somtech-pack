@@ -7,11 +7,11 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-21
 
-*Livraison `J-20260814-0002`, demande `D-20260921-0015` (lot 1/3) — annuaire des agents. Projet de schéma seulement, soumis à validation de l'architecte contre STD-032 avant fixation ; aucun code d'exécution dans ce lot.*
+*Livraison `J-20260814-0002`, demande `D-20260921-0015` (lot 1/3) — annuaire des agents. Schéma socle, aucun code d'exécution dans ce lot.*
 
 ### Ajoute
 
-- **Projet de schéma pour l'annuaire des agents** (`docs/annuaire-agents/D-20260921-0015-schema-socle-lot1.md`) : rattache la relation agent → session au tableau `sessions[]` déjà présent dans `agents.json` (STD-032 §2.4) au lieu d'une structure séparée — chaque session référence son agent par nom. `agents[].url`/`agent_card_url` passent d'obligatoires à optionnels (bump `isomorphic_version` → `1.1`) ; `status`/`last_seen` deviennent calculés depuis `sessions[]`, jamais stockés sur l'agent. Motif : sur 8 panes vérifiés dans l'inventaire de la demande, 2 étaient morts jusqu'à six jours après leur relevé — l'identité de l'agent est stable, le pane et l'adresse sont volatils, et un annuaire qui grave le volatil ment dès sa mise en service. Les champs propres à Somtech (chantier, dépôt, application, dates) sont réservés dans un bloc d'extension nommé dont le contenu reste à la main de l'architecte.
+- **Schéma socle de l'annuaire des agents, figé** (`docs/annuaire-agents/D-20260921-0015-schema-socle-lot1.md`), validé par l'architecte contre STD-032 : rattache la relation agent → session au tableau `sessions[]` déjà présent dans `agents.json` (STD-032 §2.4) au lieu d'une structure séparée — chaque session référence son agent par nom. `agents[].url`/`agent_card_url` passent d'obligatoires à optionnels (bump `isomorphic_version` → `1.1`). `status`/`last_seen` deviennent calculés, jamais stockés : par **pull** (STD-032 I7, `degraded`/`offline`) pour les agents qui exposent `agent_card_url`, par `sessions[]` (`online`/`offline` seulement — `degraded` reste propre au pull) pour les autres. Motif : sur 8 panes vérifiés dans l'inventaire de la demande, 2 étaient morts jusqu'à six jours après leur relevé — l'identité de l'agent est stable, le pane et l'adresse sont volatils. Les champs propres à Somtech (`mandate`, `repo`, `application_id`, `born_at`, `closed_at`) sont réservés dans `agents[].extensions.somtech`, tous optionnels, défini par l'architecte.
 
 ## [Non-versionne] - 2026-09-21
 
