@@ -7,6 +7,14 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-22
 
+*Ticket `T-20260922-0135` (`D-20260921-0016` Q2b, coordonnateur `batiscan`, `J-20260814-0002`).*
+
+### Ajoute
+
+- **Skill `textes-applicables` — lecture des textes applicables (ADR/STD) d'une application ServiceDesk, à la naissance d'un chef d'équipe, sans dépendre du copier-coller que Q2 fait déjà en prose côté orchestrateur.** La conception initiale du ticket supposait qu'aucun support natif n'existait pour cette notion et proposait d'en inventer un dans une clé libre `metadata.applicable_texts` — mesurée contre le réel (arbitrage `batiscan`), cette conception était **fausse** : le support existe déjà, nativement, validé côté serveur (`applications` actions `get_applicable_texts`/`set_applicable_texts`/`list_applicable_texts`/`applicable_texts_coverage`), déjà peuplé pour 11 applications sur 44 (36 pointeurs, identique à la mesure indépendante de `lionel`). Cœur du lot : `lib/classifier.sh` distingue TROIS états, jamais deux — textes-declares / aucun-declare (légitime) / non-mesure (panne) — la décision et le rendu dérivant tous deux du même champ, jamais de deux lectures indépendantes (correctif appliqué après une revue de fond). Bancs : unitaire (14 assertions), mutation (8 gardes, tous les mutants tués), corpus réel figé (14 cas, capture ServiceDesk 2026-09-22) — 11/11 applications à texte déclaré correctement classées, 3/3 sans texte correctement classées, 36 pointeurs. Trois passes de revue indépendantes par sous-agents frais (portail Haiku, fond Sonnet, vérification de correctif) ont chacune éprouvé le lot avant fusion.
+
+## [Non-versionne] - 2026-09-22
+
 *Ticket `T-20260922-0136` (priorité haute, coordonnateur `batiscan`, `J-20260814-0002`).*
 
 ### Corrige
