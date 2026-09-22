@@ -169,6 +169,36 @@ Interpreter le **code de retour** du helper :
 
 **Important** : ce gate exige une instance Supabase locale (pour `db reset`). En mode solo il ne lance jamais `db reset` (no-op avant), donc aucun cout ni prompt supplementaire pour un contributeur seul.
 
+## Etape 2.65 : Gate cle a droits elevees (service_role / sb_secret_)
+
+> **Objectif** : REFUSER toute cle Supabase a droits elevees dans le code livre, AVANT la poussee sur staging (regle d'or n12, STD-038). Ce gate ne grep JAMAIS le mot `service_role` (legitime en prose d'audit et en SQL `GRANT ... TO service_role`) — il detecte la CLE elle-meme : `sb_secret_<20+ caracteres>` en grep direct, et un JWT legacy `eyJ....·....·....` dont le **payload decode** porte `"role":"service_role"` (le mot n'apparait jamais en clair dans un JWT, base64 oblige — decoder plutot que grepper le texte encode).
+
+**Quand l'exécuter** : mode **Feature → staging**, juste apres l'Etape 2.6, avant l'Etape 2.7. En mode **Direct staging** (deja sur `staging`, legacy) : **executer quand meme** en mode `SKG_MODE=tree` (pas de branche feat dont diffuser, on scanne le tracked tree entier avant de pousser).
+
+Lancer le helper depuis la racine du repo :
+
+```bash
+bash .claude/skills/pousse-staging/lib/staging-secret-key-gate.sh
+```
+
+Ce que fait le gate (voir `lib/staging-secret-key-gate.sh`) :
+
+1. Mode **Feature → staging** (def.) : scanne les fichiers ajoutes/modifies/renommes par la branche courante par rapport a `main` (`git diff main..HEAD --name-only`) — le **code livre**, pas tout le repo.
+2. Mode **Direct staging** : `SKG_MODE=tree bash .claude/skills/pousse-staging/lib/staging-secret-key-gate.sh` — scanne tout le tracked tree.
+3. Pour chaque fichier, `lib/secret-key-scan.py` cherche les deux motifs (voir objectif ci-dessus) et rend le fichier + la ligne de chaque violation — **jamais la valeur de la cle** (STD-038 SS2.4 interdit une cle a droits elevees dans un log).
+
+Interpreter le **code de retour** du helper :
+
+| Code | Signification | Action |
+|------|---------------|--------|
+| `0` | Aucune cle detectee (ou rien a scanner) | Continuer a l'Etape 2.7 |
+| `1` | **Cle a droits elevees detectee** — fichier + ligne nommes | **STOP** — retirer la cle du code (jamais en clair — passer par un backend de confiance server-side, STD-038 SS2.2/2.3), puis relancer `/pousse-staging`. |
+| `2` | `python3` introuvable — le gate ne peut pas verifier | **STOP fail-CLOSED** — installer python3, ne jamais pousser sans avoir pu verifier. |
+
+⚠️ **Portee volontairement plus large que la whitelist suggeree par STD-038 SS3.2** (`supabase/migrations/**`, `supabase/functions/**`) : la detection ne matche deja QUE des cles reelles, jamais le mot nu — whitelister ces dossiers masquerait une vraie cle collee par erreur dans une migration, que STD-038 SS2.4 interdit explicitement.
+
+⚠️ **Ce gate n'est PAS eprouve par la chaine CI de ce depot** au moment de sa livraison (`T-20260922-0070` — `pull_request` ne declenche plus GitHub Actions ici). La moitie CI (`scripts/tests/test-secret-key-scan-repo.sh`, auto-decouverte par le job `shell-tests`) a ete **eprouvee localement uniquement** — voir le ticket `T-20260922-0072` pour le detail de cette limite.
+
 ## Etape 2.7 : Assurer l'entree CHANGELOG (sur la branche feature)
 
 > **Pourquoi ici** : sur la voie du sas staging, l'entree CHANGELOG doit etre produite **sur la branche feature, avant le merge dans staging**, pour qu'elle voyage feature→staging→main. Sinon elle serait perdue : `/pousse-staging` ne merge pas vers `main`, et `/merge` (staging→main) saute la generation sur staging en supposant qu'elle est deja arrivee — c'est ICI qu'elle arrive. Symetrique de l'etape 5.5 de `/merge` pour la voie feat→main directe (D-20260710-0001).
@@ -339,6 +369,7 @@ Deploye sur staging depuis la branche `<FEATURE_BRANCH>` :
 - Verrou de sas (atomique) : <acquis PR #<n> | non applicable (repo non lié)>
 - Gate slot unique : <slot libre | iteration de ma livraison>
 - Gate migrations multi-contributeur : <no-op | staging mergé, db reset OK>
+- Gate cle a droits elevees : <RAS | bloque — voir Etape 2.65>
 - Migrations staging : <N> appliquees
 - Edge Functions staging : <N> deployees
 - PR staging→main : <URL>
@@ -370,3 +401,7 @@ Prochaines etapes :
 - `tests/test-staging-slot-gate.sh` — test reproductible (repo jetable) prouvant que staging se comporte en sas a une seule livraison : 2e livraison bloquee (rc=4), iteration de la meme autorisee (rc=0), robuste au squash-merge en prod. Lancer : `bash .claude/skills/pousse-staging/tests/test-staging-slot-gate.sh`.
 - `lib/staging-migration-gate.sh` — implementation du gate migrations multi-contributeur (Etape 2.6). Sourçable et testable. Points d'injection en en-tete du fichier.
 - `tests/test-staging-migration-gate.sh` — test reproductible (repo jetable + simulation `db reset` via sqlite) prouvant que la collision est attrapee en local. Lancer : `bash .claude/skills/pousse-staging/tests/test-staging-migration-gate.sh`.
+- `lib/staging-secret-key-gate.sh` — implementation du gate cle a droits elevees (Etape 2.65, T-20260922-0072). Sourçable et testable. Detection deleguee a `lib/secret-key-scan.py` (motifs `sb_secret_` et JWT `service_role` decode — jamais un grep sur le mot). Points d'injection en en-tete du fichier (`SKG_PY`, `SKG_MODE`, `SKG_BASE_REF`).
+- `lib/secret-key-scan.py` — moteur de detection (STD-038 SS3.2). Pas de whitelist `supabase/migrations|functions` (deviation documentee du SS3.2 : notre motif ne matche deja que des cles reelles).
+- `tests/test-staging-secret-key-gate.sh` — test reproductible (9 scenarios : detection reelle, zero faux positif sur prose d'audit, scoping diff vs tree, fail-closed sans python3). Lancer : `bash .claude/skills/pousse-staging/tests/test-staging-secret-key-gate.sh`.
+- `scripts/tests/test-secret-key-scan-repo.sh` — **moitie CI de la garde** (auto-decouverte par le job `shell-tests` de `.github/workflows/tests.yml`, `scripts/tests/*.sh`) : auto-controle (detecte des fixtures injectees) + scan reel du tracked tree du depot. Non eprouve par la chaine GitHub Actions au moment de la livraison — voir Etape 2.65 pour la limite.

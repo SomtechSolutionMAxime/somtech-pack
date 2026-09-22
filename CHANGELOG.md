@@ -7,11 +7,45 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-22
 
-*Livraison `J-20260814-0002`, demande `D-20260922-0002` — option A tranchee par le dirigeant, ticket `T-20260922-0062`.*
+*Livraison `J-20260814-0002`, demande `D-20260921-0017` (lot 4, garde 1/5) — ticket `T-20260922-0072`.*
 
 ### Ajoute
 
-- **Skill `/scaffold-ops-discovery`** : genere localement le scaffold initial du depot applicatif `ops-discovery` (STD-032 §4) — serveur Node zero-dependance (health check, metriques Prometheus, endpoint `/.well-known/agents.json`), Dockerfile, config YAML, tests. Le skill ECRIT le scaffold ; il ne l'execute pas dans ce lot (la creation du depot `somtech-departement-ia/ops-discovery` reste un geste separe, a la demande du dirigeant). Voie de preuve en 3 etages (tests reels, build+run Docker reel, double `gh` pour le seul geste irreversible), 19/19. Deux passes de revue independantes (portail + fond), 4 defauts trouves et corriges.
+- **Gate clé à droits élevés (`service_role` / `sb_secret_`) dans `/pousse-staging` et en CI** (STD-038, règle d'or n°12) — nouvelle Étape 2.65 du skill (`lib/staging-secret-key-gate.sh` + `lib/secret-key-scan.py`) et garde CI auto-découverte (`scripts/tests/test-secret-key-scan-repo.sh`, job `shell-tests`). Détecte la clé réelle (préfixe `sb_secret_` + 20 caractères, ou JWT dont le payload décodé porte `role=service_role`), jamais le mot nu `service_role` — zéro faux positif mesuré sur les 36 mentions légitimes réelles du dépôt (prose d'audit), 5 fois de suite. Deux passes de scan (ligne seule, puis paires de lignes consécutives) pour attraper une clé coupée par un retour à la ligne littéral.
+
+## [Non-versionne] - 2026-09-22
+
+*Livraison `J-20260814-0002`, demande `D-20260921-0016` (lot 3, correctif) — le résultat annoncé dans l'entrée du 2026-09-22 ci-dessous (« 9 hook / 3 persona assumée ») est SUPERSÉDÉ, pas corrigé par écrasement.*
+
+### Corrige
+
+- **🔴 `GF-ORC-004/011/012/013` étaient `hook`, arbitrage du dirigeant révisé trois minutes après la fusion — revenus en `persona`.** L'entrée précédente citait un « GO du dirigeant » écrit dans `D-20260921-0016`, exécuté à la lettre par le lot qui a fusionné la PR #364 (11h43Z) — le dirigeant a révisé son arbitrage entre-temps (relayé par `michel`, 2026-09-22 ~11h46Z), et le pack l'a porté trois minutes avant que la révision n'arrive. Les quatre garde-fous n'ont aucun hook technique réel qui les couvre ; ils restent en `persona` avec leur bloc `sans_garantie` d'origine (motif, `assume_par` Maxime Leboeuf, `definitif: false`, `echeance: 2026-09-30`) **tant que** ces hooks ne sont pas construits — chantier séparé, ouvert par `batiscan`.
+  - **Nouveau compte, vérifié par le moteur de rendu, pas recopié** : 12 garde-fous, **5 hook / 7 persona assumée** (au lieu de 9/3). `GF-ORC-009` reste retiré (conforme, non affecté).
+  - **STD-047 R1 re-vérifié** contre ce nouveau compte (`pack metier rendre --role orchestrateur`) : **12 garde-fous · 7 dérogés · 0 refusés** — R1 reste satisfaite, avec une répartition différente de celle annoncée à l'origine.
+  - Banc `test-metier-orchestrateur.sh` re-baseliné une seconde fois (182118 → 182520 caractères), arbitrage motivé (`batiscan`) inscrit dans le banc lui-même : le dépassement vient de la restauration d'un texte déjà signé par le dirigeant, pas d'un ajout de prose.
+
+## [Non-versionne] - 2026-09-22
+
+*Livraison `J-20260814-0002`, demande `D-20260921-0016` (lot 3) — quatre décisions du dirigeant du 21 septembre portées dans le métier de l'orchestrateur.*
+
+### Modifie
+
+- **Reclassement des garde-fous de l'orchestrateur (Q1)** : 13 → 12 garde-fous — `GF-ORC-004`, `011`, `012`, `013` passent de `persona` (dérogé) à `hook` ; `GF-ORC-003`, `006`, `008` restent en persona assumée par le dirigeant ; `GF-ORC-009` (garde-fous communs du Département, jamais instancié) retiré. 9 hook / 3 persona assumée / 0 persona nue — STD-047 R1 satisfait.
+- **Modèle par rôle, jamais par produit (Q3)** : un chef d'équipe naît en Sonnet (jamais Haiku, jamais Opus par défaut), motif écrit comme un motif de COÛT et non de confiance — amende la contradiction mesurée en `D-20260920-0004` (le métier prescrivait Opus, le feed du dirigeant du 1ᵉʳ septembre disait Sonnet). Exception : Opus sur mandat précis, écrit à l'epic.
+- **Portée écrite bornée (Q4)** : le dépôt du chantier plus une liste fermée de dossiers communs du poste (veilles de déblocage, grands livres des jetons) — tout le reste reste refusé.
+- **`CONTEXTE.md` tenu par l'orchestrateur** : correction d'une prose devenue fausse — le métier affirmait depuis le 2026-08-17 qu'aucune exception d'écriture locale n'existe, alors qu'une garde dédiée (`T-20260824-0002`, `gardes/ecriture-decision.js`) le permet nommément depuis une semaine plus tard.
+
+### Ajoute
+
+- **Textes applicables au métier (Q2)** : le chapitre `chefs-equipe` porte désormais le socle commun en pointeurs (STD-029/030/031/033/035/036/038/047, ADR-030/040) et la liste propre à l'application (fiche ServiceDesk, `applications` action `get_applicable_texts`) — lus à la naissance, transmis dans chaque brief de chef.
+
+### Technique
+
+- Reclassement fait à la source (`metier/orchestrateur/classement.json`), jamais sur le gabarit distribué à la main — régénéré via `pack metier rendre --role orchestrateur`. Les 8 lieux d'orchestrateur versionnés dans ce dépôt reconvergés vers le gabarit (`cli/test/lieux-versionnes.test.js`). Banc `test-metier-orchestrateur.sh` re-baseliné une fois (181657 → 182118 caractères), arbitrage motivé inscrit dans le banc lui-même.
+
+### Non livré dans ce lot
+
+- **Le workflow de découpage BRD + ontologie** (nommé dans le métier, `D-20260921-0009`) : cette demande fait partie du périmètre écrit de `D-20260921-0016`, mais `D-20260921-0009` a été gelée par le dirigeant le 2026-09-21 à 16h00Z (« ne pas toucher au métier des orchestrateurs pour ce motif »). Reste `in_analysis`, gel non levé à ce jour.
 
 ## [Non-versionne] - 2026-09-21
 
