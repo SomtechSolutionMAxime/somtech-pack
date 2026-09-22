@@ -7,6 +7,14 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-22
 
+*Livraison `J-20260814-0002`, demande `D-20260921-0017` (lot 4, garde 3/5) — ticket `T-20260922-0093`.*
+
+### Ajoute
+
+- **Hook `SessionStart` de préflight STD-029 à la naissance des chefs** (`.claude/hooks/session-start-preflight-std029.sh`) — joue les 4 checks MUST de STD-029 (branche ≠ main/staging, fraîcheur < 3j, CLAUDE.md projet, ontologie) + le check conditionnel drift schéma (§2.7), rend un verdict par check (`OK` / `ECHEC` / `[non applicable]` / `[non mesuré]`), ne bloque jamais (`exit 0` systématique — hors-scope écrit du ticket). `[non mesuré]` est **distinct** d'un `OK` quand la sonde `git` elle-même échoue silencieusement — les 7 appels git du fichier vérifient chacun leur propre `$?`, découvert après coup pour 3 d'entre eux (`check_drift_schema` puis `resolve_base_ref`) par deux tours de revue de fond indépendante, chacun corrigé et re-vérifié avant fermeture. 23 scénarios de banc (`.claude/hooks/tests/test-preflight-std029.sh`), rouge avant vert, mutations ciblées tuées. Deux chiffres mesurés sur trafic réel : check branche — 1 attrapé sur 51 worktrees actifs du poste (un worktree abandonné depuis 4 semaines, toujours assis sur `main`), 0 refus à tort ; check fraîcheur — 4 déclenchements sur 60 PR mergées réelles, 1 attrapé à raison, 3 refusés à tort.
+
+## [Non-versionne] - 2026-09-22
+
 *Livraison `J-20260814-0002`, demande `D-20260921-0017` (lot 4, garde 2/5) — ticket `T-20260922-0084`.*
 
 ### Ajoute
