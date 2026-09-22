@@ -2,17 +2,20 @@
 name: episodique
 description: |
   Geste de la mémoire ÉPISODIQUE (le vécu conversationnel : rencontres, transcripts,
-  sessions). Interface de fonction destinée à porter ses deux gestes au même endroit
-  nommé (symétrie, STD-039 I2) : lecture/rappel LIVRÉE ; écriture/encodage PLANIFIÉE
-  (ED12). Interroge la mémoire épisodique Graphiti EN DIRECT, bornée par group_id.
+  sessions). Interface de fonction portant ses deux gestes au même endroit nommé
+  (symétrie, STD-039 I2) : lecture/rappel LIVRÉE ; écriture/encodage LIVRÉE et TESTÉE
+  (STD-045) mais PAS MISE EN SERVICE (Loi 25, §2.7 — aucun appel réel). Interroge la
+  mémoire épisodique Graphiti EN DIRECT, bornée par group_id.
   DÉCLENCHEURS : /episodique, mémoire épisodique, rappeler le vécu d'un projet,
   interroger l'épisodique, chercher dans les rencontres/transcripts, faits d'un group_id,
-  qu'a-t-on dit/décidé en séance sur X.
+  qu'a-t-on dit/décidé en séance sur X, encoder une session en mémoire épisodique.
   NE PAS confondre avec le nom du mécanisme (Graphiti/Neo4j) — on nomme par fonction (I1).
-  Le rappel épisodique NE FAIT PAS FOI (I3) ; pour rendre un fait opposable, passer par le
-  gate de promotion. Frontière D5 (I4) : appel direct, jamais via un autre substrat.
-  Cadre : STD-039 (interface d'usage mémoire), BRD Mémoire EF-EPI-005 (lecture) /
-  EF-EPI-004 (encodage), ADR-033/ADR-034.
+  Le rappel ET l'encodage épisodiques NE FONT PAS FOI (I3) et un épisode ne devient JAMAIS
+  opposable (STD-045 §2.6) ; pour rendre un fait opposable, un agent l'écrit lui-même,
+  sous sa propre autorité, dans le substrat opposable (autorat de premier rang). Frontière
+  D5 (I4) : appel direct, jamais via un autre substrat.
+  Cadre : STD-039 (interface d'usage mémoire), STD-045 (encodage), BRD Mémoire
+  EF-EPI-005 (lecture) / EF-EPI-004 (encodage), ADR-033/ADR-034/ADR-035.
 disable-model-invocation: false
 ---
 
@@ -68,16 +71,59 @@ python3 .claude/skills/episodique/scripts/graphiti_search.py --health
 Tests du moteur : `python3 .claude/skills/episodique/scripts/graphiti_search_test.py`
 (11 tests unittest, HTTP mocké).
 
-## Geste d'ÉCRITURE / encodage épisodique (planifié — ED12)
+## Geste d'ÉCRITURE / encodage épisodique (livré, testé — PAS mis en service)
 
-L'encodage d'une session/rencontre saillante en épisode (faisceau **working →
-épisodique**, EF-EPI-004) est **planifié** (projet mémoire P-20260612-0001, ED12) et
-viendra se greffer **sur ce même skill** — c'est le principe de symétrie I2 : lecture et
-écriture au même endroit nommé. Rappels de cadre pour cette extension :
+L'encodage d'une session saillante en épisode (faisceau **working → épisodique**,
+EF-EPI-004) est **entièrement spécifié par STD-045** (Somcraft, `draft`) et **livré**
+sur ce même skill (symétrie **I2** : lecture et écriture au même endroit nommé).
+Moteur : `scripts/graphiti_encode.py`, colocalisé avec `graphiti_search.py`.
 
-- **I7** — l'encodage `working → épisodique` reste dans le plastique et **ne passe PAS**
-  par le gate de promotion (non-opposable → non-opposable, RA-EPI-003).
-- **I5** filtrage par saillance + scoping `group_id` (anti-firehose, RA-EPI-004).
+```bash
+# Clé fournie hors bande (I6) — jamais dans le repo :
+export GRAPHITI_AGENT_API_KEY=<clé>       # OU : export GRAPHITI_ENV_FILE=~/.config/somtech/graphiti.env
+
+python3 .claude/skills/episodique/scripts/graphiti_encode.py \
+    --group-id "<projet-ou-sujet>" \
+    --session-ref "<identifiant-de-session>" \
+    --author-label "Michel (agent)" \
+    --statement "Un énoncé autoportant, compréhensible sans le contexte de la session."
+# → rapporte "soumis" (jamais "encodé"), puis "confirmé"/"non confirmé" selon
+#   qu'une recherche de vérification sur le même group_id a trouvé un fait.
+```
+
+Tests du moteur : `python3 .claude/skills/episodique/scripts/graphiti_encode_test.py`
+(HTTP mocké — aucun appel réseau réel).
+
+**Contraintes non négociables (STD-045)** :
+
+- **§2.2 — `--group-id` obligatoire**, aucune valeur par défaut, **aucun repli** sur
+  `somtech-internal` (contrairement à la chaîne d'ingestion des rencontres).
+- **§2.3 — on encode des énoncés, jamais un dialogue ni le transcript** : 1 à 10 énoncés
+  autoportants par appel (anti-firehose, RA-EPI-004).
+- **§2.3.1 — `--session-ref` obligatoire**, sans espace, ≤128 caractères ; porte
+  `source_description = "session <ref>"`, seul élément distinguant un épisode de session
+  d'un épisode de rencontre (`meeting <id>`).
+- **§2.4 — le geste rapporte « soumis », jamais « encodé »** : un `202` (ou tout 2xx) ne
+  prouve rien, la seule preuve est une recherche de confirmation sur le même `group_id`.
+  ⚠️ **Limite à connaître** : quand plusieurs énoncés sont soumis en un seul appel (jusqu'à
+  10), la recherche de confirmation n'en interroge qu'**un seul** (le premier) — `confirmed`
+  porte sur cet énoncé-là, pas sur l'ensemble du lot. Ce n'est pas un défaut à corriger
+  isolément : une recherche vide étant déjà **non concluante** (§2.4.1), interroger les 10
+  énoncés multiplierait un signal qui ne prouve rien plutôt que de le rendre plus probant.
+  La limite à retenir est donc dans la **lecture** du résultat, pas dans le code : `confirmed`
+  ne dit jamais « tous les énoncés sont en mémoire », seulement « le premier l'est ».
+- **§2.4.1 — MUST NOT réessayer** un `POST /messages` au seul motif qu'une recherche de
+  confirmation est revenue vide (non concluant, jamais négatif — évite les doublons, D5).
+- **§2.5 — saillance V1 humaine** : l'invocation elle-même est le filtre ; aucun score
+  n'est calculé ni simulé côté skill (I5).
+- **§2.6 — I7 : n'appelle JAMAIS `memory_promotion`**, sous aucune condition. L'encodage
+  reste non-opposable → non-opposable ; **un épisode ne devient jamais opposable**
+  (décision de projet `fdba0e96`, 2026-07-28). Pour rendre un fait opposable, un agent
+  compétent l'écrit **lui-même**, sous sa propre autorité, ailleurs (autorat de premier
+  rang, §2.6.1) — l'épisode ne s'y « convertit » pas.
+- **§2.7 — PAS MIS EN SERVICE** : encoder une session communique son contenu hors Québec
+  (moteur d'extraction → OpenAI). Tant qu'aucune EFVP ne couvre ce flux, **rien n'est
+  encodé contre une instance réelle** — ce moteur n'a été exercé qu'en HTTP mocké.
 
 ## Références
 
