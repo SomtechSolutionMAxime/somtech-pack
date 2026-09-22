@@ -493,10 +493,16 @@ alors que la fonction est simplement absente.
 > RIEN installe, sans la moindre erreur. Un tag qui avance sans son fichier de
 > version n'est pas une optimisation, c'est le meme defaut differe.
 
-```bash
-source .claude/skills/merge/lib/mesure-distante.sh
-md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }
+⚠️ **Deux blocs distincts, jamais fusionnés en un seul.** Le premier bumpe et
+commite ; le second tague. `test-merge-mesure-distante.sh` extrait pour de
+vrai le PREMIER bloc bash qui contient `git tag ` et l'exécute contre la
+racine réelle du dépôt (git y est simulé, mais pas `printf`/`node`) — un bloc
+fusionné y fait écrire `VERSION`/`pack.json`/`cli/package.json` pour de vrai à
+chaque exécution de cette suite, corrompant le dépôt qui l'héberge. Séparer
+les deux blocs retire le bump de la portée de cette extraction, sans rien
+changer à ce qu'elle éprouve.
 
+```bash
 if [ -f VERSION ]; then
   ver="<version>"
   ver="${ver#v}"
@@ -512,7 +518,11 @@ if [ -f VERSION ]; then
   fi
   git push origin HEAD || { echo "Push du bump de version échoué — on ne tague pas sur un commit non poussé"; exit 1; }
 fi
+```
 
+```bash
+source .claude/skills/merge/lib/mesure-distante.sh
+md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }
 git tag <version>
 git push origin <version>
 ```

@@ -12,10 +12,20 @@
 # ne compare jamais rien à l'extérieur du trio qu'il garde. C'est exactement
 # le motif « une garde qui ne rougit jamais » — une règle que rien n'éprouve.
 #
-# Ce test-ci ferme ce trou : il compare VERSION au dernier tag Git ATTEIGNABLE
-# (git describe --tags --abbrev=0), la source unique documentée dans le
-# CLAUDE.md racine de ce dépôt. Exécuté sur CHAQUE push (tests.yml,
-# shell-tests), il aurait rougi dès le tag v1.65.0 — pas 37 tags plus tard.
+# Ce test-ci ferme ce trou : il compare VERSION au dernier tag Git atteignable
+# depuis le HEAD checkté, la source unique documentée dans le CLAUDE.md racine
+# de ce dépôt. Exécuté sur CHAQUE push (tests.yml, shell-tests), il aurait
+# rougi dès le tag v1.65.0 — pas 37 tags plus tard.
+#
+# ⚠️ CECI N'EST PAS le motif que test-merge-mesure-distante.sh interdit (§S,
+# « aucun fichier ne PRESCRIT la lecture locale ») : /merge lit le dernier tag
+# LOCAL pour calculer un NUMÉRO À POSER — un dépôt qui n'a pas fetché depuis
+# une heure y rend un numéro déjà pris, en silence (T-20260820-0097). Ici, on
+# ne calcule rien à poser : on AUDITE si le HEAD déjà checkté (fetch-depth: 0,
+# fetch minutes plus tôt dans ce même job) est cohérent AVEC SA PROPRE
+# ancêtre-tag. La question posée n'est pas « quel est le dernier tag connu du
+# serveur ? » mais « ce commit-ci raconte-t-il une histoire cohérente ? » —
+# une question à laquelle seule la vue locale de CE commit peut répondre.
 #
 # Nécessite un historique complet AVEC tags (fetch-depth: 0 en CI — voir
 # .github/workflows/tests.yml, job shell-tests). Sans tag atteignable, ce
