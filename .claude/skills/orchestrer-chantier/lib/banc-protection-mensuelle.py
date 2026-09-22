@@ -320,15 +320,19 @@ def main():
     audite_par_id = {}
     lignes = []
     for entree in entries:
-        # Nit relevé en revue de fond (5e tour) : sur le corpus RÉEL livré,
-        # les 67 entrées sont bien formées et ceci ne se déclenche jamais —
-        # mais un schéma d'entrée malformé (mecanisme_connu/contredit_par
-        # qui ne serait pas un dict, id absent) plantait par traceback
-        # Python, rc=1 non documenté, plutôt que l'échec bruyant rc=3 déjà
-        # promis pour un corpus invalide. Même principe que la validation
-        # de `entries` plus haut, étendu par entrée.
-        if not isinstance(entree, dict) or "id" not in entree:
-            print(f"bpm: ERREUR — entree de corpus malformee (dict avec 'id' attendu) : {entree!r}", file=sys.stderr)
+        # Nit relevé en revue de fond (5e tour), COMPLÉTÉ au 6e TOUR — sur le
+        # corpus RÉEL livré, les 67 entrées sont bien formées et ceci ne se
+        # déclenche jamais, mais un schéma d'entrée malformé (mecanisme_connu/
+        # contredit_par qui ne serait pas un dict, id absent, ID D'UN MAUVAIS
+        # TYPE) plantait par traceback Python, rc=1 non documenté, plutôt que
+        # l'échec bruyant rc=3 déjà promis. 6e tour : le garde-fou du 5e tour
+        # vérifiait la PRÉSENCE de "id" mais pas son TYPE — un id `12345` ou
+        # `null` passait cette garde puis faisait planter `sanitiser_cle(rid)`,
+        # APRÈS le seul bloc try/except (qui n'entourait que `classer_entree`)
+        # — repro réel, corrigé en exigeant `id` non vide ET de type `str` ICI,
+        # avant tout usage de `rid`.
+        if not isinstance(entree, dict) or not isinstance(entree.get("id"), str) or not entree["id"]:
+            print(f"bpm: ERREUR — entree de corpus malformee (dict avec 'id' non vide, de type str, attendu) : {entree!r}", file=sys.stderr)
             return 3
         rid = entree["id"]
         try:

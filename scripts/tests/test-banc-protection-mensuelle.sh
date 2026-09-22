@@ -214,6 +214,20 @@ OUT="$(bash "$LIB" 2>"${WORK}/stderr")"; RC=$?
 [ -z "$OUT" ] && ok "stdout vide (aucun classement partiel malgre R-OK valide avant R-MAUVAIS)" || ko "stdout non vide malgre entree malformee"
 [ -n "$(cat "${WORK}/stderr")" ] && ok "message clair sur stderr" || ko "stderr vide"
 
+echo "== RÉGRESSION (6e tour de revue de fond) — un id present mais D'UN MAUVAIS TYPE (nombre) : echec bruyant propre, rc=3, pas un TypeError sur sanitiser_cle =="
+printf '{"entries": [{"id": 12345, "citations_attendues": ["MARQUEUR_MECHA"]}]}' > "${WORK}/id-mauvais-type.json"
+unset BPM_CORPUS_JSON; export BPM_CORPUS_JSON="${WORK}/id-mauvais-type.json"
+OUT="$(bash "$LIB" 2>"${WORK}/stderr")"; RC=$?
+[ "$RC" -eq 3 ] && ok "rc=3 (id de type non-str, echec propre)" || ko "attendu rc=3, obtenu rc=${RC} (BUG : sanitiser_cle() plante par TypeError, rc=1, sur un id non-string)"
+[ -z "$OUT" ] && ok "stdout vide" || ko "stdout non vide malgre id de mauvais type"
+
+echo "== RÉGRESSION (6e tour de revue de fond) — un id 'null' (JSON) : meme echec bruyant propre =="
+printf '{"entries": [{"id": null, "citations_attendues": ["MARQUEUR_MECHA"]}]}' > "${WORK}/id-null.json"
+unset BPM_CORPUS_JSON; export BPM_CORPUS_JSON="${WORK}/id-null.json"
+OUT="$(bash "$LIB" 2>"${WORK}/stderr")"; RC=$?
+[ "$RC" -eq 3 ] && ok "rc=3 (id null, echec propre)" || ko "attendu rc=3, obtenu rc=${RC}"
+[ -z "$OUT" ] && ok "stdout vide" || ko "stdout non vide malgre id null"
+
 echo "== BPM_CORPUS_JSON non positionnee : echec bruyant =="
 unset BPM_CORPUS_JSON
 OUT="$(bash "$LIB" 2>"${WORK}/stderr")"; RC=$?
