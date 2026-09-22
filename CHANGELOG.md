@@ -7,6 +7,14 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-21
 
+*Livraison `J-20260814-0002`, demande `D-20260921-0015` (lot 1/3) — annuaire des agents. Schéma socle, aucun code d'exécution dans ce lot.*
+
+### Ajoute
+
+- **Schéma socle de l'annuaire des agents, figé** (`docs/annuaire-agents/D-20260921-0015-schema-socle-lot1.md`), validé par l'architecte contre STD-032 : rattache la relation agent → session au tableau `sessions[]` déjà présent dans `agents.json` (STD-032 §2.4) au lieu d'une structure séparée — chaque session référence son agent par nom. `agents[].url`/`agent_card_url` passent d'obligatoires à optionnels (bump `isomorphic_version` → `1.1`). `status`/`last_seen` deviennent calculés, jamais stockés : par **pull** (STD-032 I7, `degraded`/`offline`) pour les agents qui exposent `agent_card_url`, par `sessions[]` (`online`/`offline` seulement — `degraded` reste propre au pull) pour les autres. Motif : sur 8 panes vérifiés dans l'inventaire de la demande, 2 étaient morts jusqu'à six jours après leur relevé — l'identité de l'agent est stable, le pane et l'adresse sont volatils. Les champs propres à Somtech (`mandate`, `repo`, `application_id`, `born_at`, `closed_at`) sont réservés dans `agents[].extensions.somtech`, tous optionnels, défini par l'architecte.
+
+## [Non-versionne] - 2026-09-21
+
 *Livraison `J-20260814-0002`, demande `D-20260921-0003` — ordre du dirigeant : « je ne sais pas qui envoie le déblocage des fenêtres de texte mais je veux que ça cesse ». Code seulement : le métier des orchestrateurs n'est pas touché.*
 
 ### Corrige
