@@ -1,0 +1,94 @@
+{
+  "_provenance": "mcp__servicedesk__applications action=get_applicable_texts, capture reelle 2026-09-22 (T-20260922-0135) — 11 des 11 applications ServiceDesk qui declarent au moins un texte a cette date, plus un echantillon de 3 applications sans texte declare. Corpus fige, pas d'appel reseau en test : voir test-merge-closes-stories-corpus.sh pour le meme motif dans ce depot.",
+  "cas": [
+    { "application": "a2a-adapter", "attendu_etat": "textes-declares", "attendu_count": 1,
+      "reponse": {"success": true, "count": 1, "applicable_texts": [
+        {"text_ref": "ADR-016", "title": "Architecture A2A pour Orbit (cadre stable d'implementation)", "somcraft_uuid": "6605915e-dd11-49ab-9b87-601d96906fa4"}
+      ]}
+    },
+    { "application": "ActionProgex", "attendu_etat": "textes-declares", "attendu_count": 1,
+      "reponse": {"success": true, "count": 1, "applicable_texts": [
+        {"text_ref": "ADR-039", "title": "Perimetre d'indexation du RAG Somtech", "somcraft_uuid": "ab310c86-3fd1-4985-9bf7-05914dc644c2"}
+      ]}
+    },
+    { "application": "ArchiBot", "attendu_etat": "textes-declares", "attendu_count": 1,
+      "reponse": {"success": true, "count": 1, "applicable_texts": [
+        {"text_ref": "ADR-028", "title": "React Three Fiber comme stack WebXR pour ArchiBot", "somcraft_uuid": "8f3638ba-fc61-4a2c-964f-5d17aae5e5a0"}
+      ]}
+    },
+    { "application": "Architecture", "attendu_etat": "textes-declares", "attendu_count": 1,
+      "reponse": {"success": true, "count": 1, "applicable_texts": [
+        {"text_ref": "STD-044", "title": "Discipline d'ecriture et cablage de la memoire semantique (Somcraft)", "somcraft_uuid": "a712033d-0e79-430f-b555-12d730c4a299"}
+      ]}
+    },
+    { "application": "ConstructionGauthier", "attendu_etat": "textes-declares", "attendu_count": 2,
+      "reponse": {"success": true, "count": 2, "applicable_texts": [
+        {"text_ref": "STD-004", "title": "Custom Domains Same-Site (DNS)", "somcraft_uuid": "55317a1f-78e1-44fc-ab9c-d4c2f99a77d8"},
+        {"text_ref": "STD-034", "title": "Documentation du modele de donnees consultable par les agents IA", "somcraft_uuid": "13138844-cbbf-4b5b-bd6d-d0e319291946"}
+      ]}
+    },
+    { "application": "Departement IA Somtech", "attendu_etat": "textes-declares", "attendu_count": 8,
+      "reponse": {"success": true, "count": 8, "applicable_texts": [
+        {"text_ref": "ADR-013", "title": "Hebergement par classe de workload", "somcraft_uuid": "905fe075-18e5-48a9-9cc9-1ff1a097b8b6"},
+        {"text_ref": "ADR-016", "title": "Architecture A2A pour Orbit", "somcraft_uuid": "6605915e-dd11-49ab-9b87-601d96906fa4"},
+        {"text_ref": "ADR-037", "title": "Runtime d'execution des agents sur inference locale souveraine", "somcraft_uuid": "0a045d6f-2dfd-471f-97b6-03fdded33ebb"},
+        {"text_ref": "ADR-038", "title": "Les conteneurs d'agents heritent de l'image officielle Hermes", "somcraft_uuid": "d280c836-399b-42e6-a26a-5b25229ac654"},
+        {"text_ref": "ADR-043", "title": "Topologie d'hebergement des agents autonomes", "somcraft_uuid": "9b25af5e-b76e-43cd-8940-3b4924ac2237"},
+        {"text_ref": "STD-028", "title": "Organisation des repos GitHub pour les agents IA", "somcraft_uuid": "6c6ef8ec-c5e5-4691-a9d9-2f386bb42090"},
+        {"text_ref": "STD-032", "title": "Discovery interne d'un Departement IA", "somcraft_uuid": "01042cea-ab9c-4b9e-8f29-8b05e34a4871"},
+        {"text_ref": "STD-040", "title": "Image d'agent Somtech", "somcraft_uuid": "aa4dc3ff-bd69-418f-b6ff-5686abe68c9f"}
+      ]}
+    },
+    { "application": "Orbit Channel", "attendu_etat": "textes-declares", "attendu_count": 3,
+      "reponse": {"success": true, "count": 3, "applicable_texts": [
+        {"text_ref": "ADR-016", "title": "Architecture A2A pour Orbit", "somcraft_uuid": "6605915e-dd11-49ab-9b87-601d96906fa4"},
+        {"text_ref": "ADR-021", "title": "A2A Gateway pour Orbit", "somcraft_uuid": "b315fc99-4ab0-489b-8964-33e3f2dd9d4f"},
+        {"text_ref": "STD-032", "title": "Discovery interne d'un Departement IA", "somcraft_uuid": "01042cea-ab9c-4b9e-8f29-8b05e34a4871"}
+      ]}
+    },
+    { "application": "RAG Service", "attendu_etat": "textes-declares", "attendu_count": 4,
+      "reponse": {"success": true, "count": 4, "applicable_texts": [
+        {"text_ref": "ADR-014", "title": "Cohere Embed v4 + Rerank v3", "somcraft_uuid": "3b084300-26d6-45c6-a396-d8ad1d06f721"},
+        {"text_ref": "ADR-015", "title": "JWT machine-to-machine pour le RAG", "somcraft_uuid": "ae9a42a6-622c-4256-834c-da1a80ecdc60"},
+        {"text_ref": "ADR-039", "title": "Perimetre d'indexation du RAG Somtech", "somcraft_uuid": "ab310c86-3fd1-4985-9bf7-05914dc644c2"},
+        {"text_ref": "STD-007", "title": "Micro-service Somtech — installation cliente vs code source", "somcraft_uuid": "53f253cc-f14e-42cf-969b-b1f2bbd95291"}
+      ]}
+    },
+    { "application": "ServiceDesk", "attendu_etat": "textes-declares", "attendu_count": 4,
+      "reponse": {"success": true, "count": 4, "applicable_texts": [
+        {"text_ref": "ADR-032", "title": "Couche analytique de graphe pour ServiceDesk (SD-Graph)", "somcraft_uuid": "2f4f5d27-7ecb-4144-9fc3-ab2628a9ad33"},
+        {"text_ref": "ADR-035", "title": "Gate de promotion vers l'opposable", "somcraft_uuid": "d6d3b591-491d-447a-bb7f-9cc34f7a713c"},
+        {"text_ref": "STD-042", "title": "Retention et consentement des personnes captees", "somcraft_uuid": "555b8568-94f0-46d7-9b06-5f6d1ada9df6"},
+        {"text_ref": "STD-043", "title": "Effacement dans la memoire de Somtech", "somcraft_uuid": "1658d28e-5703-44ea-a39c-0f622a622475"}
+      ]}
+    },
+    { "application": "Somcraft", "attendu_etat": "textes-declares", "attendu_count": 5,
+      "reponse": {"success": true, "count": 5, "applicable_texts": [
+        {"text_ref": "ADR-010", "title": "Next.js adopte pour SomCraft", "somcraft_uuid": "f49704c6-086e-4ded-a8cb-6123315f5ffd"},
+        {"text_ref": "ADR-039", "title": "Perimetre d'indexation du RAG Somtech", "somcraft_uuid": "ab310c86-3fd1-4985-9bf7-05914dc644c2"},
+        {"text_ref": "STD-004", "title": "Custom Domains Same-Site (DNS)", "somcraft_uuid": "55317a1f-78e1-44fc-ab9c-d4c2f99a77d8"},
+        {"text_ref": "STD-007", "title": "Micro-service Somtech — installation cliente vs code source", "somcraft_uuid": "53f253cc-f14e-42cf-969b-b1f2bbd95291"},
+        {"text_ref": "STD-044", "title": "Discipline d'ecriture et cablage de la memoire semantique", "somcraft_uuid": "a712033d-0e79-430f-b555-12d730c4a299"}
+      ]}
+    },
+    { "application": "Somtech Pack", "attendu_etat": "textes-declares", "attendu_count": 6,
+      "reponse": {"success": true, "count": 6, "applicable_texts": [
+        {"text_ref": "ADR-036", "title": "BD Supabase isolee et legere par worktree claude-swt", "somcraft_uuid": "97918775-67f5-408a-b477-15de297cb70a"},
+        {"text_ref": "STD-008", "title": "Audit RLS — procedure et criteres", "somcraft_uuid": "2505796f-485c-4d13-a989-95d2a3b61e5a"},
+        {"text_ref": "STD-009", "title": "Creation de migration Supabase", "somcraft_uuid": "c34f9655-1639-4194-acc6-c2540d854826"},
+        {"text_ref": "STD-010", "title": "Validation UI — 0 erreur console apres modification", "somcraft_uuid": "3df82128-e07d-4cb9-a866-7cf5f29d783f"},
+        {"text_ref": "STD-027", "title": "Memoire externe d'etat d'application", "somcraft_uuid": "a3371942-c97e-41c8-8d25-b586943a0165"},
+        {"text_ref": "STD-039", "title": "Interface d'usage de la memoire", "somcraft_uuid": "6c4c5f20-7bd0-4ca1-8588-1fe235d6539f"}
+      ]}
+    },
+    { "application": "Accroche Note", "attendu_etat": "aucun-declare", "attendu_count": 0,
+      "reponse": {"success": true, "count": 0, "applicable_texts": []}
+    },
+    { "application": "Administration", "attendu_etat": "aucun-declare", "attendu_count": 0,
+      "reponse": {"success": true, "count": 0, "applicable_texts": []}
+    },
+    { "application": "Orbit", "attendu_etat": "aucun-declare", "attendu_count": 0,
+      "reponse": {"success": true, "count": 0, "applicable_texts": []}
+    }
+  ]
+}
