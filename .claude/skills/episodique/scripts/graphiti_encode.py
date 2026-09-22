@@ -204,7 +204,14 @@ class GraphitiEncodeClient:
         except (ValueError, UnicodeDecodeError) as exc:
             raise GraphitiError("réponse Graphiti illisible (JSON attendu)") from exc
 
-    def _validate(self, group_id: str | None, session_ref: str | None, author_label: str | None, statements: list[str] | None) -> None:
+    def _validate(
+        self,
+        group_id: str | None,
+        session_ref: str | None,
+        author_label: str | None,
+        statements: list[str] | None,
+        timestamp: str | None,
+    ) -> None:
         if not group_id:
             raise GraphitiConfigError(
                 "--group-id obligatoire : aucune valeur par défaut, aucun repli sur "
@@ -221,14 +228,25 @@ class GraphitiEncodeClient:
             raise GraphitiConfigError(
                 f"--session-ref dépasse {SESSION_REF_MAX_LEN} caractères (STD-045 §2.3.1)."
             )
-        if not author_label:
-            raise GraphitiConfigError("--author-label obligatoire (champs name/role, STD-045 §2.3).")
+        if not author_label or not author_label.strip():
+            raise GraphitiConfigError("--author-label obligatoire, non vide (champs name/role, STD-045 §2.3).")
         count = len(statements) if statements else 0
         if count < MIN_STATEMENTS or count > MAX_STATEMENTS:
             raise GraphitiConfigError(
                 f"un encodage porte {MIN_STATEMENTS} à {MAX_STATEMENTS} énoncés "
                 f"(STD-045 §2.3, anti-firehose RA-EPI-004) — reçu {count}."
             )
+        if statements and any(not statement or not statement.strip() for statement in statements):
+            raise GraphitiConfigError(
+                "chaque --statement doit être un énoncé non vide (STD-045 §2.3 — un énoncé est autoportant)."
+            )
+        if timestamp is not None:
+            try:
+                datetime.datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
+            except ValueError as exc:
+                raise GraphitiConfigError(
+                    f"--timestamp doit être ISO 8601 (ex. 2026-09-22T12:00:00Z) — reçu {timestamp!r}."
+                ) from exc
 
     def encode(
         self,
@@ -243,7 +261,7 @@ class GraphitiEncodeClient:
         réponse ne prouve rien), puis une recherche de confirmation est tentée sur
         le même group_id — un résultat vide est non concluant et NE DÉCLENCHE
         JAMAIS de réessai du POST (§2.4.1)."""
-        self._validate(group_id, session_ref, author_label, statements)
+        self._validate(group_id, session_ref, author_label, statements, timestamp)
 
         ts = timestamp or _now_iso8601()
         messages = _build_messages(author_label, statements, ts, session_ref)

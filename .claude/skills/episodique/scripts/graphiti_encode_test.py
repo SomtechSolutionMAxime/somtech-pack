@@ -116,6 +116,67 @@ class SessionRefRequiredTest(unittest.TestCase):
         self.assertTrue(result["submitted"])
 
 
+class AuthorLabelRequiredTest(unittest.TestCase):
+    def test_blank_author_label_is_rejected_before_network(self):
+        cap = _Capture([MESSAGES_ACK])
+        with _with_key(), mock.patch.object(ge, "_do_request", cap), _no_sleep():
+            with self.assertRaises(ge.GraphitiConfigError):
+                ge.GraphitiEncodeClient().encode(
+                    group_id=GROUP, session_ref=REF, author_label="   ", statements=["un énoncé"]
+                )
+        self.assertEqual(cap.calls, 0)
+
+
+class StatementContentTest(unittest.TestCase):
+    def test_blank_statement_is_rejected_before_network(self):
+        cap = _Capture([MESSAGES_ACK])
+        with _with_key(), mock.patch.object(ge, "_do_request", cap), _no_sleep():
+            with self.assertRaises(ge.GraphitiConfigError):
+                ge.GraphitiEncodeClient().encode(
+                    group_id=GROUP, session_ref=REF, author_label=AUTHOR, statements=["   "]
+                )
+        self.assertEqual(cap.calls, 0)
+
+    def test_one_blank_among_valid_statements_is_rejected_before_network(self):
+        cap = _Capture([MESSAGES_ACK])
+        with _with_key(), mock.patch.object(ge, "_do_request", cap), _no_sleep():
+            with self.assertRaises(ge.GraphitiConfigError):
+                ge.GraphitiEncodeClient().encode(
+                    group_id=GROUP,
+                    session_ref=REF,
+                    author_label=AUTHOR,
+                    statements=["un énoncé valide", "   "],
+                )
+        self.assertEqual(cap.calls, 0)
+
+
+class TimestampFormatTest(unittest.TestCase):
+    def test_malformed_explicit_timestamp_is_rejected_before_network(self):
+        cap = _Capture([MESSAGES_ACK])
+        with _with_key(), mock.patch.object(ge, "_do_request", cap), _no_sleep():
+            with self.assertRaises(ge.GraphitiConfigError):
+                ge.GraphitiEncodeClient().encode(
+                    group_id=GROUP,
+                    session_ref=REF,
+                    author_label=AUTHOR,
+                    statements=["un énoncé"],
+                    timestamp="pas une date",
+                )
+        self.assertEqual(cap.calls, 0)
+
+    def test_valid_explicit_timestamp_is_accepted(self):
+        cap = _Capture([MESSAGES_ACK, _facts([])])
+        with _with_key(), mock.patch.object(ge, "_do_request", cap), _no_sleep():
+            result = ge.GraphitiEncodeClient().encode(
+                group_id=GROUP,
+                session_ref=REF,
+                author_label=AUTHOR,
+                statements=["un énoncé"],
+                timestamp="2026-09-22T12:00:00Z",
+            )
+        self.assertTrue(result["submitted"])
+
+
 class SecretHandlingTest(unittest.TestCase):
     def test_no_key_fails_before_any_network_call(self):
         cap = _Capture([MESSAGES_ACK])
