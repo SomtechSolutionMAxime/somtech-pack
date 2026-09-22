@@ -1456,7 +1456,7 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #   LE GESTE PRESCRIT. `GF-ORC-004`, `011`, `012`, `013` restaurés en couche
 #   `persona` avec leur bloc `sans_garantie` complet (motif d'origine, `assume_par`
 #   « Maxime Leboeuf (dirigeant) », `definitif: false`, `echeance: 2026-09-30`).
-#   Suite à l'arbitrage du dirigeant, relayé par `michel` le 2026-09-22 ~11h40Z :
+#   Suite à l'arbitrage du dirigeant, relayé par `michel` le 2026-09-22 ~11h46Z :
 #   les quatre restent en persona TANT QUE leurs hooks ne sont pas branchés — le
 #   reclassement immédiat se réduit au retrait de `GF-ORC-009` (déjà conforme,
 #   non touché ici). Ce texte supersède le premier reclassement (bd38943,
