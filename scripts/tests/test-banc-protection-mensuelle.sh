@@ -206,6 +206,14 @@ OUT="$(bash "$LIB" 2>"${WORK}/stderr")"; RC=$?
 [ -z "$OUT" ] && ok "stdout vide" || ko "stdout non vide malgre corpus sans 'entries'"
 [ -n "$(cat "${WORK}/stderr")" ] && ok "message clair sur stderr" || ko "stderr vide"
 
+echo "== RÉGRESSION (5e tour de revue de fond) — une entree de corpus malformee : echec bruyant propre, rc=3, RIEN sur stdout (pas un traceback non attrape) =="
+printf '{"entries": [{"id": "R-OK", "citations_attendues": ["MARQUEUR_MECHA"]}, {"id": "R-MAUVAIS", "mecanisme_connu": "ceci-nest-pas-un-dict"}]}' > "${WORK}/entree-malformee.json"
+unset BPM_CORPUS_JSON; export BPM_CORPUS_JSON="${WORK}/entree-malformee.json"
+OUT="$(bash "$LIB" 2>"${WORK}/stderr")"; RC=$?
+[ "$RC" -eq 3 ] && ok "rc=3 (entree malformee, echec propre)" || ko "attendu rc=3, obtenu rc=${RC}"
+[ -z "$OUT" ] && ok "stdout vide (aucun classement partiel malgre R-OK valide avant R-MAUVAIS)" || ko "stdout non vide malgre entree malformee"
+[ -n "$(cat "${WORK}/stderr")" ] && ok "message clair sur stderr" || ko "stderr vide"
+
 echo "== BPM_CORPUS_JSON non positionnee : echec bruyant =="
 unset BPM_CORPUS_JSON
 OUT="$(bash "$LIB" 2>"${WORK}/stderr")"; RC=$?
@@ -223,6 +231,22 @@ executer '{"id": "R-X", "citations_attendues": ["MARQUEUR_MECHA"]}' BPM_ETAT_PRE
 case "$(champ ECART_PRECEDENT)" in
   *"R-X:contredit->"*) ok "ecart detecte et nomme: $(champ ECART_PRECEDENT)" ;;
   *) ko "ecart non detecte: $(champ ECART_PRECEDENT)" ;;
+esac
+
+echo "== RÉGRESSION (5e tour de revue de fond) — un id qui DISPARAÎT du corpus doit être nommé DISPARU, pas rendu AUCUN =="
+echo '{"R-X": "contredit", "R-Y-DISPARUE": "protege"}' > "${WORK}/etat_avec_disparue.json"
+executer '{"id": "R-X", "citations_attendues": ["MARQUEUR_MECHA"]}' BPM_ETAT_PRECEDENT="${WORK}/etat_avec_disparue.json"
+case "$(champ ECART_PRECEDENT)" in
+  *"R-Y-DISPARUE:protege->DISPARU"*) ok "disparition detectee et nommee: $(champ ECART_PRECEDENT)" ;;
+  *) ko "disparition NON detectee (BUG : un ADR/STD retire du corpus, meme sil etait contredit, rendrait AUCUN ecart) : $(champ ECART_PRECEDENT)" ;;
+esac
+
+echo "== RÉGRESSION (5e tour de revue de fond) — un id qui APPARAÎT dans le corpus doit être nommé NOUVEAU, pas ignoré silencieusement =="
+echo '{}' > "${WORK}/etat_vide.json"
+executer '{"id": "R-Z-NOUVELLE", "citations_attendues": ["MARQUEUR_MECHA"]}' BPM_ETAT_PRECEDENT="${WORK}/etat_vide.json"
+case "$(champ ECART_PRECEDENT)" in
+  *"R-Z-NOUVELLE:NOUVEAU->"*) ok "apparition detectee et nommee: $(champ ECART_PRECEDENT)" ;;
+  *) ko "apparition NON detectee (BUG : ancien is not None excluait explicitement ce cas) : $(champ ECART_PRECEDENT)" ;;
 esac
 
 echo "== Aucun ecart : meme etat precedent que le classement courant =="

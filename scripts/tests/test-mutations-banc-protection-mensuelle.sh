@@ -181,9 +181,9 @@ PY
 
 echo "== (d-bis) Écart : les changements de classe ne sont plus détectés (comparaison neutralisée) =="
 essai 'la comparaison ancien != nouveau est neutralisee — un ecart reel nest plus jamais signale' <<'PY'
-old = '''                if ancien is not None and ancien != nouveau:
+old = '''                elif ancien is not None and nouveau is not None and ancien != nouveau:
                     ecarts.append(f"{rid}:{ancien}->{nouveau}")'''
-new = '''                if False:
+new = '''                elif False:
                     ecarts.append(f"{rid}:{ancien}->{nouveau}")'''
 assert old in s
 s = s.replace(old, new)
@@ -197,6 +197,14 @@ old = '''    if code_hits and test_hits:
 new = '''    if code_hits and test_hits:
         return ("protege", code_hits[0], None, None, None, True)
     return ("prose", None, None, None, None, False)'''
+assert old in s
+s = s.replace(old, new)
+PY
+
+echo "== (f) — RÉGRESSION (revue de fond, 5e tour) : l'ecart ne boucle plus que sur le passage courant, une DISPARITION redevient invisible =="
+essai 'boucle restreinte a classement.keys() — un id qui disparait du corpus (present dans precedent, absent du courant) redevient invisible, AUCUN ecart' <<'PY'
+old = '''            for rid in sorted(set(classement.keys()) | set(precedent.keys())):'''
+new = '''            for rid in sorted(classement.keys()):'''
 assert old in s
 s = s.replace(old, new)
 PY

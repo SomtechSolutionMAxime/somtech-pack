@@ -320,8 +320,22 @@ def main():
     audite_par_id = {}
     lignes = []
     for entree in entries:
+        # Nit relevé en revue de fond (5e tour) : sur le corpus RÉEL livré,
+        # les 67 entrées sont bien formées et ceci ne se déclenche jamais —
+        # mais un schéma d'entrée malformé (mecanisme_connu/contredit_par
+        # qui ne serait pas un dict, id absent) plantait par traceback
+        # Python, rc=1 non documenté, plutôt que l'échec bruyant rc=3 déjà
+        # promis pour un corpus invalide. Même principe que la validation
+        # de `entries` plus haut, étendu par entrée.
+        if not isinstance(entree, dict) or "id" not in entree:
+            print(f"bpm: ERREUR — entree de corpus malformee (dict avec 'id' attendu) : {entree!r}", file=sys.stderr)
+            return 3
         rid = entree["id"]
-        classe, mecanisme, date_a, date_b, _detail, audite = classer_entree(entree, racine, fichiers_cache)
+        try:
+            classe, mecanisme, date_a, date_b, _detail, audite = classer_entree(entree, racine, fichiers_cache)
+        except Exception as exc:  # noqa: BLE001 — echec bruyant volontaire, jamais un classement partiel
+            print(f"bpm: ERREUR — entree de corpus '{rid}' n'a pas pu etre classee ({exc!r}).", file=sys.stderr)
+            return 3
         classement[rid] = classe
         audite_par_id[rid] = audite
         cle = sanitiser_cle(rid)
@@ -372,11 +386,25 @@ def main():
         except (OSError, json.JSONDecodeError):
             lignes.append("ECART_PRECEDENT=PREMIER_PASSAGE (etat precedent illisible: " + etat_precedent_path + ")")
         else:
+            # DÉFAUT TROUVÉ EN REVUE DE FOND (5e tour), CORRIGÉ ICI — ne
+            # boucler que sur `classement.keys()` (le passage COURANT) ne
+            # voit jamais un id qui existait dans `precedent` et a DISPARU
+            # du corpus, et exclut explicitement (`ancien is not None`) un id
+            # NOUVEAU (apparu ce passage, absent du précédent). Un ADR/STD
+            # retiré du corpus — y compris s'il était `contredit` — rendait
+            # `AUCUN` écart : la pire des deux lectures possibles de « rien
+            # n'a changé ». Boucler sur l'UNION des deux jeux d'ids, et
+            # nommer explicitement l'apparition/la disparition plutôt que de
+            # les fondre dans un `None` silencieux.
             ecarts = []
-            for rid in sorted(classement.keys()):
+            for rid in sorted(set(classement.keys()) | set(precedent.keys())):
                 ancien = precedent.get(rid)
-                nouveau = classement[rid]
-                if ancien is not None and ancien != nouveau:
+                nouveau = classement.get(rid)
+                if ancien is None and nouveau is not None:
+                    ecarts.append(f"{rid}:NOUVEAU->{nouveau}")
+                elif ancien is not None and nouveau is None:
+                    ecarts.append(f"{rid}:{ancien}->DISPARU")
+                elif ancien is not None and nouveau is not None and ancien != nouveau:
                     ecarts.append(f"{rid}:{ancien}->{nouveau}")
             lignes.append("ECART_PRECEDENT=" + (",".join(ecarts) if ecarts else "AUCUN"))
 
