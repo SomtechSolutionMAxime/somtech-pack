@@ -57,14 +57,16 @@ herdr agent rename <ton-pane> <ta-rivière>          # matapedia, bonaventure…
 
 | Ce que tu fais naître | Modèle | Pourquoi |
 |---|---|---|
-| **Agent herdr** (chef d'équipe) | **Opus — jamais Haiku** | Haiku n'a pas de mode auto : il s'arrête à *chaque* demande de permission. Mesuré : deux reviewers Haiku ouverts en pane se sont bloqués en boucle, et le gain de vitesse a été entièrement mangé par le déblocage manuel |
+| **Agent herdr** (chef d'équipe) | **Sonnet — jamais Haiku** | Haiku n'a pas de mode auto, il s'arrête à chaque permission. **Sonnet, pas Opus : motif de COÛT, pas de confiance** — trois chefs Sonnet ont trouvé des défauts que l'orchestrateur en Opus n'avait pas vus. *Exception : Opus sur mandat précis, à l'epic* |
 | **Sous-agent** (outil `Agent`) | **Haiku possible, et utile** | Il n'a pas d'invite de permission à lui : il hérite de la session qui l'a lancé. Sa place est en **passe 1 de revue**, en portail de rejet |
+
+**Le rôle décide, pas le produit** — cible : open-weight, mêmes rôles.
 
 **Le lanceur de session ne relaie pas le modèle** — il refuse les drapeaux qu'il ne connaît pas, `--model` compris. Il faut **décomposer le geste** : faire naître l'espace de travail, **puis** lancer l'agent dedans avec son modèle.
 
 *À savoir* : `claude-swt` et ses variantes sont des **fonctions du shell interactif**, pas des binaires. Elles marchent dans un pane, mais pas depuis un outil qui lance un shell non interactif — et même là, elles ne relaient pas le modèle.
 
-**Si tu découvres un agent déjà né sur le mauvais modèle**, `herdr pane run "$P" '/model opus'` le corrige — mais c'est un rattrapage, pas la méthode : entre sa naissance et ta découverte, il a déjà travaillé.
+**Si tu découvres un agent déjà né sur le mauvais modèle**, `herdr pane run "$P" '/model sonnet'` le corrige — mais c'est un rattrapage, pas la méthode : entre sa naissance et ta découverte, il a déjà travaillé.
 
 ⚠️ **Et relis son écran après ce geste** (`herdr pane read "$P"`). Il passe par la **même boîte de saisie qu'un brief**, donc par la même panne : tu verrais un succès sans que le modèle ait changé, et tu repartirais en croyant l'agent corrigé. *C'est le seul endroit de ce texte où ce geste est mis en scène — la consigne générale plus bas ne sert à rien si elle n'est pas ici.*
 
