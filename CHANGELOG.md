@@ -7,6 +7,14 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-21
 
+*Livraison `J-20260814-0002`, demande `D-20260921-0015` (lot 1/3) — annuaire des agents. Projet de schéma seulement, soumis à validation de l'architecte contre STD-032 avant fixation ; aucun code d'exécution dans ce lot.*
+
+### Ajoute
+
+- **Projet de schéma pour l'annuaire des agents** (`docs/annuaire-agents/D-20260921-0015-schema-socle-lot1.md`) : rattache la relation agent → session au tableau `sessions[]` déjà présent dans `agents.json` (STD-032 §2.4) au lieu d'une structure séparée — chaque session référence son agent par nom. `agents[].url`/`agent_card_url` passent d'obligatoires à optionnels (bump `isomorphic_version` → `1.1`) ; `status`/`last_seen` deviennent calculés depuis `sessions[]`, jamais stockés sur l'agent. Motif : sur 8 panes vérifiés dans l'inventaire de la demande, 2 étaient morts jusqu'à six jours après leur relevé — l'identité de l'agent est stable, le pane et l'adresse sont volatils, et un annuaire qui grave le volatil ment dès sa mise en service. Les champs propres à Somtech (chantier, dépôt, application, dates) sont réservés dans un bloc d'extension nommé dont le contenu reste à la main de l'architecte.
+
+## [Non-versionne] - 2026-09-21
+
 *Livraison `J-20260814-0002`, demande `D-20260921-0003` — ordre du dirigeant : « je ne sais pas qui envoie le déblocage des fenêtres de texte mais je veux que ça cesse ». Code seulement : le métier des orchestrateurs n'est pas touché.*
 
 ### Corrige
