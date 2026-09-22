@@ -1,0 +1,13 @@
+# ops-discovery
+
+> `ops-discovery` n'est pas un agent LLM (pas d'ABC, pas de brief de naissance) —
+> c'est un **service systeme** du Departement IA (STD-032 SS2.7, "service systeme
+> ... jamais cede au client"). Ce fichier existe pour satisfaire la verification
+> automatisable de STD-028 §7 ("Tout repo agent contient un Dockerfile, un
+> README.md, un agent.md (ou equivalent)") — le contenu utile est dans README.md.
+
+- **Secteur** : `ops-` (ADR-030 §2)
+- **Role** : endpoint d'agregation `/.well-known/agents.json` (RFC 5785, STD-032)
+- **Proprietaire operationnel** : `ops-discovery` (STD-032 SS2.7)
+- **Co-signataire architecture** : `ing-curateur-architecture` (changements de schema `agents.json`)
+- **Cession** : non-cessible (STD-032 SS2.7 — reste propriete Somtech qui opere le Droplet, meme sur un Departement IA client)
