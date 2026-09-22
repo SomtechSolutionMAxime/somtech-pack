@@ -7,6 +7,14 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-22
 
+*Livraison `J-20260814-0002`, demande `D-20260921-0017` (lot 4, garde 5/5 — la dernière) — ticket `T-20260922-0106`.*
+
+### Ajoute
+
+- **Banc mensuel `protege`/`prose`/`contredit`/`[non établi]` sur les ADR et STD** (`.claude/skills/orchestrer-chantier/lib/banc-protection-mensuelle.sh` + compagnon `.py`) — rejoue, de façon mécanique et sans appel réseau/MCP, la mesure « ce qui tient par un mécanisme vs ce qui reste de la prose » sur un corpus figé de 67 règles (41 ADR + 24 STD + 2 entrées invitées : le sous-thème `/merge` de STD-030 et le garde-fou `GF-ORC-013`, tous deux nés dans ce même lot 4). Ne rend **jamais** `absent` — une citation introuvable dans ce dépôt rend `[non établi]`, jamais une conclusion sur son inexistence ailleurs (corpus Somcraft connu incomplet). **Témoin positif obligatoire** : les 4 gardes déjà livrées du lot 4 (STD-038, STD-030 §/merge, STD-029, GF-ORC-013) doivent être vues `protege`, mécanisme cité — sinon c'est le banc qui a tort, pas le corpus. Rend l'**écart** avec le passage précédent (`PREMIER_PASSAGE` au premier tour, sinon la liste des ids qui changent de classe), jamais seulement l'état. Échoue bruyamment (rc≠0, zéro ligne de classement) si le corpus est absent/illisible/invalide, ou si l'appelant déclare la source cassée. **Défaut réel trouvé et corrigé avant fusion** : le corpus figé et l'état de sortie vivent sous `scripts/`/`.claude/` (les répertoires scannés) et énumèrent chaque id en clair — sans exclusion explicite du corpus/de l'état (fichier exact ET dossier entier, y compris un état périmé jamais référencé par l'appel courant), le banc se « trouvait » lui-même comme citation et rendait `prose` au lieu de `non_etabli` pour la majorité du corpus (58/67 au lieu de 17/67 après correctif). Bancs : 33/33 unitaire (dont 2 tests de régression sur ce défaut, rouge confirmé sans le correctif), 14/14 sur le corpus réel — témoin positif OK, 8/8 entrées vérifiées à la main classées correctement (0 à tort, sur 8 vérifiées / 67 au total — les 59 autres sont classées par une heuristique générique non auditée, documentée comme telle), 9/9 mutations tuées (0 survivante). Premier passage réel : 5 `protege`, 17 `prose`, 4 `contredit`, 41 `non_etabli` — porté au tableau stratégique (Somcraft).
+
+## [Non-versionne] - 2026-09-22
+
 *Livraison `J-20260814-0002`, demande `D-20260921-0017` (lot 4, garde 4/5) — ticket `T-20260922-0098`.*
 
 ### Ajoute
