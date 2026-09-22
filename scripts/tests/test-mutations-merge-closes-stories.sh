@@ -168,6 +168,47 @@ assert old in s
 s = s.replace(old, new)
 PY
 
+echo "== Le défaut de revue de fond : frontière de mot sur le label retirée =="
+essai 'mfs_ligne_label ne vérifie plus que le label est un mot ENTIER (Ticketing/Storyboard redeviennent des labels)' <<'PY'
+old = '''    if [[ "$apres" =~ ^[A-Za-z] ]]; then
+      return 1
+    fi
+'''
+new = ''
+assert old in s
+s = s.replace(old, new)
+PY
+
+echo "== Le défaut de revue de fond : frontière de fin sur l'ID retirée (retour à grep -oE non ancré) =="
+essai 'mfs_extraire_ids revient à un grep -oE non ancré, un ID mal formé se ferait tronquer' <<'PY'
+old = '''mfs_extraire_ids() {
+  local token motif_ancre="^${MFS_ID_MOTIF}\\$"
+  # `|| [ -n "$token" ]` : sans ce filet, le DERNIER token est perdu quand le
+  # flux de `tr` ne se termine pas par un saut de ligne (`read` échoue sur la
+  # dernière ligne partielle et la boucle s'arrête avant de la traiter) — un
+  # ID valide en fin de ligne étiquetée disparaîtrait silencieusement.
+  while IFS= read -r token || [ -n "$token" ]; do
+    [ -z "$token" ] && continue
+    if [[ "$token" =~ $motif_ancre ]]; then
+      printf '%s\\n' "$token"
+    fi
+  done < <(printf '%s' "$1" | tr -c 'A-Za-z0-9-' '\\n')
+}'''
+new = '''mfs_extraire_ids() {
+  printf '%s\\n' "$1" | grep -oE "$MFS_ID_MOTIF" || true
+}'''
+assert old in s
+s = s.replace(old, new)
+PY
+
+echo "== Le défaut de revue de fond : filet de la dernière ligne sans saut de ligne retiré =="
+essai 'mfs_extraire_ids perd le dernier token quand le texte ne finit pas par un saut de ligne' <<'PY'
+old = 'while IFS= read -r token || [ -n "$token" ]; do'
+new = 'while IFS= read -r token; do'
+assert old in s
+s = s.replace(old, new)
+PY
+
 echo
 echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

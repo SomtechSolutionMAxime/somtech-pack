@@ -45,7 +45,7 @@
 #     jamais sur-fermeture : l'asymétrie est voulue (fermer à tort est PIRE que
 #     ne pas fermer).
 #
-# Sur les 60 PR mesurées : 28 déterminent >=1 ticket (35 IDs au total, TOUS
+# Sur les 60 PR mesurées : 28 déterminent >=1 ticket (37 IDs au total, TOUS
 # vérifiés à la main contre le texte réel — 0 faux positif) ; 32 s'abstiennent
 # (aucune ligne étiquetée) — l'abstention est le comportement voulu sur du
 # texte ambigu, pas un échec de la mesure.
@@ -80,12 +80,27 @@ MFS_ID_MOTIF='T-[0-9]{8}-[0-9]{4}'
 # ⚠️ Label ANCRÉ EN TÊTE DE LIGNE (après trim), jamais recherché n'importe où
 # dans le texte — c'est ce qui exclut PR #338 (T-20260826-0042 cité en pleine
 # phrase, sur une ligne qui ne COMMENCE pas par le label).
+#
+# 🔴 FRONTIÈRE DE MOT APRÈS LE LABEL, OBLIGATOIRE — trouvé en revue de fond
+# (T-20260922-0084) : sans elle, `Tickets?`/`Stor(y|ies)` matchent le PRÉFIXE
+# d'un mot plus long («Ticketing system updated: ... T-20260921-0099»,
+# «Storyboard revu, voir T-20260921-0088» — les deux vérifiés en rejouant la
+# fonction), ce qui fait exactement rentrer par la bande le défaut PR #338 que
+# l'ancrage en tête de ligne prétend exclure. Le caractère qui suit
+# immédiatement le label (avant les `*`/espaces/`:` de bordure) ne doit JAMAIS
+# être une lettre.
 mfs_ligne_label() {
-  local ligne="$1" trim
+  local ligne="$1" trim label_match apres
   trim="${ligne#"${ligne%%[![:space:]]*}"}"
   [ -z "$trim" ] && return 1
-  if [[ "$trim" =~ ^\*{0,2}(Tickets?|Stor(y|ies))\*{0,2}[[:space:]]*:?[[:space:]]* ]]; then
-    printf '%s\n' "${trim:${#BASH_REMATCH[0]}}"
+  if [[ "$trim" =~ ^\*{0,2}(Tickets?|Stor(y|ies))\*{0,2} ]]; then
+    label_match="${BASH_REMATCH[0]}"
+    apres="${trim:${#label_match}}"
+    if [[ "$apres" =~ ^[A-Za-z] ]]; then
+      return 1
+    fi
+    [[ "$apres" =~ ^[[:space:]]*:?[[:space:]]* ]]
+    printf '%s\n' "${apres:${#BASH_REMATCH[0]}}"
     return 0
   fi
   return 1
@@ -105,8 +120,30 @@ mfs_tronquer_a_la_phrase() {
 # JAMAIS activée : un nom d'agent en minuscules (`t-20260825-0012`, convention
 # des panes herdr) ne matche pas `T-` majuscule — exclusion voulue, pas un
 # angle mort (mesuré sur PR #329, qui cite les deux formes cote à cote).
+#
+# 🔴 TOKEN ENTIER, JAMAIS UNE SOUS-CHAÎNE — trouvé en revue de fond
+# (T-20260922-0084) : `grep -oE "$MFS_ID_MOTIF"` sans frontière trouve le
+# motif N'IMPORTE OÙ, y compris À L'INTÉRIEUR d'un token plus long — un ID mal
+# formé `T-20260921-00171` (un chiffre de trop) se faisait TRONQUER,
+# SILENCIEUSEMENT, en `T-20260921-0017` — un ID VALIDE mais DIFFÉRENT, que
+# l'Étape 6.5 pourrait alors fermer à tort si ce numéro existe réellement.
+# `tr -c 'A-Za-z0-9-' '\n'` découpe <texte> en tokens faits uniquement de
+# lettres/chiffres/tirets (toute ponctuation, espace, ou octet multi-octet
+# UTF-8 devient un séparateur) ; seul un token qui correspond EXACTEMENT
+# (ancré des DEUX côtés) au motif est retenu — un token trop long, trop court,
+# ou suffixé (`T-20260914-0004a`) est rejeté EN ENTIER, jamais tronqué.
 mfs_extraire_ids() {
-  printf '%s\n' "$1" | grep -oE "$MFS_ID_MOTIF" || true
+  local token motif_ancre="^${MFS_ID_MOTIF}\$"
+  # `|| [ -n "$token" ]` : sans ce filet, le DERNIER token est perdu quand le
+  # flux de `tr` ne se termine pas par un saut de ligne (`read` échoue sur la
+  # dernière ligne partielle et la boucle s'arrête avant de la traiter) — un
+  # ID valide en fin de ligne étiquetée disparaîtrait silencieusement.
+  while IFS= read -r token || [ -n "$token" ]; do
+    [ -z "$token" ] && continue
+    if [[ "$token" =~ $motif_ancre ]]; then
+      printf '%s\n' "$token"
+    fi
+  done < <(printf '%s' "$1" | tr -c 'A-Za-z0-9-' '\n')
 }
 
 # mfs_tickets_du_corps <fichier-corps> — voir contrat en tête de fichier.

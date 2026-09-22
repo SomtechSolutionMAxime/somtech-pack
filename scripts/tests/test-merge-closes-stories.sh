@@ -111,6 +111,28 @@ assert_cas "ligne étiquetée sans ID reconnaissable" \
   "$(corps 'Ticket : voir la demande, aucun numero pour le moment')" \
   "" 1
 
+echo "== Le défaut trouvé en revue de fond : frontière de mot sur le label ============"
+# Sans frontière, "Tickets?"/"Stor(y|ies)" matchent le PRÉFIXE d'un mot plus
+# long — le label doit être le mot ENTIER, jamais un préfixe.
+assert_cas "Ticketing (le mot commence par Ticket, n'EST PAS Ticket)" \
+  "$(corps 'Ticketing system updated: consulter T-20260921-0099 pour details')" \
+  "" 1
+
+assert_cas "Storyboard (le mot commence par Story, n'EST PAS Story)" \
+  "$(corps 'Storyboard revu, voir T-20260921-0088')" \
+  "" 1
+
+echo "== Le défaut trouvé en revue de fond : frontière de fin sur l'ID ================"
+# Un ID mal formé (chiffre ou lettre en trop) ne doit JAMAIS être tronqué en
+# un ID voisin valide mais DIFFÉRENT — il doit être rejeté EN ENTIER.
+assert_cas "ID avec un chiffre de trop n'est PAS tronqué en un ID voisin" \
+  "$(corps 'Ticket T-20260921-00171 · test suffixe')" \
+  "" 1
+
+assert_cas "1er ID suffixé par une lettre rejeté ENTIER, 2e ID valide gardé" \
+  "$(corps 'Tickets : T-20260914-0004a, T-20260818-0035')" \
+  "T-20260818-0035" 0
+
 echo "== Dédoublonnage et ordre ========================================================"
 
 assert_cas "même ID répété sur deux lignes étiquetées : une seule sortie" \
