@@ -65,6 +65,17 @@
 # banc-protection-mensuelle.py pour le détail de la classification.
 #   REGLE_<ID>_CLASSE=protege|prose|contredit|non_etabli   (pour chaque
 #     entrée du corpus, <ID> = id sanitisé, non-alphanumériques -> `_`)
+#   REGLE_<ID>_AUDITE=oui|non              (pour CHAQUE entrée, quelle que
+#     soit sa CLASSE) — `oui` seulement quand le classement vient d'un
+#     `mecanisme_connu`/`contredit_par` déclaré et vérifié (corpus,
+#     `verifie_a_la_main`) ; `non` pour l'heuristique générique, MÊME
+#     quand elle rend `protege` — un `protege` de l'heuristique peut être
+#     une pure coïncidence de deux fichiers sans rapport réel (trouvé en
+#     revue de fond, 3e tour, repro réelle sur STD-030 du corpus).
+#     ⚠️ Trouvé par une revue de fond, 4e tour : cette ligne de contrat
+#     manquait alors que le champ était déjà émis pour chaque entrée —
+#     corrigée ici, exactement le genre d'écart que ce champ existe pour
+#     empêcher de laisser passer silencieusement ailleurs dans le dépôt.
 #   REGLE_<ID>_MECANISME=<chemin>          (seulement si CLASSE=protege)
 #   REGLE_<ID>_DATE_A=... / _DATE_B=...    (seulement si CLASSE=contredit —
 #     DATE_A = date_source du texte ADR/STD (JSON) ; DATE_B = date du
