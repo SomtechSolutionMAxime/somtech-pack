@@ -105,6 +105,13 @@ Tests du moteur : `python3 .claude/skills/episodique/scripts/graphiti_encode_tes
   d'un épisode de rencontre (`meeting <id>`).
 - **§2.4 — le geste rapporte « soumis », jamais « encodé »** : un `202` (ou tout 2xx) ne
   prouve rien, la seule preuve est une recherche de confirmation sur le même `group_id`.
+  ⚠️ **Limite à connaître** : quand plusieurs énoncés sont soumis en un seul appel (jusqu'à
+  10), la recherche de confirmation n'en interroge qu'**un seul** (le premier) — `confirmed`
+  porte sur cet énoncé-là, pas sur l'ensemble du lot. Ce n'est pas un défaut à corriger
+  isolément : une recherche vide étant déjà **non concluante** (§2.4.1), interroger les 10
+  énoncés multiplierait un signal qui ne prouve rien plutôt que de le rendre plus probant.
+  La limite à retenir est donc dans la **lecture** du résultat, pas dans le code : `confirmed`
+  ne dit jamais « tous les énoncés sont en mémoire », seulement « le premier l'est ».
 - **§2.4.1 — MUST NOT réessayer** un `POST /messages` au seul motif qu'une recherche de
   confirmation est revenue vide (non concluant, jamais négatif — évite les doublons, D5).
 - **§2.5 — saillance V1 humaine** : l'invocation elle-même est le filtre ; aucun score
