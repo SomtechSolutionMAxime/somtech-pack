@@ -54,6 +54,28 @@ test('liste d objets plats sous une cle (agents statiques, mecanisme #1 STD-032 
   ]);
 });
 
+test('item de liste avec un mapping imbrique (extensions.somtech, SS2.4, REJET revue de fond T-20260922-0062)', () => {
+  const yaml = [
+    'agents:',
+    '  - name: nicolet',
+    '    sector: ops',
+    '    extensions:',
+    '      somtech:',
+    '        mandate: "P-20260601-0094"',
+    '        repo: "org/repo"',
+  ].join('\n');
+
+  const parsed = parseYamlLite(yaml);
+
+  assert.deepEqual(parsed.agents, [
+    {
+      name: 'nicolet',
+      sector: 'ops',
+      extensions: { somtech: { mandate: 'P-20260601-0094', repo: 'org/repo' } },
+    },
+  ]);
+});
+
 test('liste vide (agents: []) reste une liste vide, jamais absente', () => {
   const parsed = parseYamlLite('agents: []');
   assert.deepEqual(parsed.agents, []);

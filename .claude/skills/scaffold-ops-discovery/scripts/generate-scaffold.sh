@@ -52,23 +52,47 @@ mkdir -p "$DEST_DIR/.well-known"
 # par sed : le remplacement sed traite '&' comme "le motif entier trouve" et
 # '\1' etc comme des groupes de capture — un DEPARTMENT_NAME/ORGANIZATION_NAME
 # contenant '&' (ex. "Acme & Co") corromprait alors le fichier genere en
-# silence (defaut trouve en revue, T-20260922-0062). L'expansion bash ne
-# traite aucun caractere du remplacement comme special.
+# silence (defaut trouve en revue portail, T-20260922-0062). L'expansion bash
+# ne traite aucun caractere du remplacement comme special.
+#
+# MAIS l'expansion bash ne connait rien non plus de la SYNTAXE du fichier
+# CIBLE. Dans config.example.yaml et agents.json.example, les placeholders
+# sont a l'interieur de guillemets doubles ("{{ORGANIZATION_NAME}}") : un nom
+# contenant lui-meme un guillemet ou un backslash (ex. 'Acme "Prod" Inc')
+# casse alors le JSON/YAML genere tout aussi silencieusement que l'ancien bug
+# sed (defaut trouve en revue de fond, T-20260922-0062). json_escape()
+# echappe backslash PUIS guillemet (l'ordre compte : echapper les backslashes
+# deja presents avant d'introduire ceux des guillemets, sinon on les
+# re-echapperait) pour les fichiers ou le placeholder vit dans une chaine
+# quotee. README.md/agent.md ne sont que de la prose affichee, pas parsee :
+# aucun echappement n'y est necessaire.
+json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  printf '%s' "$s"
+}
+
 substitute() {
-  local src="$1" dest="$2"
+  local src="$1" dest="$2" mode="$3"
+  local dept="$DEPARTMENT_NAME" org="$ORGANIZATION_NAME"
+  if [ "$mode" = "quoted" ]; then
+    dept="$(json_escape "$DEPARTMENT_NAME")"
+    org="$(json_escape "$ORGANIZATION_NAME")"
+  fi
   local content
   content="$(cat "$src")"
-  content="${content//\{\{DEPARTMENT_NAME\}\}/$DEPARTMENT_NAME}"
-  content="${content//\{\{ORGANIZATION_NAME\}\}/$ORGANIZATION_NAME}"
+  content="${content//\{\{DEPARTMENT_NAME\}\}/$dept}"
+  content="${content//\{\{ORGANIZATION_NAME\}\}/$org}"
   content="${content//\{\{AUTH_MODE\}\}/$AUTH_MODE}"
   content="${content//\{\{SCAFFOLDED_AT\}\}/$SCAFFOLDED_AT}"
   printf '%s\n' "$content" > "$dest"
 }
 
-substitute "$TEMPLATES_DIR/config.example.yaml" "$DEST_DIR/config.example.yaml"
-substitute "$TEMPLATES_DIR/well-known/agents.json.example" "$DEST_DIR/.well-known/agents.json.example"
-substitute "$TEMPLATES_DIR/README.md.template" "$DEST_DIR/README.md"
-substitute "$TEMPLATES_DIR/agent.md.template" "$DEST_DIR/agent.md"
+substitute "$TEMPLATES_DIR/config.example.yaml" "$DEST_DIR/config.example.yaml" quoted
+substitute "$TEMPLATES_DIR/well-known/agents.json.example" "$DEST_DIR/.well-known/agents.json.example" quoted
+substitute "$TEMPLATES_DIR/README.md.template" "$DEST_DIR/README.md" plain
+substitute "$TEMPLATES_DIR/agent.md.template" "$DEST_DIR/agent.md" plain
 
 cat > "$DEST_DIR/VERSION" <<EOF
 OPS_DISCOVERY_SCAFFOLD_VERSION=0.1.0

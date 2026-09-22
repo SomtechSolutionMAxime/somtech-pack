@@ -39,6 +39,15 @@ function buildAgentEntry(agent) {
   // le statut ne peut etre calcule honnêtement -> "unknown" (valeur valide
   // du schema SS2.4), jamais invente en "online".
   entry.status = 'unknown';
+  // extensions.somtech (SS2.4) est le SEUL bloc ou du vocabulaire Somtech-only
+  // est permis (mandate/repo/application_id/born_at/closed_at) — propage tel
+  // quel si present en config, jamais invente s'il est absent (defaut trouve
+  // en revue de fond, T-20260922-0062 : ce champ etait silencieusement
+  // supprime, alors que c'est le cas d'usage central d'un agent-session sans
+  // URL, cf. I10).
+  if (agent.extensions && agent.extensions.somtech) {
+    entry.extensions = { somtech: agent.extensions.somtech };
+  }
   return entry;
 }
 

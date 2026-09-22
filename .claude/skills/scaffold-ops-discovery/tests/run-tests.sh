@@ -122,6 +122,25 @@ else
   cat "$WORKDIR/amp.log"
 fi
 
+echo "== Etage 2d-ter : ORGANIZATION_NAME avec un guillemet ne casse pas le JSON/YAML genere (REJET revue de fond T-20260922-0062) =="
+QUOTE_DEST="$WORKDIR/generated-quote"
+if "$SKILL_DIR/scripts/generate-scaffold.sh" "$QUOTE_DEST" "dept-ia-test" 'Acme "Prod" Inc' "public" > "$WORKDIR/quote.log" 2>&1; then
+  if node -e "
+    const fs = require('node:fs');
+    const j = JSON.parse(fs.readFileSync('$QUOTE_DEST/.well-known/agents.json.example', 'utf8'));
+    if (j.department.organization !== 'Acme \"Prod\" Inc') process.exit(1);
+  " 2>"$WORKDIR/quote-check.log"; then
+    report "ORGANIZATION_NAME avec guillemet produit un JSON valide et fidele" 0
+  else
+    report "ORGANIZATION_NAME avec guillemet produit un JSON valide et fidele" 1
+    cat "$WORKDIR/quote-check.log"
+    cat "$QUOTE_DEST/.well-known/agents.json.example"
+  fi
+else
+  report "ORGANIZATION_NAME avec guillemet produit un JSON valide et fidele" 1
+  cat "$WORKDIR/quote.log"
+fi
+
 echo "== Etage 2e : le serveur genere demarre reellement et repond =="
 cp "$DEST/config.example.yaml" "$DEST/config.yaml"
 # exec remplace le sous-shell par node : $! designe alors le VRAI process node,
@@ -202,13 +221,23 @@ else
   cat "$GH_DOUBLE_LOG"
 fi
 
-if grep -q '"--private"' "$GH_DOUBLE_LOG" && grep -q '"--source=."' "$GH_DOUBLE_LOG" && grep -q '"--push"' "$GH_DOUBLE_LOG"; then
-  report "flags --private --source=. --push presents (STD-028 ACL)" 0
+if grep -q '"--private"' "$GH_DOUBLE_LOG" && grep -q '"--source=."' "$GH_DOUBLE_LOG" \
+   && grep -q '"--remote=origin"' "$GH_DOUBLE_LOG" && grep -q '"--push"' "$GH_DOUBLE_LOG"; then
+  report "flags --private --source=. --remote=origin --push presents (STD-028 ACL)" 0
 else
-  report "flags --private --source=. --push presents (STD-028 ACL)" 1
+  report "flags --private --source=. --remote=origin --push presents (STD-028 ACL)" 1
 fi
 
-echo "== Etage 3b : publish-github.sh s'arrete AVANT repo create si gh non authentifie =="
+echo "== Etage 3b : le double gh rejette un appel SANS --remote= (REJET revue de fond T-20260922-0062) =="
+: > "$GH_DOUBLE_LOG"
+if PATH="$PATH_WITH_DOUBLE" gh repo create somtech-departement-ia/ops-discovery --private --source=. --push > "$WORKDIR/gh-no-remote.log" 2>&1; then
+  report "double gh rejette repo create sans --remote=" 1
+  cat "$WORKDIR/gh-no-remote.log"
+else
+  report "double gh rejette repo create sans --remote=" 0
+fi
+
+echo "== Etage 3c : publish-github.sh s'arrete AVANT repo create si gh non authentifie =="
 : > "$GH_DOUBLE_LOG"
 PUBLISH_DEST2="$WORKDIR/generated-for-publish-2"
 "$SKILL_DIR/scripts/generate-scaffold.sh" "$PUBLISH_DEST2" "dept-ia-test" "Test Org" "public" > /dev/null 2>&1

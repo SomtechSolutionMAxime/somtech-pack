@@ -9,8 +9,11 @@
 #   - `gh auth status` : code de sortie et texte conformes au comportement reel
 #     (0 + texte sur stderr si authentifie ; 1 + message si non, via GH_DOUBLE_AUTH_FAIL)
 #   - `gh repo create <org>/<repo> --private --source=. --remote=origin --push` :
-#     valide la PRESENCE des flags attendus (comme le ferait un test d'integration
-#     contre le vrai binaire) plutot que de les ignorer ; echoue si absents.
+#     valide la PRESENCE des QUATRE flags attendus (comme le ferait un test
+#     d'integration contre le vrai binaire) plutot que de les ignorer ; echoue
+#     si l'un manque. --remote= a manque a une premiere version de ce double
+#     (defaut trouve en revue de fond, T-20260922-0062) : un appel sans lui
+#     passait a tort, exactement le "faux GO" que ce double est cense empecher.
 #
 # Chaque invocation est journalisee dans $GH_DOUBLE_LOG (argv complet, une ligne
 # JSON par appel) pour assertion depuis les tests.
@@ -48,11 +51,13 @@ case "${1:-}" in
       target="${3:-}"
       has_private=false
       has_source=false
+      has_remote=false
       has_push=false
       for arg in "$@"; do
         case "$arg" in
           --private) has_private=true ;;
           --source=*) has_source=true ;;
+          --remote=*) has_remote=true ;;
           --push) has_push=true ;;
         esac
       done
@@ -60,8 +65,8 @@ case "${1:-}" in
         echo "gh double: repo create exige <org>/<repo>" >&2
         exit 1
       fi
-      if [ "$has_private" != true ] || [ "$has_source" != true ] || [ "$has_push" != true ]; then
-        echo "gh double: repo create appele SANS --private/--source=./--push (attendus par STD-028 §2.8 ACL + publish-github.sh)" >&2
+      if [ "$has_private" != true ] || [ "$has_source" != true ] || [ "$has_remote" != true ] || [ "$has_push" != true ]; then
+        echo "gh double: repo create appele SANS --private/--source=./--remote=./--push (attendus par STD-028 §2.8 ACL + publish-github.sh)" >&2
         exit 1
       fi
       echo "✓ Created repository $target on GitHub (DOUBLE — aucun depot reel cree)" >&2

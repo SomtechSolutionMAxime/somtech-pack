@@ -132,18 +132,19 @@ function parseList(lines, start, itemIndent) {
       firstFieldText.slice(colonIndex + 1)
     );
 
-    // Champs additionnels de l'item, indentes davantage que le "- ".
+    // Champs additionnels de l'item, indentes davantage que le "- ". Delegue
+    // a parseBlock plutot qu'a une boucle plate : un item peut ainsi porter
+    // un mapping imbrique (ex. extensions.somtech, SS2.4) au meme titre que
+    // n'importe quelle cle de mapping ailleurs dans le fichier — sans
+    // dupliquer la logique de recursion (defaut trouve en revue de fond,
+    // T-20260922-0062 : la version plate ne supportait qu'un seul niveau de
+    // champs et levait sur tout mapping imbrique).
     const fieldIndent = itemIndent + 2;
     let j = i + 1;
-    while (j < lines.length && lines[j].indent === fieldIndent) {
-      const fieldColon = findKeyColon(lines[j].text);
-      if (fieldColon === -1) {
-        throw new Error(`champ d'item non supporte : "${lines[j].text}"`);
-      }
-      item[lines[j].text.slice(0, fieldColon).trim()] = coerceScalar(
-        lines[j].text.slice(fieldColon + 1)
-      );
-      j += 1;
+    if (lines[j] && lines[j].indent === fieldIndent) {
+      const [restFields, nextIndex] = parseBlock(lines, j, fieldIndent);
+      Object.assign(item, restFields);
+      j = nextIndex;
     }
 
     items.push(item);
@@ -154,21 +155,15 @@ function parseList(lines, start, itemIndent) {
 }
 
 function findKeyColon(text) {
-  // Le premier ':' qui n'est pas a l'interieur d'une chaine quotee.
-  let inQuote = null;
-  for (let idx = 0; idx < text.length; idx += 1) {
-    const ch = text[idx];
-    if (inQuote) {
-      if (ch === inQuote) inQuote = null;
-      continue;
-    }
-    if (ch === '"' || ch === "'") {
-      inQuote = ch;
-      continue;
-    }
-    if (ch === ':') return idx;
-  }
-  return -1;
+  // Le premier ':' de la ligne separe toujours la cle de la valeur dans cette
+  // grammaire : une cle n'est JAMAIS quotee et ne contient JAMAIS de ':'. Tout
+  // ':' a l'interieur d'une valeur quotee vient donc necessairement APRES le
+  // ':' separateur, jamais avant. Une version anterieure de cette fonction
+  // "sautait" les ':' a l'interieur des guillemets, en pretendant proteger
+  // contre un cas qui ne peut pas se produire ici — une garantie fictive,
+  // retiree en revue (T-20260922-0062) : sa suppression totale ne faisait
+  // rougir aucun test, preuve qu'elle ne protegeait rien.
+  return text.indexOf(':');
 }
 
 module.exports = { parseYamlLite };

@@ -52,6 +52,33 @@ test('sessions[] est toujours present meme si non fourni en config — isomorphi
   assert.ok(Array.isArray(response.sessions));
 });
 
+test('extensions.somtech present en config est propage tel quel (SS2.4, REJET revue de fond T-20260922-0062)', () => {
+  const response = buildAgentsResponse({
+    department: { name: 'd', organization: 'o' },
+    agents: [
+      {
+        name: 'nicolet',
+        sector: 'ops',
+        extensions: {
+          somtech: { mandate: 'P-20260601-0094', repo: 'org/repo', born_at: '2026-09-14T15:41:00Z' },
+        },
+      },
+    ],
+  });
+
+  assert.deepEqual(response.agents[0].extensions, {
+    somtech: { mandate: 'P-20260601-0094', repo: 'org/repo', born_at: '2026-09-14T15:41:00Z' },
+  });
+});
+
+test('extensions absent de la config n ajoute pas le champ (pas de valeur inventee)', () => {
+  const response = buildAgentsResponse({
+    department: { name: 'd', organization: 'o' },
+    agents: [{ name: 'a', sector: 'ops' }],
+  });
+  assert.equal('extensions' in response.agents[0], false);
+});
+
 test('anti-pattern : aucun champ Somtech-only bare n ajoute hors extensions.somtech', () => {
   const response = buildAgentsResponse({
     department: { name: 'd', organization: 'o' },
