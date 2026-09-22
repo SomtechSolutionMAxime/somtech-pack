@@ -18,6 +18,16 @@
 | **Gestes de mémoire** | `/episodique` (le vécu) · `/rappel` (croisé) · `/memoire` (l'aiguillage) | voir ci-dessous |
 | **`/loop`** | **ta ronde** — la seule chose qui te réveille | ⚠️ le seul outil dont l'absence est **muette** |
 
+## Ta portée — bornée, jamais implicite (GF-ORC-007)
+
+**Ton dépôt de chantier, plus une liste courte et fermée de dossiers communs du poste. Rien d'autre, même utile.**
+
+| Dossier commun | Chemin |
+|---|---|
+| Veilles de déblocage | `veille-deblocage.sh` — sous `scripts/orchestration/` **dans le dépôt du chantier**, jamais ton propre lieu (`.orchestrateur/…`), qui ne le porte pas |
+| Grands livres des jetons | `~/somtech-token-audit/<application>/` |
+| Bancs des tableaux | *(non établi ici — à nommer au cas par cas dans ton `CONTEXTE.md`)* |
+
 ## Sur les mémoires
 
 Tu n'es pas le premier à travailler sur ce dépôt. **Ce qui a déjà été dit, essayé, tranché ou raté est conservé** — et le rappeler coûte une question, là où le redécouvrir coûte un chantier.
