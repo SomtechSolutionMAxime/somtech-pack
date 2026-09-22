@@ -1450,7 +1450,57 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #   dedans, qui vit entièrement dans un chapitre L2 souple).
 #
 # ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
-BASELINE=182118
+#
+# ── RE-BASELINE DU 2026-09-22 (2ᵉ) — T-20260922-0059 / D-20260921-0016 (revert 4 hooks) ──
+#
+#   LE GESTE PRESCRIT. `GF-ORC-004`, `011`, `012`, `013` restaurés en couche
+#   `persona` avec leur bloc `sans_garantie` complet (motif d'origine, `assume_par`
+#   « Maxime Leboeuf (dirigeant) », `definitif: false`, `echeance: 2026-09-30`).
+#   Suite à l'arbitrage du dirigeant, relayé par `michel` le 2026-09-22 ~11h40Z :
+#   les quatre restent en persona TANT QUE leurs hooks ne sont pas branchés — le
+#   reclassement immédiat se réduit au retrait de `GF-ORC-009` (déjà conforme,
+#   non touché ici). Ce texte supersède le premier reclassement (bd38943,
+#   `RE-BASELINE DU 2026-09-22` ci-dessus), fusionné trois minutes avant que
+#   l'arbitrage réel n'arrive — la décision « GO » citée dans `D-20260921-0016`
+#   avait déjà été révisée en « GO avec b » sans que ce lot en soit informé à
+#   temps.
+#
+#   LE DÉFAUT ÉVITÉ, MESURÉ. Sans ce retrait, le métier affiche une garantie
+#   fausse : `GF-ORC-004/011/012/013` sont classés `hook` — une couche qui
+#   GARANTIT selon STD-047 — sans qu'aucun hook technique réel ne les couvre
+#   (mesuré par la revue de fond de la première PR : grep vide sur les quatre
+#   fichiers de garde existants). C'est exactement ce que STD-047 R1 existe
+#   pour interdire, et le pack l'a porté trois minutes en production.
+#
+#   RE-VÉRIFIÉ, PAS RECOPIÉ — STD-047 R1. Mesuré par le moteur de rendu
+#   lui-même (`pack metier rendre --role orchestrateur`), pas par lecture :
+#   **12 garde-fous · 7 dérogés · 0 refusés.** Les sept dérogés (`GF-ORC-003`,
+#   `004`, `006`, `008`, `011`, `012`, `013`) portent tous un motif, un nom qui
+#   assume, et soit `definitif: true` soit une `echeance` — R1 reste satisfaite,
+#   avec une répartition différente (5 hook / 7 persona assumée, au lieu de
+#   9 hook / 3) que la demande d'origine n'annonçait pas.
+#
+#   LA PART COUPÉE AVANT DE DEMANDER. Aucune. Restaurer un bloc `sans_garantie`
+#   déjà signé par le dirigeant est un geste de restitution, pas une
+#   composition libre — rien à couper sans mutiler une signature déjà validée
+#   ailleurs (le texte des quatre motifs est repris mot pour mot de la version
+#   d'avant reclassement).
+#
+#   182 118 → 182 520. MARGE ZÉRO, comme les précédentes. +402.
+#
+#   L'ARBITRAGE, avec son référent durable. `batiscan`, coordonnateur du
+#   jalon : « ce plus 402 ne vient pas d'un ajout de prose, il vient de
+#   RESTAURER quatre blocs que la décision du dirigeant exige. Refuser ce
+#   dépassement reviendrait à faire choisir entre la garde de taille et un
+#   ordre du dirigeant, et la garde de taille n'a pas cette autorité. » GO
+#   FERME, delivery `4c777bb2-9209-4488-88fc-a459009e5f53`, commentaire
+#   `7bb9e4c9-5933-4865-a7b0-c088e6de036e`, 2026-09-22.
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0, et
+# les quatre hooks réels restent un chantier ouvert (ticket séparé, ouvert par
+# `batiscan`) — quand ils existeront, la couche de chaque item redeviendra
+# `hook` et ce lot se re-baselinera dans l'autre sens.
+BASELINE=182520
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"
