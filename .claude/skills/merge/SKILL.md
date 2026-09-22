@@ -498,13 +498,19 @@ source .claude/skills/merge/lib/mesure-distante.sh
 md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }
 
 if [ -f VERSION ]; then
-  ver="${<version>#v}"
+  ver="<version>"
+  ver="${ver#v}"
   printf '%s\n' "$ver" > VERSION
   [ -f pack.json ] && node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('pack.json','utf8'));p.version=process.argv[1];fs.writeFileSync('pack.json',JSON.stringify(p,null,2)+'\n')" "$ver"
   [ -f cli/package.json ] && node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('cli/package.json','utf8'));p.version=process.argv[1];fs.writeFileSync('cli/package.json',JSON.stringify(p,null,2)+'\n')" "$ver"
-  git add VERSION pack.json cli/package.json 2>/dev/null
-  git commit -m "chore(release): v${ver} — VERSION suit le tag" || true
-  git push origin HEAD
+  git add VERSION pack.json cli/package.json
+  # Rien à commiter (VERSION déjà juste) N'EST PAS une erreur — mais tout AUTRE
+  # échec (hook rejeté, etc.) DOIT arrêter la pose du tag : jamais de `|| true`
+  # aveugle qui masquerait un hook refusé (règle d'or : jamais de --no-verify).
+  if ! git diff --cached --quiet; then
+    git commit -m "chore(release): v${ver} — VERSION suit le tag" || { echo "Commit du bump de version refusé — on ne tague pas"; exit 1; }
+  fi
+  git push origin HEAD || { echo "Push du bump de version échoué — on ne tague pas sur un commit non poussé"; exit 1; }
 fi
 
 git tag <version>
