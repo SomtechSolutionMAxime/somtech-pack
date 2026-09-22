@@ -5,6 +5,14 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-09-22
+
+*Livraison `J-20260814-0002`, demande `D-20260922-0002` — option A tranchee par le dirigeant, ticket `T-20260922-0062`.*
+
+### Ajoute
+
+- **Skill `/scaffold-ops-discovery`** : genere localement le scaffold initial du depot applicatif `ops-discovery` (STD-032 §4) — serveur Node zero-dependance (health check, metriques Prometheus, endpoint `/.well-known/agents.json`), Dockerfile, config YAML, tests. Le skill ECRIT le scaffold ; il ne l'execute pas dans ce lot (la creation du depot `somtech-departement-ia/ops-discovery` reste un geste separe, a la demande du dirigeant). Voie de preuve en 3 etages (tests reels, build+run Docker reel, double `gh` pour le seul geste irreversible), 19/19. Deux passes de revue independantes (portail + fond), 4 defauts trouves et corriges.
+
 ## [Non-versionne] - 2026-09-21
 
 *Livraison `J-20260814-0002`, demande `D-20260921-0015` (lot 1/3) — annuaire des agents. Schéma socle, aucun code d'exécution dans ce lot.*
