@@ -84,12 +84,35 @@ log "Ref    : ${REF}"
 
 clone_pack "$REPO_URL" "$REF" "$PACK_CLONE"
 
-pack_version="$(get_pack_version "$PACK_CLONE")"
-log "Version disponible : ${pack_version}"
+# ── Corroboration : VERSION doit concorder avec le dernier tag Git ──────────
+#
+# Le tag Git est la SOURCE UNIQUE de version pour ce dépôt (CLAUDE.md racine).
+# Un fichier VERSION lu SEUL n'en est qu'une copie, et rien ne garantissait
+# jusqu'ici qu'elle suive — c'est exactement le défaut mesuré sur ce dépôt :
+# VERSION figé à 1.64.0 pendant 37 tags (T-20260922-0136). Sans cette
+# corroboration, la comparaison ci-dessous se fonde sur une valeur dont on ne
+# sait pas si elle est vraie.
+pack_state_out="$(resolve_pack_version "$PACK_CLONE")"
+pack_state="$(sed -n '1p' <<<"$pack_state_out")"
+pack_version="$(sed -n '2p' <<<"$pack_state_out")"
+log "Version disponible : ${pack_version} (${pack_state})"
+
+if [[ "$pack_state" == "incoherent" ]]; then
+  echo ""
+  err "Version du pack INCOHÉRENTE : le fichier VERSION (${pack_version}) ne concorde pas"
+  err "  avec le dernier tag Git atteignable depuis ${REF:-la branche par défaut}."
+  err "  Comparer une version installée à cette valeur ne serait pas fiable — je ne peux"
+  err "  pas dire si ce projet est à jour, en retard, ou en avance."
+  if [[ "$FORCE" == "1" ]]; then
+    log "--force fourni : installation forcée malgré l'incohérence (aucune garantie de fraîcheur)."
+  else
+    die "Installation interrompue : version du pack incohérente. Relance avec --force pour passer outre, ou corrige VERSION dans le pack."
+  fi
+fi
 
 # ── Comparaison de versions ───────────────────────────────────
 
-if [[ "$installed_version" == "$pack_version" ]] && [[ "$FORCE" == "0" ]]; then
+if [[ "$pack_state" == "coherent" ]] && [[ "$installed_version" == "$pack_version" ]] && [[ "$FORCE" == "0" ]]; then
   log "Le projet est déjà à jour (v${pack_version})."
   log "Utilise --force pour réinstaller."
   exit 0
@@ -100,7 +123,7 @@ if [[ "$installed_version" != "not-installed" ]] && [[ "$installed_version" != "
     log "Mise à jour disponible : v${installed_version} → v${pack_version}"
   else
     log "Version locale (${installed_version}) >= pack (${pack_version})"
-    if [[ "$FORCE" == "0" ]]; then
+    if [[ "$pack_state" == "coherent" ]] && [[ "$FORCE" == "0" ]]; then
       log "Utilise --force pour forcer la réinstallation."
       exit 0
     fi

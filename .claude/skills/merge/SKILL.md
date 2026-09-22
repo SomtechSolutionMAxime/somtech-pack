@@ -484,6 +484,42 @@ l'humain, et le shell ne survit pas a cet arret. Un bloc qui compterait sur un
 `source` fait avant la Confirmation echouerait en `command not found` — a chaque
 fois, pas seulement en cas de course, et le message parlerait de disponibilite
 alors que la fonction est simplement absente.
+> 🔴 **Si un fichier `VERSION` existe a la racine du depot : le bumper ET LE
+> COMMITER AVANT de taguer, jamais apres.** Sans ca, le tag avance et `VERSION`
+> reste fige sur le dernier commit qui l'avait mis a jour — c'est exactement
+> ce qui a laisse `VERSION` a `1.64.0` pendant 37 tags sur somtech-pack
+> (T-20260922-0136, 2026-08-17 → 2026-09-22) : un mecanisme d'installation qui
+> compare la version installee a ce fichier sort alors en SUCCES sans avoir
+> RIEN installe, sans la moindre erreur. Un tag qui avance sans son fichier de
+> version n'est pas une optimisation, c'est le meme defaut differe.
+
+⚠️ **Deux blocs distincts, jamais fusionnés en un seul.** Le premier bumpe et
+commite ; le second tague. `test-merge-mesure-distante.sh` extrait pour de
+vrai le PREMIER bloc bash qui contient `git tag ` et l'exécute contre la
+racine réelle du dépôt (git y est simulé, mais pas `printf`/`node`) — un bloc
+fusionné y fait écrire `VERSION`/`pack.json`/`cli/package.json` pour de vrai à
+chaque exécution de cette suite, corrompant le dépôt qui l'héberge. Séparer
+les deux blocs retire le bump de la portée de cette extraction, sans rien
+changer à ce qu'elle éprouve.
+
+```bash
+if [ -f VERSION ]; then
+  ver="<version>"
+  ver="${ver#v}"
+  printf '%s\n' "$ver" > VERSION
+  [ -f pack.json ] && node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('pack.json','utf8'));p.version=process.argv[1];fs.writeFileSync('pack.json',JSON.stringify(p,null,2)+'\n')" "$ver"
+  [ -f cli/package.json ] && node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('cli/package.json','utf8'));p.version=process.argv[1];fs.writeFileSync('cli/package.json',JSON.stringify(p,null,2)+'\n')" "$ver"
+  git add VERSION pack.json cli/package.json
+  # Rien à commiter (VERSION déjà juste) N'EST PAS une erreur — mais tout AUTRE
+  # échec (hook rejeté, etc.) DOIT arrêter la pose du tag : jamais de `|| true`
+  # aveugle qui masquerait un hook refusé (règle d'or : jamais de --no-verify).
+  if ! git diff --cached --quiet; then
+    git commit -m "chore(release): v${ver} — VERSION suit le tag" || { echo "Commit du bump de version refusé — on ne tague pas"; exit 1; }
+  fi
+  git push origin HEAD || { echo "Push du bump de version échoué — on ne tague pas sur un commit non poussé"; exit 1; }
+fi
+```
+
 ```bash
 source .claude/skills/merge/lib/mesure-distante.sh
 md_version_libre "<version>" || { echo "Numero indisponible ou non verifiable — on ne tague pas"; exit 1; }

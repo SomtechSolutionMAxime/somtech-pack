@@ -14,7 +14,13 @@ jobs:
   shell-tests:
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 (historique + tags complets) : test-version-tag-coherence.sh
+      # (T-20260922-0136) compare VERSION au dernier tag Git ATTEIGNABLE — un
+      # checkout superficiel le rendrait aveugle à ce qu'il doit justement garder,
+      # et un « je ne peux pas vérifier » qui se tait vaut moins qu'aucune garde.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Exécuter scripts/tests/*.sh
         run: |
