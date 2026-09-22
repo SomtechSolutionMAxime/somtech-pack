@@ -75,9 +75,14 @@ tap_classifie() {
   # violation directe de la garantie "la panne prime toujours sur le contenu"
   # ecrite plus haut. Desormais tout — validite, compte, rendu — derive de
   # `.applicable_texts` et RIEN d'autre ; `.count` du serveur n'est jamais lu.
+  # 🔴 CORRECTIF (verification independante post-correctif, T-20260922-0135) :
+  # un ELEMENT individuel de applicable_texts avec text_ref/title/somcraft_uuid
+  # null ou absent se rendait avant silencieusement avec le litteral "null"
+  # (rc=0, succes) — un pointeur mal forme cote serveur DOIT faire basculer en
+  # non-mesure, pas se glisser dans un rendu qui se pretend fiable.
   local valide=""
   if [ "$rc_appel" -eq 0 ]; then
-    valide="$(jq -r 'if .success == true and (.applicable_texts | type) == "array" then "ok" else empty end' "$fichier" 2>/dev/null)"
+    valide="$(jq -r 'if .success == true and (.applicable_texts | type) == "array" and (.applicable_texts | all(.text_ref != null and .title != null and .somcraft_uuid != null)) then "ok" else empty end' "$fichier" 2>/dev/null)"
   fi
 
   if [ "$valide" != "ok" ]; then

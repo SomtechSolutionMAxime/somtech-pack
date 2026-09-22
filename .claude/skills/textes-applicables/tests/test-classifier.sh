@@ -111,9 +111,51 @@ cat > "$WORK/type-invalide.json" <<'JSON'
 JSON
 sortie="$(tap_classifie "$WORK/type-invalide.json" 0)"; rc=$?
 if [ "$rc" -eq 2 ] && [[ "$sortie" == *"[non mesure]"* ]]; then
-  ok "applicable_texts n'est pas un tableau -> rc=2, [non mesure]"
+  ok "applicable_texts n'est pas un tableau (chaine) -> rc=2, [non mesure]"
 else
-  ko "type invalide mal classe (rc=$rc, sortie='$sortie')"
+  ko "type invalide (chaine) mal classe (rc=$rc, sortie='$sortie')"
+fi
+
+# ---- 4quinquies. applicable_texts est un OBJET (pas un tableau) ----
+# Piege distinct de la chaine ci-dessus : jq `all()` sur un OBJET itere ses
+# VALEURS et rend `true` par vacuite si l'objet est vide ou n'a pas la forme
+# attendue — contrairement a une chaine/nombre/booleen/null ou `all()` echoue
+# nativement. Sans la verification explicite `type == "array"`, un objet
+# passerait la garde en silence. Trouve en isolant pourquoi une mutation
+# retirant cette verification survivait au banc unitaire d'origine (qui ne
+# testait que le cas chaine, deja ferme par ailleurs).
+cat > "$WORK/type-objet.json" <<'JSON'
+{"success":true,"applicable_texts":{}}
+JSON
+sortie="$(tap_classifie "$WORK/type-objet.json" 0)"; rc=$?
+if [ "$rc" -eq 2 ] && [[ "$sortie" == *"[non mesure]"* ]]; then
+  ok "applicable_texts n'est pas un tableau (objet vide) -> rc=2, [non mesure]"
+else
+  ko "type invalide (objet) mal classe (rc=$rc, sortie='$sortie')"
+fi
+
+# ---- 4quater. un pointeur individuel mal forme (champ null) -> non-mesure, jamais "null" litteral ----
+# Trouve en verification independante du premier correctif : un element avec
+# text_ref/title/somcraft_uuid null passait avant en succes avec un rendu
+# contenant le litteral "null", visible dans le brief d'un chef.
+cat > "$WORK/pointeur-casse-ref.json" <<'JSON'
+{"success":true,"applicable_texts":[{"text_ref":null,"title":"Titre sans ref","somcraft_uuid":"u9"}]}
+JSON
+sortie="$(tap_classifie "$WORK/pointeur-casse-ref.json" 0)"; rc=$?
+if [ "$rc" -eq 2 ] && [[ "$sortie" == *"[non mesure]"* ]] && [[ "$sortie" != *"null"* ]]; then
+  ok "pointeur avec text_ref null -> rc=2, [non mesure] (jamais un 'null' litteral rendu)"
+else
+  ko "pointeur avec text_ref null mal classe (rc=$rc, sortie='$sortie')"
+fi
+
+cat > "$WORK/pointeur-casse-titre.json" <<'JSON'
+{"success":true,"applicable_texts":[{"text_ref":"STD-060","somcraft_uuid":"u-mf"}]}
+JSON
+sortie="$(tap_classifie "$WORK/pointeur-casse-titre.json" 0)"; rc=$?
+if [ "$rc" -eq 2 ] && [[ "$sortie" == *"[non mesure]"* ]]; then
+  ok "pointeur sans title -> rc=2, [non mesure]"
+else
+  ko "pointeur sans title mal classe (rc=$rc, sortie='$sortie')"
 fi
 
 # ---- 5. appel reussi, pointeurs presents -> textes-declares, rend les pointeurs ----

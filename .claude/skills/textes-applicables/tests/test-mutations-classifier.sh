@@ -81,11 +81,11 @@ echo "== Collapse etats 1&3 : un appel echoue calcule quand meme la validite =="
 essai 'tap_classifie ignore rc_appel (calcule "valide" meme en echec)' <<'PY'
 old = '''  local valide=""
   if [ "$rc_appel" -eq 0 ]; then
-    valide="$(jq -r \'if .success == true and (.applicable_texts | type) == "array" then "ok" else empty end\' "$fichier" 2>/dev/null)"
+    valide="$(jq -r \'if .success == true and (.applicable_texts | type) == "array" and (.applicable_texts | all(.text_ref != null and .title != null and .somcraft_uuid != null)) then "ok" else empty end\' "$fichier" 2>/dev/null)"
   fi
 '''
 new = '''  local valide=""
-  valide="$(jq -r \'if .success == true and (.applicable_texts | type) == "array" then "ok" else empty end\' "$fichier" 2>/dev/null)"
+  valide="$(jq -r \'if .success == true and (.applicable_texts | type) == "array" and (.applicable_texts | all(.text_ref != null and .title != null and .somcraft_uuid != null)) then "ok" else empty end\' "$fichier" 2>/dev/null)"
 '''
 assert old in s
 s = s.replace(old, new)
@@ -93,16 +93,24 @@ PY
 
 echo "== Collapse etats 2&3 : success=false (mais tableau present) traite comme valide =="
 essai 'tap_classifie ne verifie plus .success == true' <<'PY'
-old = 'if .success == true and (.applicable_texts | type) == "array" then "ok" else empty end'
-new = 'if (.applicable_texts | type) == "array" then "ok" else empty end'
+old = '.success == true and (.applicable_texts | type) == "array"'
+new = '(.applicable_texts | type) == "array"'
 assert old in s
 s = s.replace(old, new)
 PY
 
 echo "== Collapse etats 2&3 : le type de applicable_texts n'est plus verifie =="
 essai 'tap_classifie accepte applicable_texts non-tableau (null, chaine, etc.)' <<'PY'
-old = 'if .success == true and (.applicable_texts | type) == "array" then "ok" else empty end'
-new = 'if .success == true then "ok" else empty end'
+old = '(.applicable_texts | type) == "array" and (.applicable_texts | all('
+new = 'true and (.applicable_texts | all('
+assert old in s
+s = s.replace(old, new)
+PY
+
+echo "== Un pointeur casse (champ null) n'est plus filtre -> se rend en 'null' litteral =="
+essai 'tap_classifie ne verifie plus la forme de chaque pointeur (text_ref/title/somcraft_uuid non-null)' <<'PY'
+old = 'and (.applicable_texts | all(.text_ref != null and .title != null and .somcraft_uuid != null)) then "ok"'
+new = 'then "ok"'
 assert old in s
 s = s.replace(old, new)
 PY
