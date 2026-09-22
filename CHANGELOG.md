@@ -7,6 +7,14 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-22
 
+*Livraison `J-20260814-0002`, demande `D-20260921-0017` (lot 4, garde 1/5) — ticket `T-20260922-0072`.*
+
+### Ajoute
+
+- **Gate clé à droits élevés (`service_role` / `sb_secret_`) dans `/pousse-staging` et en CI** (STD-038, règle d'or n°12) — nouvelle Étape 2.65 du skill (`lib/staging-secret-key-gate.sh` + `lib/secret-key-scan.py`) et garde CI auto-découverte (`scripts/tests/test-secret-key-scan-repo.sh`, job `shell-tests`). Détecte la clé réelle (préfixe `sb_secret_` + 20 caractères, ou JWT dont le payload décodé porte `role=service_role`), jamais le mot nu `service_role` — zéro faux positif mesuré sur les 36 mentions légitimes réelles du dépôt (prose d'audit), 5 fois de suite. Deux passes de scan (ligne seule, puis paires de lignes consécutives) pour attraper une clé coupée par un retour à la ligne littéral.
+
+## [Non-versionne] - 2026-09-22
+
 *Livraison `J-20260814-0002`, demande `D-20260921-0016` (lot 3, correctif) — le résultat annoncé dans l'entrée du 2026-09-22 ci-dessous (« 9 hook / 3 persona assumée ») est SUPERSÉDÉ, pas corrigé par écrasement.*
 
 ### Corrige
