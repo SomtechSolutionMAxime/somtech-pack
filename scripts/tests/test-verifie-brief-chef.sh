@@ -248,6 +248,17 @@ executer "VBC_BRIEF_TEXTE=Le BRD applicable a ce lot est a jour et a ete verifie
   && ok "grain module cite loin de « brd » dans le texte (~210 car.) → PASSE (faux refus corrige)" \
   || ko "faux refus grain eloigne → attendu PASSE, obtenu '$(champ BRD)'"
 
+# FAUX POSITIF (second tour, revue de fond 2026-09-22) : un « grain » SANS
+# rapport avec le BRD (grain de découpage du TICKET, vocabulaire PM
+# courant) apparaît loin de toute mention « brd » (> VBC_FENETRE_PROXIMITE_GRAIN,
+# 300 car.) — l'ancrage doit l'exclure sur un document de longueur réaliste.
+PADDING_LONG="$(printf 'lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod. %.0s' $(seq 1 6))"
+executer "VBC_BRIEF_TEXTE=Le grain de decoupage retenu pour ce ticket est le module technique, pas le module metier. ${PADDING_LONG} Le BRD est a jour et couvre ce lot." \
+  "VBC_MODULE_ID=facturation"
+[ "$(champ BRD)" = "REFUS" ] \
+  && ok "« grain » sans rapport avec le BRD, loin de « brd » (document long) → REFUS (second faux positif corrige)" \
+  || ko "grain sans rapport mais loin de brd → attendu REFUS, obtenu '$(champ BRD)' (fenetre trop large ?)"
+
 # =================================================================
 # « Ce qui s'applique ici » — absente/présente, variante d'apostrophe.
 # =================================================================

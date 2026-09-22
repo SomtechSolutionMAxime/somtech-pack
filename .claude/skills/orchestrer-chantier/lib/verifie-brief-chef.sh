@@ -39,11 +39,20 @@
 #   • LIMITE CONNUE (vbc_champ_brd, grain module) — le signal ajouté pour
 #     détecter le grain module (§ vbc_grain_module_associes) associe les
 #     mots « grain » et « module » par simple proximité de caractères, sans
-#     analyse sémantique : un brief qui emploierait fortuitement ces deux
-#     mots l'un près de l'autre SANS rapport avec le grain du BRD (rare en
-#     pratique, mais possible) serait faussement compté PASSE. Compromis
-#     documenté, pas une garantie de précision parfaite (voir commentaire
-#     de la fonction).
+#     analyse sémantique, dans une fenêtre LARGE (300 car.) autour de la
+#     mention « brd » (VBC_FENETRE_PROXIMITE_GRAIN — corrigé en un second
+#     tour de revue pour ne plus scanner le document entier). Sur un brief
+#     COURT (moins de ~600 car. au total), cette fenêtre couvre encore la
+#     totalité du texte : un « grain » sans rapport avec le BRD (ex. le
+#     grain de découpage du TICKET, pas du BRD) ailleurs dans un brief très
+#     court peut encore faire PASSER ce champ à tort — reproduit et confirmé
+#     en revue (2026-09-22, second tour). Sur un brief de longueur réaliste
+#     (les 6 briefs réels de ce dépôt en comptent tous plusieurs milliers de
+#     caractères), l'ancrage exclut correctement un « grain » éloigné —
+#     vérifié. Compromis documenté, pas une garantie de précision parfaite
+#     (voir commentaire de la fonction) : resserrer davantage sans un
+#     découpage par paragraphe/section risquerait de réintroduire le premier
+#     faux-REFUS corrigé plus haut.
 #
 # ENTRÉES (variables d'environnement — points d'injection des tests)
 #   VBC_BRIEF_TEXTE      texte intégral du brief (peut être multi-lignes).
@@ -110,14 +119,23 @@ VBC_SEUIL_MOTIF=15
 VBC_FENETRE_PROXIMITE=80
 
 # Fenêtre de proximité (en caractères, de part et d'autre de « grain ») dans
-# laquelle le mot « module » est recherché — signal DISTINCT de
-# VBC_FENETRE_PROXIMITE ci-dessus, volontairement NON ancré sur la position
-# de « brd » (voir vbc_grain_module_associes). Choisie à 40 : assez large
-# pour couvrir une même phrase complète (repro réelle mesurée : 25
-# caractères entre « grain » et « module » dans « le grain retenu ici est
-# celui du module facturation »), assez étroite pour rester une
-# association de PHRASE plutôt qu'une coïncidence de paragraphe.
+# laquelle le mot « module » est recherché par vbc_grain_module_associes.
+# Choisie à 40 : assez large pour couvrir une même phrase complète (repro
+# réelle mesurée : 25 caractères entre « grain » et « module » dans « le
+# grain retenu ici est celui du module facturation »), assez étroite pour
+# rester une association de PHRASE plutôt qu'une coïncidence de paragraphe.
 VBC_FENETRE_GRAIN_MODULE=40
+
+# Fenêtre LARGE (en caractères, de part et d'autre de « brd ») dans
+# laquelle vbc_grain_module_associes est autorisée à chercher — DISTINCTE
+# de VBC_FENETRE_PROXIMITE (plus étroite, pour les signaux exacts type
+# module_id/chemin). 🔴 Ancrage ajouté en second correctif (revue de fond,
+# 2026-09-22) : une première version cherchait sur le DOCUMENT ENTIER, ce
+# qui laissait passer un « grain » sans rapport (ex. « grain de découpage
+# du ticket ») ailleurs dans le brief. 300 couvre confortablement le cas
+# réel qui a motivé ce signal (~210 caractères entre « brd » et « module »)
+# sans dégénérer en une recherche document-entier.
+VBC_FENETRE_PROXIMITE_GRAIN=300
 
 # Motif d'une référence ADR par numéro nu : « ADR », 0 à 2 séparateurs
 # (tiret, souligné, espace), puis 2 à 4 chiffres. Volontairement simple —
@@ -317,34 +335,40 @@ vbc_champ_adr() {
   fi
 }
 
-# vbc_grain_module_associes <texte-normalisé> — vrai si « grain » et
-# « module » apparaissent l'un près de l'autre (≤ VBC_FENETRE_GRAIN_MODULE
-# caractères), sans égard à leur position par rapport à « brd ». Ancrer ce
-# signal sur la première occurrence de « brd » (comme les deux autres
-# signaux de vbc_champ_brd) aurait manqué le cas réel qui a motivé ce
-# signal : un brief peut préciser le grain module dans une PHRASE distincte
-# de celle qui cite le BRD (repro réelle, revue 2026-09-22 : « Le BRD
-# applicable [...] est a jour [...] Le grain retenu ici est celui du
-# module facturation. » — écart de ~210 caractères entre « brd » et
-# « module », très au-delà de VBC_FENETRE_PROXIMITE, mais « grain » et
-# « module » restent à 25 caractères l'un de l'autre). Ne considère QUE la
-# première occurrence de « grain » — cohérent avec le parti pris du reste
-# du fichier (ADR, BRD : toujours la première mention qui compte).
-# LIMITE : heuristique de PROXIMITÉ, pas d'analyse sémantique — voir la
-# note dans « CE QUE CE FICHIER NE FAIT PAS » en tête de fichier.
+# vbc_grain_module_associes <fenetre-large-autour-de-brd> — vrai si
+# « grain » et « module » apparaissent l'un près de l'autre (≤
+# VBC_FENETRE_GRAIN_MODULE caractères) DANS la fenêtre déjà bornée autour
+# de « brd » que l'appelant lui passe (voir vbc_champ_brd). 🔴 CORRIGÉ
+# (revue de fond, 2026-09-22, second tour) : une première version
+# cherchait « grain »+« module » sur le DOCUMENT ENTIER, sans aucun
+# ancrage sur « brd » — repro qui a fait tomber ça : un brief peut
+# légitimement parler du « grain de découpage » du TICKET (vocabulaire PM
+# courant, sans rapport avec le grain du BRD) n'importe où dans le texte,
+# et cette occurrence isolée suffisait à faire PASSER le champ BRD même
+# quand la section BRD elle-même ne dit RIEN sur le grain module — exactement
+# le trou que ce signal existe pour fermer, rouvert par une portée trop
+# large. Ancré maintenant sur une fenêtre large autour de « brd »
+# (VBC_FENETRE_PROXIMITE_GRAIN, 300 car. de chaque côté — assez pour
+# couvrir le cas réel qui a motivé ce signal : ~210 car. entre « brd » et
+# « module » — sans couvrir un document entier).
+# LIMITE RÉSIDUELLE : heuristique de PROXIMITÉ, pas d'analyse sémantique —
+# un brief pourrait encore, dans de rares cas, associer fortuitement
+# « grain » et « module » à proximité d'une mention BRD sans rapport avec
+# son grain. Voir la note dans « CE QUE CE FICHIER NE FAIT PAS » en tête
+# de fichier.
 vbc_grain_module_associes() {
   local LC_ALL=C
-  local texte="$1"
-  [[ "$texte" == *"grain"* ]] || return 1
-  [[ "$texte" == *"module"* ]] || return 1
+  local fenetre_brd="$1"
+  [[ "$fenetre_brd" == *"grain"* ]] || return 1
+  [[ "$fenetre_brd" == *"module"* ]] || return 1
 
   local avant pos_grain debut longueur fenetre
-  avant="${texte%%grain*}"
+  avant="${fenetre_brd%%grain*}"
   pos_grain=${#avant}
   debut=$(( pos_grain - VBC_FENETRE_GRAIN_MODULE ))
   [ "$debut" -lt 0 ] && debut=0
   longueur=$(( VBC_FENETRE_GRAIN_MODULE * 2 + 5 ))
-  fenetre="${texte:debut:longueur}"
+  fenetre="${fenetre_brd:debut:longueur}"
 
   [[ "$fenetre" == *"module"* ]]
 }
@@ -376,15 +400,23 @@ vbc_champ_brd() {
   #   2. un chemin « /…/brd », à proximité de « brd » — inchangé ;
   #   3. la phrase « brd du module » / « brd au module », où qu'elle
   #      apparaisse — brd et module directement reliés par un article ;
-  #   4. « grain » et « module » associés (vbc_grain_module_associes,
-  #      document entier — voir sa note pour le pourquoi de ne PAS
-  #      l'ancrer sur « brd »).
-  local avant debut longueur fenetre
+  #   4. « grain » et « module » associés (vbc_grain_module_associes),
+  #      cherché dans une fenêtre LARGE autour de « brd »
+  #      (VBC_FENETRE_PROXIMITE_GRAIN) — PAS le document entier (🔴 second
+  #      correctif, revue de fond 2026-09-22 : la version « document
+  #      entier » laissait passer un « grain » sans rapport avec le BRD,
+  #      ailleurs dans le brief — voir la note de vbc_grain_module_associes).
+  local avant debut longueur fenetre debut_large longueur_large fenetre_large
   avant="${texte_norm%%brd*}"
   debut=$(( ${#avant} - VBC_FENETRE_PROXIMITE ))
   [ "$debut" -lt 0 ] && debut=0
   longueur=$(( VBC_FENETRE_PROXIMITE * 2 + 3 ))
   fenetre="${texte_norm:debut:longueur}"
+
+  debut_large=$(( ${#avant} - VBC_FENETRE_PROXIMITE_GRAIN ))
+  [ "$debut_large" -lt 0 ] && debut_large=0
+  longueur_large=$(( VBC_FENETRE_PROXIMITE_GRAIN * 2 + 3 ))
+  fenetre_large="${texte_norm:debut_large:longueur_large}"
 
   local module_id_norm
   module_id_norm="$(vbc_normaliser_recherche "$module_id")"
@@ -393,7 +425,7 @@ vbc_champ_brd() {
      || [[ "$fenetre" == *"/"*"/brd"* ]] \
      || [[ "$texte_norm" == *"brd du module"* ]] \
      || [[ "$texte_norm" == *"brd au module"* ]] \
-     || vbc_grain_module_associes "$texte_norm"; then
+     || vbc_grain_module_associes "$fenetre_large"; then
     printf 'PASSE\n%s' ""
   else
     printf 'REFUS\n%s' "BRD mentionne, mais rien n indique le grain MODULE (module_id=${module_id}) — le BRD du module est requis, pas celui de l application"

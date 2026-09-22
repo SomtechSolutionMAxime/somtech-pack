@@ -161,7 +161,7 @@ old = '''  if { [ -n "$module_id_norm" ] && [[ "$fenetre" == *"$module_id_norm"*
      || [[ "$fenetre" == *"/"*"/brd"* ]] \\
      || [[ "$texte_norm" == *"brd du module"* ]] \\
      || [[ "$texte_norm" == *"brd au module"* ]] \\
-     || vbc_grain_module_associes "$texte_norm"; then
+     || vbc_grain_module_associes "$fenetre_large"; then
     printf 'PASSE\\n%s' ""
   else
     printf 'REFUS\\n%s' "BRD mentionne, mais rien n indique le grain MODULE (module_id=${module_id}) — le BRD du module est requis, pas celui de l application"
@@ -173,7 +173,7 @@ PY
 
 echo "== BRD : le signal grain+module (défaut FAUX REFUS corrigé, 2026-09-22) est retiré =="
 essai 'vbc_grain_module_associes est retirée des signaux — le grain module cité loin de « brd » redevient un REFUS à tort' <<'PY'
-old = '''     || vbc_grain_module_associes "$texte_norm"; then'''
+old = '''     || vbc_grain_module_associes "$fenetre_large"; then'''
 new = '''     ; then'''
 assert old in s
 s = s.replace(old, new)
