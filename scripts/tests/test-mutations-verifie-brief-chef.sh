@@ -157,16 +157,30 @@ PY
 
 echo "== BRD : l'exigence de grain module est retirée (toujours PASSE si module_id posé) =="
 essai 'la vérification de proximité module/BRD est neutralisée' <<'PY'
-old = '''  if { [ -n "$module_id_norm" ] && [[ "$fenetre" == *"$module_id_norm"* ]]; } \\
-     || [[ "$fenetre" == *"/"*"/brd"* ]] \\
+old = '''  if [ "$grain_trouve" -eq 1 ] \\
      || [[ "$texte_norm" == *"brd du module"* ]] \\
-     || [[ "$texte_norm" == *"brd au module"* ]] \\
-     || vbc_grain_module_associes "$fenetre_large"; then
+     || [[ "$texte_norm" == *"brd au module"* ]]; then
     printf 'PASSE\\n%s' ""
   else
     printf 'REFUS\\n%s' "BRD mentionne, mais rien n indique le grain MODULE (module_id=${module_id}) — le BRD du module est requis, pas celui de l application"
   fi'''
 new = '''  printf 'PASSE\\n%s' ""'''
+assert old in s
+s = s.replace(old, new)
+PY
+
+echo "== BRD : la boucle multi-occurrences de « brd » est retirée (seule la première mention compte, comme avant le 3e correctif) =="
+essai 'la seconde mention de « brd » (celle qui porte le vrai signal de grain) redevient invisible — retour au faux REFUS corrigé' <<'PY'
+old = '''  local grain_trouve=0
+  local reste="$texte_norm" decalage=0 avant_seg pos_globale
+  local debut longueur fenetre debut_large longueur_large fenetre_large
+  local tours=0
+  while [[ "$reste" == *"brd"* ]]; do'''
+new = '''  local grain_trouve=0
+  local reste="$texte_norm" decalage=0 avant_seg pos_globale
+  local debut longueur fenetre debut_large longueur_large fenetre_large
+  local tours=0
+  while [ "$tours" -eq -999 ] && [[ "$reste" == *"brd"* ]]; do'''
 assert old in s
 s = s.replace(old, new)
 PY

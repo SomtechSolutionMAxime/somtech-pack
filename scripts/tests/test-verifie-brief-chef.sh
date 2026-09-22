@@ -259,6 +259,19 @@ executer "VBC_BRIEF_TEXTE=Le grain de decoupage retenu pour ce ticket est le mod
   && ok "« grain » sans rapport avec le BRD, loin de « brd » (document long) → REFUS (second faux positif corrige)" \
   || ko "grain sans rapport mais loin de brd → attendu REFUS, obtenu '$(champ BRD)' (fenetre trop large ?)"
 
+# FAUX REFUS (troisieme tour, revue de fond 2026-09-22) : une PREMIERE
+# mention de « brd » sans rapport avec le grain (ex. citee en passant dans
+# une autre section), suivie loin plus tard d'une SECONDE mention qui porte
+# le vrai signal (module_id exact a proximite). L'ancrage sur la PREMIERE
+# occurrence seule manquait ce cas -> boucle desormais sur toutes les
+# occurrences.
+PADDING_ENTRE_DEUX_BRD="$(printf 'lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod. %.0s' $(seq 1 4))"
+executer "VBC_BRIEF_TEXTE=Ce lot cite le BRD une premiere fois en passant, sans rapport avec le grain module. ${PADDING_ENTRE_DEUX_BRD} Deuxieme mention : le BRD applicable ici porte module_id=facturation, brd correspondant bien identifie." \
+  "VBC_MODULE_ID=facturation"
+[ "$(champ BRD)" = "PASSE" ] \
+  && ok "signal de grain porte par une SECONDE occurrence de « brd », loin de la premiere → PASSE (troisieme faux refus corrige)" \
+  || ko "second brd porteur du signal → attendu PASSE, obtenu '$(champ BRD)'"
+
 # =================================================================
 # « Ce qui s'applique ici » — absente/présente, variante d'apostrophe.
 # =================================================================

@@ -406,26 +406,56 @@ vbc_champ_brd() {
   #      correctif, revue de fond 2026-09-22 : la version « document
   #      entier » laissait passer un « grain » sans rapport avec le BRD,
   #      ailleurs dans le brief — voir la note de vbc_grain_module_associes).
-  local avant debut longueur fenetre debut_large longueur_large fenetre_large
-  avant="${texte_norm%%brd*}"
-  debut=$(( ${#avant} - VBC_FENETRE_PROXIMITE ))
-  [ "$debut" -lt 0 ] && debut=0
-  longueur=$(( VBC_FENETRE_PROXIMITE * 2 + 3 ))
-  fenetre="${texte_norm:debut:longueur}"
-
-  debut_large=$(( ${#avant} - VBC_FENETRE_PROXIMITE_GRAIN ))
-  [ "$debut_large" -lt 0 ] && debut_large=0
-  longueur_large=$(( VBC_FENETRE_PROXIMITE_GRAIN * 2 + 3 ))
-  fenetre_large="${texte_norm:debut_large:longueur_large}"
-
+  #
+  # 🔴 TROISIÈME correctif (revue de fond 2026-09-22) : les signaux 1 et 4
+  # ne regardaient QUE la fenêtre autour de la PREMIÈRE occurrence de
+  # « brd ». Un brief qui mentionne « brd » une première fois en passant
+  # (ex. dans la section ADR) puis porte le VRAI signal de grain autour
+  # d'une occurrence PLUS TARDIVE (ex. « ## BRD applicable » avec le
+  # module_id exact) le manquait si l'écart entre les deux mentions
+  # dépassait la fenêtre — un faux REFUS sur un brief pourtant conforme.
+  # Boucle désormais sur TOUTES les occurrences de « brd » et accepte dès
+  # qu'UNE SEULE porte le signal.
   local module_id_norm
   module_id_norm="$(vbc_normaliser_recherche "$module_id")"
 
-  if { [ -n "$module_id_norm" ] && [[ "$fenetre" == *"$module_id_norm"* ]]; } \
-     || [[ "$fenetre" == *"/"*"/brd"* ]] \
+  local grain_trouve=0
+  local reste="$texte_norm" decalage=0 avant_seg pos_globale
+  local debut longueur fenetre debut_large longueur_large fenetre_large
+  local tours=0
+  while [[ "$reste" == *"brd"* ]]; do
+    tours=$((tours+1))
+    # Garde-fou anti-boucle infinie — aucun brief réel n'approche ce compte
+    # d'occurrences de « brd » ; borne défensive, pas une limite mesurée.
+    [ "$tours" -gt 200 ] && break
+
+    avant_seg="${reste%%brd*}"
+    pos_globale=$(( decalage + ${#avant_seg} ))
+
+    debut=$(( pos_globale - VBC_FENETRE_PROXIMITE ))
+    [ "$debut" -lt 0 ] && debut=0
+    longueur=$(( VBC_FENETRE_PROXIMITE * 2 + 3 ))
+    fenetre="${texte_norm:debut:longueur}"
+
+    debut_large=$(( pos_globale - VBC_FENETRE_PROXIMITE_GRAIN ))
+    [ "$debut_large" -lt 0 ] && debut_large=0
+    longueur_large=$(( VBC_FENETRE_PROXIMITE_GRAIN * 2 + 3 ))
+    fenetre_large="${texte_norm:debut_large:longueur_large}"
+
+    if { [ -n "$module_id_norm" ] && [[ "$fenetre" == *"$module_id_norm"* ]]; } \
+       || [[ "$fenetre" == *"/"*"/brd"* ]] \
+       || vbc_grain_module_associes "$fenetre_large"; then
+      grain_trouve=1
+      break
+    fi
+
+    decalage=$(( pos_globale + 3 ))
+    reste="${texte_norm:decalage}"
+  done
+
+  if [ "$grain_trouve" -eq 1 ] \
      || [[ "$texte_norm" == *"brd du module"* ]] \
-     || [[ "$texte_norm" == *"brd au module"* ]] \
-     || vbc_grain_module_associes "$fenetre_large"; then
+     || [[ "$texte_norm" == *"brd au module"* ]]; then
     printf 'PASSE\n%s' ""
   else
     printf 'REFUS\n%s' "BRD mentionne, mais rien n indique le grain MODULE (module_id=${module_id}) — le BRD du module est requis, pas celui de l application"
