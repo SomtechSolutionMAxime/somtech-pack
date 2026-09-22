@@ -76,6 +76,8 @@ herdr agent rename <ton-pane> <ta-rivière>          # matapedia, bonaventure…
 
 Il va donc où vit l'unité de travail : la **description de l'epic** (`epics` action `update`), ou le **ticket** (`tickets` action `add_comment`) quand le lot n'a pas d'epic. Il y survit à ta session.
 
+**Deux listes de textes, pas une** : le socle commun en pointeurs — STD-029, 030, 031, 033, 035, 036, 038, 047, ADR-030, 040 — et la liste de ton application (`applications` action `get_applicable_texts`). **À ta naissance, lis les deux, mets-les dans chaque brief** — ton chef ne les lira pas.
+
 Le brief contient :
 
 - **qui il est** — l'epic, le chantier parent, le coordonnateur. ⚠️ **Pas son nom** : le geste l'a nommé et vérifié. Le redemander le ferait se renommer par-dessus — sa déclaration ne l'apparierait plus, et la garde l'accuserait ;

@@ -1404,7 +1404,53 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 # la séparation entre savoir opératoire et récit d'incident — nommée par cette
 # épreuve, jamais faite avant elle — reste un chantier ouvert (voir le ticket
 # qui la porte, cité dans le jalon).
-BASELINE=181657
+#
+# ── RE-BASELINE DU 2026-09-22 — T-20260922-0059 / D-20260921-0016 (Q2 + annexe 1) ──
+#
+#   LE GESTE PRESCRIT. Deux décisions du dirigeant portées dans `chefs-equipe.md`
+#   et `reflexes.md` : (Q2) une liste fermée de dix pointeurs (STD-029/030/031/
+#   033/035/036/038/047, ADR-030/040) et la règle « à ta naissance, lis la liste
+#   de ton application et mets-la dans chaque brief » ; (annexe 1) la correction
+#   de `reflexes.md` et de l'énoncé de `GF-ORC-001` pour dire que l'orchestrateur
+#   tient son `CONTEXTE.md`.
+#
+#   LE DÉFAUT ÉVITÉ, MESURÉ. Sans Q2, un chef d'équipe naît sans savoir quels
+#   textes de gouvernance s'appliquent à son application — chaque orchestrateur
+#   réinvente la liste, ou l'oublie. Sans l'annexe 1, `reflexes.md` affirme
+#   depuis le 2026-08-17 qu'aucune exception d'écriture locale n'existe et que
+#   « la voie n'existe pas » — FAUX depuis le 2026-08-24 (`T-20260824-0002`,
+#   `gardes/ecriture-decision.js`, `FICHIER_PERMIS`) : un orchestrateur qui lit
+#   cette prose renonce à une capacité qu'il possède réellement. Mesuré sur
+#   `batiscan` lui-même, qui l'a vécu tel quel un mois entier avant de le
+#   corriger (delivery `4c777bb2`, commentaire `32f1c530`).
+#
+#   LA PART COUPÉE AVANT DE DEMANDER. Le modèle par rôle (même lot, chapitre
+#   `chefs-equipe`) a été compressé DEUX fois avant d'entrer, banc rejoué après
+#   chaque coupe : la mesure « deux reviewers Haiku bloqués en boucle » a
+#   perdu sa reformulation ; l'exception Opus a perdu son adverbe. −127
+#   caractères récupérés avant même la première mesure de ce lot. Pour Q2 et
+#   l'annexe 1 eux-mêmes : AUCUNE coupe supplémentaire trouvée sans perdre un
+#   fait vérifié — la liste des dix pointeurs et le nom du fichier permis ne
+#   se raccourcissent pas sans devenir faux ou incomplets, et les deux dates
+#   (2026-08-17 / 2026-08-24) sont ce qui distingue une prose légitime d'une
+#   prose fautive : les retirer redonnerait l'ambiguïté que ce lot ferme.
+#
+#   181 657 → 182 118. MARGE ZÉRO, comme les précédentes. +461.
+#
+#   L'ARBITRAGE, avec son référent durable. `batiscan`, coordonnateur du
+#   jalon, tranche seul (ligne 1084 : « si tes amendements n'y tiennent pas,
+#   la question appartient à ton coordonnateur » ; règle permanente de
+#   `matapedia`, 2026-08-19/20, D-20260818-0003 / T-20260820-0003 : « re-
+#   baseliner EST la décision qu'elle exige »). GO FERME inscrit le
+#   2026-09-22T11:22:28Z, delivery `4c777bb2-9209-4488-88fc-a459009e5f53`,
+#   commentaire `7e04e151-e5b7-4f34-9606-70e6c3728d3e` — qui supersède une
+#   première conclusion erronée (`32f1c530`) confondant ce plafond avec
+#   `BUDGETS.L1` de `cli/src/metier/rendu.js` (celui-là EST signé par le
+#   dirigeant, 2026-08-20, et Q2 ne le touche pas : L1 = 1924/2500 avec Q2
+#   dedans, qui vit entièrement dans un chapitre L2 souple).
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
+BASELINE=182118
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"

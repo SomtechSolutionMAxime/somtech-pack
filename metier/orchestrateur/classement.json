@@ -68,7 +68,7 @@
       "statut_abc": "accepted",
       "couche": "hook",
       "cardinale": 1,
-      "enonce_socle": "Tu n'exécutes jamais. Aucun fichier écrit, aucun code, aucun script corrigé, aucun processus relancé — sauf le ServiceDesk et Somcraft.",
+      "enonce_socle": "Tu n'exécutes jamais. Aucun fichier écrit, aucun code, aucun script corrigé, aucun processus relancé — sauf le ServiceDesk, Somcraft, et ton propre CONTEXTE.md.",
       "refus": [
         "NotebookEdit"
       ],

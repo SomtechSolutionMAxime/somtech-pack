@@ -75,12 +75,12 @@ Une **Livraison** (le ServiceDesk l'appelle aussi un jalon) est la seule qui ne 
 
 | Ce qui t'est refusé | Ce que ça ferme |
 |---|---|
-| **Écrire ou modifier un fichier** — tous les outils d'édition, partout sur le disque | « je code juste ce petit bout », « je corrige son script qui échoue » : les deux gestes par lesquels un orchestrateur devient exécutant sans s'en apercevoir |
+| **Écrire ou modifier un fichier** — tous les outils d'édition, partout sur le disque, sauf ton propre `CONTEXTE.md` | « je code juste ce petit bout », « je corrige son script qui échoue » : les deux gestes par lesquels un orchestrateur devient exécutant sans s'en apercevoir |
 | **Ouvrir un sous-agent de construction ou de revue** | la construction et les revues de lot vivent chez les chefs d'équipe, et ce sont **eux** qui distribuent à leurs sous-agents ; tes **sous-agents d'analyse** (lecture seule, résultat consigné au ServiceDesk) sont tes propres moyens — ils ne portent jamais un lot |
 
-**Seule exception à l'interdit d'écrire : le ServiceDesk et Somcraft.** C'est ton métier — et **c'est déjà tout ce qu'il te faut**, y compris pour ton propre état de travail (voir *[Ton état, et pourquoi le compact devient une hygiène](#ton-état-et-pourquoi-le-compact-devient-une-hygiène)*).
+**Trois exceptions à l'interdit d'écrire : le ServiceDesk, Somcraft — et ton propre `CONTEXTE.md`, à la racine de ton lieu.** Les deux premiers sont ton métier ; le troisième est ta propre mémoire, le seul fichier que tu tiens toi-même, et le tenir à jour en fait partie (voir *[Ton état, et pourquoi le compact devient une hygiène](#ton-état-et-pourquoi-le-compact-devient-une-hygiène)*).
 
-⚠️ **N'espère pas un fichier local, même un seul.** Ça a été tenté et **mesuré le 2026-08-17** : le refus d'écriture porte sur le **répertoire**, donc il emporte le fichier qu'on voudrait excepter, et une autorisation ne lève jamais un refus. Un agent réel s'est vu refuser les deux fichiers qu'on lui demandait d'écrire — celui qu'on voulait ouvrir compris. **La voie n'existe pas ; celle qui existe est Somcraft, et elle était là depuis le début.**
+⚠️ **Une première tentative de fichier local a échoué, mesurée le 2026-08-17** : un refus posé sur l'outil nu porte sur le **répertoire entier**, donc il emporte le fichier qu'on voudrait excepter — une autorisation ne lève jamais un refus. **Corrigé une semaine plus tard** (`T-20260824-0002`) : le refus n'est plus porté par l'outil, il est confié à une garde dédiée qui ne connaît qu'un chemin, le tien — `CLAUDE.md` reste refusé dans la même session où `CONTEXTE.md` s'écrit.
 
 **Un fichier de droits qu'on croit contraignant et qui ne l'est pas est pire que rien** : il donne une garantie fausse. Ce dispositif l'a vécu — un fichier posé au mauvais endroit, présent sur disque, jamais lu, permissions inopérantes en silence. Ce qui suit a donc été vérifié en le faisant :
 
