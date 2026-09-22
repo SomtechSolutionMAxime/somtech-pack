@@ -208,10 +208,13 @@ PLAN=$(mwt_plan_delete "$HEAD_BRANCH")
 **corps de la PR venant d'etre mergee** et determine, de facon deterministe et
 testable, quels IDs `T-YYYYMMDD-NNNN` elle ferme. Voir le motif complet (ce que
 la regle couvre, ce qu'elle NE couvre PAS, mesure sur 60 PR reelles de ce
-depot) en tete du fichier. Resume : seule une ligne du corps qui **commence**
-par un label reconnu (`Ticket`, `Tickets`, `Story`, `Stories`) porte les IDs a
-fermer ; un ID cite ailleurs dans le corps (narration, tableau) n'est jamais
-retenu.
+depot, et les deux tours de revue qui ont resserre la frontiere du label)
+en tete du fichier. Resume : seule une ligne du corps qui **commence par le
+mot ENTIER** d'un label reconnu (`Ticket`, `Tickets`, `Story`, `Stories` —
+immediatement suivi de la fin de ligne, d'un espace ou de `:`, jamais d'un
+autre caractere) porte les IDs a fermer ; un ID cite ailleurs dans le corps
+(narration, tableau, ou une ligne qui commence seulement par un mot
+PREFIXE du label comme "Ticketing"/"Ticket-tracking") n'est jamais retenu.
 
 1. **Recuperer le corps de la PR venant d'etre mergee** (si pas deja en main) :
    ```bash

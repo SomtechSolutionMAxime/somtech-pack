@@ -122,6 +122,31 @@ assert_cas "Storyboard (le mot commence par Story, n'EST PAS Story)" \
   "$(corps 'Storyboard revu, voir T-20260921-0088')" \
   "" 1
 
+# 2e tour de revue de fond : une frontière qui ne rejette qu'une LETTRE
+# suivante était encore insuffisante — un caractère non-lettre ET non-espace/
+# ':' (tiret, apostrophe, guillemet, slash) laissait aussi passer une phrase
+# de narration ordinaire. La liste blanche (fin de ligne / espace / ':')
+# corrige ça.
+assert_cas "Ticket-tracking (tiret apres le label, narration)" \
+  "$(corps 'Ticket-tracking notes: while investigating, we noticed T-20260921-0099 relates to the same root cause but is out of scope for this PR')" \
+  "" 1
+
+assert_cas "Ticket/Story matrix (slash apres le label)" \
+  "$(corps 'Ticket/Story matrix, see T-20260921-0099 for details')" \
+  "" 1
+
+assert_cas "Ticket-42 workflow (tiret+chiffre apres le label)" \
+  "$(corps 'Ticket-42 workflow updated, id T-20260921-0099 confirmed')" \
+  "" 1
+
+assert_cas "Ticket's status (apostrophe apres le label)" \
+  "$(corps "Ticket's status now includes T-20260921-0099 for review")" \
+  "" 1
+
+assert_cas 'Ticket"quoted" (guillemet apres le label)' \
+  "$(corps 'Ticket"quoted" reference T-20260921-0099 noted')" \
+  "" 1
+
 echo "== Le défaut trouvé en revue de fond : frontière de fin sur l'ID ================"
 # Un ID mal formé (chiffre ou lettre en trop) ne doit JAMAIS être tronqué en
 # un ID voisin valide mais DIFFÉRENT — il doit être rejeté EN ENTIER.

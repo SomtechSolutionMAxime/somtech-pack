@@ -81,14 +81,24 @@ MFS_ID_MOTIF='T-[0-9]{8}-[0-9]{4}'
 # dans le texte — c'est ce qui exclut PR #338 (T-20260826-0042 cité en pleine
 # phrase, sur une ligne qui ne COMMENCE pas par le label).
 #
-# 🔴 FRONTIÈRE DE MOT APRÈS LE LABEL, OBLIGATOIRE — trouvé en revue de fond
-# (T-20260922-0084) : sans elle, `Tickets?`/`Stor(y|ies)` matchent le PRÉFIXE
-# d'un mot plus long («Ticketing system updated: ... T-20260921-0099»,
-# «Storyboard revu, voir T-20260921-0088» — les deux vérifiés en rejouant la
-# fonction), ce qui fait exactement rentrer par la bande le défaut PR #338 que
-# l'ancrage en tête de ligne prétend exclure. Le caractère qui suit
-# immédiatement le label (avant les `*`/espaces/`:` de bordure) ne doit JAMAIS
-# être une lettre.
+# 🔴 FRONTIÈRE DE MOT APRÈS LE LABEL, OBLIGATOIRE — trouvé en DEUX tours de
+# revue de fond (T-20260922-0084) :
+#   · 1er tour : sans frontière du tout, `Tickets?`/`Stor(y|ies)` matchent le
+#     PRÉFIXE d'un mot plus long («Ticketing system updated: ... T-ID»,
+#     «Storyboard revu, voir T-ID»).
+#   · 2e tour : une frontière qui rejette SEULEMENT une lettre suivante était
+#     encore insuffisante — «Ticket-tracking notes: ... T-ID», «Ticket's
+#     status ... T-ID», «Ticket"quoted" ... T-ID», «Ticket/Story matrix ...
+#     T-ID» passaient tous (le caractère suivant n'est pas une lettre, mais
+#     n'est pas non plus un vrai séparateur de label). Les deux vérifiés en
+#     rejouant la fonction — même classe de défaut que PR #338 (ID cité en
+#     narration) que l'ancrage en tête de ligne prétend exclure.
+#
+# Le correctif est une LISTE BLANCHE, pas une liste noire : après le label (et
+# ses `*` de bordure), le premier caractère ne peut être QUE l'un de trois —
+# fin de ligne, espace, ou `:`. Tout le reste (lettre, tiret, apostrophe,
+# guillemet, slash, chiffre, ...) signifie que le label n'était qu'un PRÉFIXE
+# d'un texte plus large, jamais le label lui-même.
 mfs_ligne_label() {
   local ligne="$1" trim label_match apres
   trim="${ligne#"${ligne%%[![:space:]]*}"}"
@@ -96,7 +106,7 @@ mfs_ligne_label() {
   if [[ "$trim" =~ ^\*{0,2}(Tickets?|Stor(y|ies))\*{0,2} ]]; then
     label_match="${BASH_REMATCH[0]}"
     apres="${trim:${#label_match}}"
-    if [[ "$apres" =~ ^[A-Za-z] ]]; then
+    if [[ -n "$apres" && ! "$apres" =~ ^[[:space:]:] ]]; then
       return 1
     fi
     [[ "$apres" =~ ^[[:space:]]*:?[[:space:]]* ]]

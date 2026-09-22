@@ -168,13 +168,21 @@ assert old in s
 s = s.replace(old, new)
 PY
 
-echo "== Le défaut de revue de fond : frontière de mot sur le label retirée =="
-essai 'mfs_ligne_label ne vérifie plus que le label est un mot ENTIER (Ticketing/Storyboard redeviennent des labels)' <<'PY'
-old = '''    if [[ "$apres" =~ ^[A-Za-z] ]]; then
+echo "== Le défaut de revue de fond (1er tour) : frontière de mot totalement retirée =="
+essai 'mfs_ligne_label ne vérifie plus DU TOUT le caractère après le label (Ticketing/Storyboard redeviennent des labels)' <<'PY'
+old = '''    if [[ -n "$apres" && ! "$apres" =~ ^[[:space:]:] ]]; then
       return 1
     fi
 '''
 new = ''
+assert old in s
+s = s.replace(old, new)
+PY
+
+echo "== Le défaut de revue de fond (2e tour) : liste blanche affaiblie en liste noire (lettre seulement) =="
+essai 'mfs_ligne_label revient a ne rejeter QUE les lettres (tiret/apostrophe/guillemet/slash repassent)' <<'PY'
+old = '    if [[ -n "$apres" && ! "$apres" =~ ^[[:space:]:] ]]; then'
+new = '    if [[ -n "$apres" && "$apres" =~ ^[A-Za-z] ]]; then'
 assert old in s
 s = s.replace(old, new)
 PY
