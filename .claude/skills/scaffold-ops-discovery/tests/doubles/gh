@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Double du CLI `gh`, utilise UNIQUEMENT par les tests de ce skill pour prouver
+# que scripts/publish-github.sh appelle `gh` avec les bons arguments — SANS
+# jamais creer de depot reel ni toucher le reseau (regle d'or 7 : creer le depot
+# somtech-departement-ia/ops-discovery est hors perimetre de ce ticket).
+#
+# Fidelite au vrai gh (pour eviter un double trop simple qui invente un defaut,
+# cf. memoire "un-double-trop-simple-invente-un-defaut") :
+#   - `gh auth status` : code de sortie et texte conformes au comportement reel
+#     (0 + texte sur stderr si authentifie ; 1 + message si non, via GH_DOUBLE_AUTH_FAIL)
+#   - `gh repo create <org>/<repo> --private --source=. --remote=origin --push` :
+#     valide la PRESENCE des flags attendus (comme le ferait un test d'integration
+#     contre le vrai binaire) plutot que de les ignorer ; echoue si absents.
+#
+# Chaque invocation est journalisee dans $GH_DOUBLE_LOG (argv complet, une ligne
+# JSON par appel) pour assertion depuis les tests.
+
+set -euo pipefail
+
+LOG_FILE="${GH_DOUBLE_LOG:-/dev/null}"
+
+log_call() {
+  local args_json
+  args_json=$(printf '%s\n' "$@" | node -e '
+    const lines = require("node:fs").readFileSync(0, "utf8").split("\n").filter(Boolean);
+    process.stdout.write(JSON.stringify(lines));
+  ')
+  printf '%s\n' "$args_json" >> "$LOG_FILE"
+}
+
+log_call "$@"
+
+case "${1:-}" in
+  auth)
+    if [ "${2:-}" = "status" ]; then
+      if [ "${GH_DOUBLE_AUTH_FAIL:-}" = "1" ]; then
+        echo "gh: not logged in" >&2
+        exit 1
+      fi
+      echo "Logged in to github.com as double-test-user" >&2
+      exit 0
+    fi
+    echo "gh double: sous-commande auth non geree: ${2:-}" >&2
+    exit 1
+    ;;
+  repo)
+    if [ "${2:-}" = "create" ]; then
+      target="${3:-}"
+      has_private=false
+      has_source=false
+      has_push=false
+      for arg in "$@"; do
+        case "$arg" in
+          --private) has_private=true ;;
+          --source=*) has_source=true ;;
+          --push) has_push=true ;;
+        esac
+      done
+      if [ -z "$target" ]; then
+        echo "gh double: repo create exige <org>/<repo>" >&2
+        exit 1
+      fi
+      if [ "$has_private" != true ] || [ "$has_source" != true ] || [ "$has_push" != true ]; then
+        echo "gh double: repo create appele SANS --private/--source=./--push (attendus par STD-028 §2.8 ACL + publish-github.sh)" >&2
+        exit 1
+      fi
+      echo "✓ Created repository $target on GitHub (DOUBLE — aucun depot reel cree)" >&2
+      exit 0
+    fi
+    echo "gh double: sous-commande repo non geree: ${2:-}" >&2
+    exit 1
+    ;;
+  *)
+    echo "gh double: commande non geree: ${1:-}" >&2
+    exit 1
+    ;;
+esac

@@ -1,0 +1,15 @@
+{
+  "name": "ops-discovery",
+  "version": "0.1.0",
+  "description": "Endpoint de discovery isomorphique d'un Departement IA Somtech (STD-032)",
+  "private": true,
+  "license": "UNLICENSED",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test tests/unit/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
