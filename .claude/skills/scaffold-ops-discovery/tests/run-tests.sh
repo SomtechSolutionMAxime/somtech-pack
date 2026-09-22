@@ -106,11 +106,30 @@ else
   report "auth mode invalide refuse, rien ecrit (coherent config.js VALID_AUTH_MODES)" 1
 fi
 
+echo "== Etage 2d-bis : ORGANIZATION_NAME avec '&' ne corrompt pas la substitution (REJET revue portail T-20260922-0062) =="
+AMP_DEST="$WORKDIR/generated-amp"
+if "$SKILL_DIR/scripts/generate-scaffold.sh" "$AMP_DEST" "dept-ia-test" "Acme & Co" "public" > "$WORKDIR/amp.log" 2>&1; then
+  if grep -q "Acme & Co" "$AMP_DEST/README.md" \
+     && ! grep -q "{{ORGANIZATION_NAME}}" "$AMP_DEST/README.md" \
+     && ! grep -q "{{ORGANIZATION_NAME}}" "$AMP_DEST/config.example.yaml"; then
+    report "ORGANIZATION_NAME='Acme & Co' substitue correctement, aucun placeholder residuel" 0
+  else
+    report "ORGANIZATION_NAME='Acme & Co' substitue correctement, aucun placeholder residuel" 1
+    grep -n "Acme\|{{ORGANIZATION_NAME}}" "$AMP_DEST/README.md" "$AMP_DEST/config.example.yaml" 2>/dev/null
+  fi
+else
+  report "ORGANIZATION_NAME='Acme & Co' substitue correctement, aucun placeholder residuel" 1
+  cat "$WORKDIR/amp.log"
+fi
+
 echo "== Etage 2e : le serveur genere demarre reellement et repond =="
 cp "$DEST/config.example.yaml" "$DEST/config.yaml"
-(cd "$DEST" && node src/server.js > "$WORKDIR/server.log" 2>&1 &)
+# exec remplace le sous-shell par node : $! designe alors le VRAI process node,
+# tuable directement (sans lui, kill $! ne tuait que le sous-shell et laissait
+# node orphelin — defaut observe pendant le developpement de ce harnais).
+(cd "$DEST" && exec node src/server.js) > "$WORKDIR/server.log" 2>&1 &
+SERVER_PID=$!
 sleep 0.6
-SERVER_PID=$(pgrep -f "$DEST/src/server.js" | head -1 || true)
 
 health_body=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health 2>/dev/null || echo "000")
 if [ "$health_body" = "200" ]; then

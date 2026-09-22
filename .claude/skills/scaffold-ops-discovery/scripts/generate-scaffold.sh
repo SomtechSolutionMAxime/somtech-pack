@@ -48,14 +48,21 @@ cp -r "$TEMPLATES_DIR/tests" "$DEST_DIR/tests"
 mkdir -p "$DEST_DIR/.well-known"
 
 # --- Fichiers avec substitution de placeholders ---
+# Remplacement par expansion de parametres bash (${var//search/replace}), PAS
+# par sed : le remplacement sed traite '&' comme "le motif entier trouve" et
+# '\1' etc comme des groupes de capture — un DEPARTMENT_NAME/ORGANIZATION_NAME
+# contenant '&' (ex. "Acme & Co") corromprait alors le fichier genere en
+# silence (defaut trouve en revue, T-20260922-0062). L'expansion bash ne
+# traite aucun caractere du remplacement comme special.
 substitute() {
   local src="$1" dest="$2"
-  sed \
-    -e "s/{{DEPARTMENT_NAME}}/$DEPARTMENT_NAME/g" \
-    -e "s/{{ORGANIZATION_NAME}}/$ORGANIZATION_NAME/g" \
-    -e "s/{{AUTH_MODE}}/$AUTH_MODE/g" \
-    -e "s/{{SCAFFOLDED_AT}}/$SCAFFOLDED_AT/g" \
-    "$src" > "$dest"
+  local content
+  content="$(cat "$src")"
+  content="${content//\{\{DEPARTMENT_NAME\}\}/$DEPARTMENT_NAME}"
+  content="${content//\{\{ORGANIZATION_NAME\}\}/$ORGANIZATION_NAME}"
+  content="${content//\{\{AUTH_MODE\}\}/$AUTH_MODE}"
+  content="${content//\{\{SCAFFOLDED_AT\}\}/$SCAFFOLDED_AT}"
+  printf '%s\n' "$content" > "$dest"
 }
 
 substitute "$TEMPLATES_DIR/config.example.yaml" "$DEST_DIR/config.example.yaml"
