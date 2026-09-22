@@ -183,8 +183,20 @@ def classer_entree(entree, racine, fichiers_cache):
         banc = mecanisme_connu.get("banc", "")
         chemin_ok = os.path.isfile(os.path.join(racine, chemin))
         banc_ok = os.path.isfile(os.path.join(racine, banc))
+        # DÉFAUT TROUVÉ EN REVUE DE FOND, CORRIGÉ ICI — la citation doit être
+        # trouvée DANS le mécanisme ou son banc, PAS n'importe où dans le
+        # dépôt scanné. `grep_repo` (ci-dessous, `hits`) sert seulement au
+        # repli prose/non_etabli, jamais à décider `protege` : sans cette
+        # distinction, un mécanisme VIDÉ DE SON CONTENU (fichier gardé, logique
+        # retirée) continuait de rendre `protege` tant que la chaîne cherchée
+        # traînait ailleurs dans le dépôt (ex. "service_role" cité dans un
+        # SKILL.md ou un prompt d'audit, sans rapport avec le gate réel) —
+        # exactement le défaut de silence que ce ticket existe pour détecter.
+        cite_dans_mecanisme = (chemin_ok and grep_fichier(racine, chemin, citations)) or (
+            banc_ok and grep_fichier(racine, banc, citations)
+        )
         hits = grep_repo(racine, citations, fichiers_cache)
-        if chemin_ok and banc_ok and hits:
+        if chemin_ok and banc_ok and cite_dans_mecanisme:
             return ("protege", chemin, None, None, None)
         if hits:
             manque = []
@@ -220,7 +232,14 @@ def main():
 
     with open(corpus_path, "r", encoding="utf-8") as f:
         corpus = json.load(f)
-    entries = corpus["entries"]
+    # Un JSON syntaxiquement valide mais sans schéma correct (ex. `{}`) ne
+    # doit pas planter par KeyError non documenté (traceback = bruyant, mais
+    # HORS du contrat de codes de retour du .sh, qui promet un rc=3 propre
+    # pour tout corpus invalide) — trouvé en revue de fond, corrigé ici.
+    entries = corpus.get("entries") if isinstance(corpus, dict) else None
+    if not isinstance(entries, list):
+        print("bpm: ERREUR — corpus invalide: cle 'entries' absente ou n'est pas une liste.", file=sys.stderr)
+        return 3
 
     # Le corpus figé et les fichiers d'état énumèrent chaque id en clair —
     # jamais des citations valides du métier/des kits (voir lister_fichiers).
@@ -230,7 +249,18 @@ def main():
     # Le banc lui-même (ce .py et son .sh compagnon) documente ses ids en
     # commentaire (ex. le motif de ce correctif) — sans son exclusion, CE
     # correctif recrée le défaut qu'il corrige, un cran plus loin.
-    ici = os.path.dirname(os.path.abspath(__file__))
+    #
+    # ⚠️ Ancré sur `racine` (l'argument CLI), JAMAIS sur `__file__` — trouvé
+    # en revue de fond : le banc de mutation copie ce script dans un tmpdir
+    # et l'exécute de LÀ (`BPM_PY=<copie tmp>`) pour éprouver chaque
+    # variante ; `__file__` y vaudrait le chemin de la copie, pas celui du
+    # dépôt réel, et l'exclusion du dossier `etat/` ÉCHOUERAIT SILENCIEUSEMENT
+    # pour CETTE RAISON SEULE — un faux rouge sans rapport avec la mutation
+    # testée, qui aurait rendu TOUTE mutation "tuée" à tort (le banc de
+    # mutation aurait mesuré un artefact de son propre montage, pas la
+    # mutation). `racine` est fourni par l'appelant à chaque exécution,
+    # réelle ou sous mutation : lui seul est fiable ici.
+    ici = os.path.join(racine, ".claude", "skills", "orchestrer-chantier", "lib")
     exclus = [
         os.path.abspath(corpus_path),
         os.path.join(ici, "banc-protection-mensuelle.py"),
@@ -240,6 +270,17 @@ def main():
         exclus.append(os.path.abspath(etat_precedent_path))
     if etat_sortie_path and etat_sortie_path != "-":
         exclus.append(os.path.abspath(etat_sortie_path))
+    # Les 3 bancs de CE lot énumèrent aussi les 4 ids témoins en clair (pour
+    # leurs propres assertions) — trouvé en revue de fond : sans leur
+    # exclusion, une partie du signal "protege" des témoins peut venir du
+    # banc de test lui-même plutôt que du mécanisme réel, affaiblissant
+    # l'indépendance de la mesure (même si, au moment de ce commit, les 4
+    # mécanismes réels sont de toute façon protégés par ailleurs).
+    exclus += [
+        os.path.join(racine, "scripts", "tests", "test-banc-protection-mensuelle.sh"),
+        os.path.join(racine, "scripts", "tests", "test-banc-protection-mensuelle-corpus.sh"),
+        os.path.join(racine, "scripts", "tests", "test-mutations-banc-protection-mensuelle.sh"),
+    ]
     # Dossiers réservés au banc lui-même, exclus EN BLOC (voir lister_fichiers) :
     # le dossier d'état à côté de ce script, et le dossier des fixtures du
     # corpus figé de ce lot (chemin conventionnel, pas déduit de corpus_path —

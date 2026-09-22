@@ -98,6 +98,22 @@ executer '{
 [ "$(champ REGLE_R_NONETABLI_CLASSE)" = "non_etabli" ] && ok "rien trouve -> non_etabli" || ko "attendu non_etabli, obtenu $(champ REGLE_R_NONETABLI_CLASSE)"
 [ "$(champ REGLE_R_NONETABLI_CLASSE)" != "absent" ] && ok "jamais la valeur 'absent' (critere #3 du ticket)" || ko "a rendu 'absent' — interdit"
 
+echo "== Discriminant 1-bis — RÉGRESSION (revue de fond) : citation trouvée AILLEURS dans le dépôt, PAS dans le mécanisme/banc déclaré -> jamais protege =="
+echo "   (défaut réel trouvé en revue avant fusion : la citation était cherchée n'importe où dans le dépôt scanné,"
+echo "    pas dans les fichiers 'chemin'/'banc' déclarés — un mécanisme VIDÉ DE SON CONTENU aurait quand même rendu"
+echo "    'protege' tant que la chaîne cherchée traînait ailleurs, ex. dans un SKILL.md sans rapport)"
+executer '{
+  "id": "R-MECANISME-VIDE",
+  "citations_attendues": ["MARQUEUR_PROSE"],
+  "mecanisme_connu": {"chemin": ".claude/skills/x/lib/mecha.sh", "banc": ".claude/skills/x/tests/test-mecha.sh"}
+}'
+[ "$(champ REGLE_R_MECANISME_VIDE_CLASSE)" = "prose" ] \
+  && ok "citation ailleurs (docs/note.md), absente du mecanisme/banc déclaré -> prose, PAS protege" \
+  || ko "attendu prose, obtenu $(champ REGLE_R_MECANISME_VIDE_CLASSE) (BUG : le mecanisme_connu a été crédité d'une citation qu'il ne porte pas)"
+[ -z "$(champ REGLE_R_MECANISME_VIDE_MECANISME)" ] \
+  && ok "aucun REGLE_..._MECANISME émis (cohérent avec prose, pas protege)" \
+  || ko "REGLE_..._MECANISME émis alors que la classe n'est pas protege : $(champ REGLE_R_MECANISME_VIDE_MECANISME)"
+
 echo "== Discriminant 4 : contredit (fichier contredisant existe, citation trouvee dedans) =="
 executer '{
   "id": "R-CONTREDIT",
@@ -161,6 +177,15 @@ unset BPM_CORPUS_JSON; export BPM_CORPUS_JSON="${WORK}/invalide.json"
 OUT="$(bash "$LIB" 2>"${WORK}/stderr")"; RC=$?
 [ "$RC" -ne 0 ] && ok "rc != 0 (JSON invalide)" || ko "rc devrait etre != 0"
 [ -z "$OUT" ] && ok "stdout vide (JSON invalide)" || ko "stdout non vide malgre JSON invalide"
+
+echo "== Corpus JSON valide mais SANS cle 'entries' : echec bruyant propre, rc=3, RIEN sur stdout (pas un KeyError non attrape) =="
+echo "   (trouvé en revue de fond : {} est un JSON valide mais fait planter le script — hors du contrat rc du .sh)"
+printf '{}' > "${WORK}/sans-entries.json"
+unset BPM_CORPUS_JSON; export BPM_CORPUS_JSON="${WORK}/sans-entries.json"
+OUT="$(bash "$LIB" 2>"${WORK}/stderr")"; RC=$?
+[ "$RC" -eq 3 ] && ok "rc=3 (corpus sans 'entries', echec propre)" || ko "attendu rc=3, obtenu rc=${RC}"
+[ -z "$OUT" ] && ok "stdout vide" || ko "stdout non vide malgre corpus sans 'entries'"
+[ -n "$(cat "${WORK}/stderr")" ] && ok "message clair sur stderr" || ko "stderr vide"
 
 echo "== BPM_CORPUS_JSON non positionnee : echec bruyant =="
 unset BPM_CORPUS_JSON

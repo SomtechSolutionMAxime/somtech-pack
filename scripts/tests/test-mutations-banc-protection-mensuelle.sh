@@ -93,18 +93,25 @@ PY
 
 echo "== (a-ter) Discriminant non_etabli vs prose : une citation manquante ne dégrade plus jamais vers non_etabli =="
 essai 'hits toujours non-vide — une regle sans AUCUNE citation trouvee dans le depot serait quand meme prose/protege' <<'PY'
-old = '''    if mecanisme_connu:
-        chemin = mecanisme_connu.get("chemin", "")
-        banc = mecanisme_connu.get("banc", "")
-        chemin_ok = os.path.isfile(os.path.join(racine, chemin))
-        banc_ok = os.path.isfile(os.path.join(racine, banc))
+old = '''        cite_dans_mecanisme = (chemin_ok and grep_fichier(racine, chemin, citations)) or (
+            banc_ok and grep_fichier(racine, banc, citations)
+        )
         hits = grep_repo(racine, citations, fichiers_cache)'''
-new = '''    if mecanisme_connu:
-        chemin = mecanisme_connu.get("chemin", "")
-        banc = mecanisme_connu.get("banc", "")
-        chemin_ok = os.path.isfile(os.path.join(racine, chemin))
-        banc_ok = os.path.isfile(os.path.join(racine, banc))
+new = '''        cite_dans_mecanisme = (chemin_ok and grep_fichier(racine, chemin, citations)) or (
+            banc_ok and grep_fichier(racine, banc, citations)
+        )
         hits = ["invente-un-hit-qui-nexiste-pas.txt"]'''
+assert old in s
+assert s.count(old) == 1, "le motif doit etre unique dans le fichier (sinon la mutation deborde sur une autre branche)"
+s = s.replace(old, new)
+PY
+
+echo "== (a-quater) — RÉGRESSION (revue de fond) : la citation n'est plus exigée DANS le mécanisme/banc déclaré =="
+essai 'cite_dans_mecanisme toujours vrai — un mecanisme sans rapport avec la regle (citation trouvee ailleurs dans le depot) serait quand meme protege' <<'PY'
+old = '''        cite_dans_mecanisme = (chemin_ok and grep_fichier(racine, chemin, citations)) or (
+            banc_ok and grep_fichier(racine, banc, citations)
+        )'''
+new = '''        cite_dans_mecanisme = True'''
 assert old in s
 s = s.replace(old, new)
 PY
