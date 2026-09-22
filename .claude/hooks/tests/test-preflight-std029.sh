@@ -198,6 +198,38 @@ echo "$out" | grep -qi "\[non mesuré\]" && echo "$out" | grep -qi "migration" \
   || ko "'ne s'exécute pas' est apparu alors que status a échoué seul : $out"
 rm -rf "$FAKEBIN3" "$R"
 
+echo "== I6. Résolution de la ref de base cassée (rev-parse/for-each-ref) → [non mesuré] =="
+echo "    (3e trou trouvé par la revue de fond : resolve_base_ref() bouclait sur des"
+echo "     'git rev-parse --verify -q' qui avalaient leurs propres erreurs — un git cassé"
+echo "     SPÉCIFIQUEMENT sur cette résolution laissait passer une migration COMMITÉE,"
+echo "     invisible à 'git status', sans jamais lever probe_failed.)"
+R="$(mktemp -d)"; git -C "$R" init -q -b main
+git -C "$R" config user.email "test@somtech.ca"; git -C "$R" config user.name "test"
+mkdir -p "$R/supabase/migrations"; echo x > "$R/f.txt"; git -C "$R" add f.txt; git -C "$R" commit -q -m init
+git -C "$R" checkout -q -b feat/x
+echo "alter table foo add column bar int;" > "$R/supabase/migrations/20260922_mig.sql"
+git -C "$R" add supabase/migrations; git -C "$R" commit -q -m "feat: migration"
+REALGIT="$(command -v git)"
+FAKEBIN4="$(mktemp -d)"
+cat > "$FAKEBIN4/git" <<EOF
+#!/usr/bin/env bash
+# Casse les DEUX mécanismes possibles de résolution de ref (l'actuel et
+# l'ancien, pré-correctif) : le test doit rester un garde-fou même si
+# l'implémentation change de nouveau de mécanisme.
+[ "\$1" = "for-each-ref" ] && exit 1
+[ "\$1" = "rev-parse" ] && [ "\$2" = "--verify" ] && exit 1
+exec "$REALGIT" "\$@"
+EOF
+chmod +x "$FAKEBIN4/git"
+out="$( cd "$R" && PATH="$FAKEBIN4:$PATH" bash "$HOOK" )"
+echo "$out" | grep -qi "\[non mesuré\]" && echo "$out" | grep -qi "migration" \
+  && ok "for-each-ref cassé → [non mesuré] (migration commitée non masquée en OK implicite)" \
+  || ko "attendu [non mesuré] quand la résolution de base échoue : $out"
+! echo "$out" | grep -qi "ne s'exécute pas" \
+  && ok "pas de faux 'ne s'exécute pas' quand la résolution de base échoue" \
+  || ko "'ne s'exécute pas' est apparu alors que la résolution de base a échoué — migration commitée masquée : $out"
+rm -rf "$FAKEBIN4" "$R"
+
 echo "== J. SONDE CASSÉE (git indisponible) → [non mesuré], DISTINCT d'un OK — c'est la contrainte du lot =="
 R="$(mkrepo)"; git -C "$R" checkout -q -b feat/x; commit_days_ago "$R" 0 f1.txt
 FAKEBIN="$(mktemp -d)"

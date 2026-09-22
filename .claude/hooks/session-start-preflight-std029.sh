@@ -133,10 +133,23 @@ check_ontologie() {
 }
 
 # ---- Check 5 — Drift schéma prod/staging, conditionnel (STD-029 §2.7) ----
+# UN SEUL appel git, dont le $? est vérifié directement — pas une boucle de
+# `git rev-parse --verify -q` par ref candidate. `-q` avale ses propres erreurs
+# ref-par-ref ; un git brisé spécifiquement sur `rev-parse --verify` continuait
+# silencieusement sur tous les refs et rendait base="" sans jamais lever
+# probe_failed (3e trou trouvé par la revue de fond, après diff/status).
+# `echo "__PROBE_FAILED__"` signale l'échec à l'appelant sans dépendre d'un
+# second appel qui pourrait, lui aussi, être cassé.
 resolve_base_ref() {
-  local current="$1" ref
+  local current="$1" refs rc ref
+  refs="$(git for-each-ref --format='%(refname:short)' refs/heads refs/remotes 2>/dev/null)"
+  rc=$?
+  if [ $rc -ne 0 ]; then
+    echo "__PROBE_FAILED__"
+    return
+  fi
   for ref in origin/main origin/staging main staging; do
-    if git rev-parse --verify -q "$ref" >/dev/null 2>&1 && [ "$ref" != "$current" ]; then
+    if [ "$ref" != "$current" ] && printf '%s\n' "$refs" | grep -qxF "$ref"; then
       echo "$ref"
       return
     fi
@@ -164,6 +177,10 @@ check_drift_schema() {
   local current base new_committed uncommitted status_out signal="" probe_failed=0
   current="$(git branch --show-current 2>/dev/null)" || probe_failed=1
   base="$(resolve_base_ref "$current")"
+  if [ "$base" = "__PROBE_FAILED__" ]; then
+    probe_failed=1
+    base=""
+  fi
 
   if [ -n "$base" ]; then
     new_committed="$(git diff --name-only --diff-filter=A "${base}...HEAD" -- supabase/migrations 2>/dev/null)"
