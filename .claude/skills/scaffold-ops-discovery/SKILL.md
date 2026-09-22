@@ -112,6 +112,8 @@ Afficher : chemin du scaffold genere, `AUTH_MODE` choisi, resultat des tests loc
 
 **Resultat** : la generation, la config, les metriques, l'endpoint et le conteneur Docker sont eprouves de bout en bout contre du reel. Seule l'existence du depot GitHub lui-meme reste, par construction de ce ticket, non observee — c'est le geste qui restera a demander explicitement au dirigeant.
 
+**Limite de l'etage 3, a savoir avant d'executer ce skill pour de vrai** : l'etage 3 prouve que `publish-github.sh` appelle `gh` avec les bons arguments — il ne prouve PAS que le vrai `gh repo create --private --source=. --remote=origin --push` se comporte comme le double le simule (aucun vrai `gh` n'a ete invoque, pour ne pas creer de depot reel). Le seul etage jamais eprouve contre le vrai `gh` est celui qui, par construction, ne pouvait pas l'etre sans violer la borne de perimetre de T-20260922-0062.
+
 Lancer la preuve complete :
 
 ```bash
