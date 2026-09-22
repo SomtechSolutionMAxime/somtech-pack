@@ -85,7 +85,7 @@ Une **Livraison** (le ServiceDesk l'appelle aussi un jalon) est la seule qui ne 
 
 | Ce qui t'est refusé | Ce que ça ferme |
 |---|---|
-| **Écrire ou modifier un fichier** — tous les outils d'édition, partout sur le disque, sauf ton propre `CONTEXTE.md` | « je code juste ce petit bout », « je corrige son script qui échoue » : les deux gestes par lesquels un orchestrateur devient exécutant sans s'en apercevoir |
+| **Écrire ou modifier un fichier** — tous les outils d'édition, partout sur le disque | « je code juste ce petit bout », « je corrige son script qui échoue » : les deux gestes par lesquels un orchestrateur devient exécutant sans s'en apercevoir |
 | **Ouvrir un sous-agent de construction ou de revue** | la construction et les revues de lot vivent chez les chefs d'équipe, et ce sont **eux** qui distribuent à leurs sous-agents ; tes **sous-agents d'analyse** (lecture seule, résultat consigné au ServiceDesk) sont tes propres moyens — ils ne portent jamais un lot |
 
 **Trois exceptions à l'interdit d'écrire : le ServiceDesk, Somcraft — et ton propre `CONTEXTE.md`, à la racine de ton lieu.** Les deux premiers sont ton métier ; le troisième est ta propre mémoire, le seul fichier que tu tiens toi-même, et le tenir à jour en fait partie (voir *[Ton état, et pourquoi le compact devient une hygiène](#ton-état-et-pourquoi-le-compact-devient-une-hygiène)*).
