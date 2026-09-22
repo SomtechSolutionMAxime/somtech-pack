@@ -157,14 +157,24 @@ PY
 
 echo "== BRD : l'exigence de grain module est retirée (toujours PASSE si module_id posé) =="
 essai 'la vérification de proximité module/BRD est neutralisée' <<'PY'
-old = '''  if [[ "$fenetre" == *"module"* ]] \\
-     || { [ -n "$module_id_norm" ] && [[ "$fenetre" == *"$module_id_norm"* ]]; } \\
-     || [[ "$fenetre" == *"/"*"/brd"* ]]; then
+old = '''  if { [ -n "$module_id_norm" ] && [[ "$fenetre" == *"$module_id_norm"* ]]; } \\
+     || [[ "$fenetre" == *"/"*"/brd"* ]] \\
+     || [[ "$texte_norm" == *"brd du module"* ]] \\
+     || [[ "$texte_norm" == *"brd au module"* ]] \\
+     || vbc_grain_module_associes "$texte_norm"; then
     printf 'PASSE\\n%s' ""
   else
     printf 'REFUS\\n%s' "BRD mentionne, mais rien n indique le grain MODULE (module_id=${module_id}) — le BRD du module est requis, pas celui de l application"
   fi'''
 new = '''  printf 'PASSE\\n%s' ""'''
+assert old in s
+s = s.replace(old, new)
+PY
+
+echo "== BRD : le signal grain+module (défaut FAUX REFUS corrigé, 2026-09-22) est retiré =="
+essai 'vbc_grain_module_associes est retirée des signaux — le grain module cité loin de « brd » redevient un REFUS à tort' <<'PY'
+old = '''     || vbc_grain_module_associes "$texte_norm"; then'''
+new = '''     ; then'''
 assert old in s
 s = s.replace(old, new)
 PY
@@ -273,6 +283,25 @@ s = s.replace(old, new)
 PY
 else
   echo "  ⚠️ zsh indisponible sur ce poste — cette mutation dépend du nouveau test zsh de test-verifie-brief-chef.sh (lui-même sauté sans zsh) : sautée pour rester cohérente avec l'instrument qu'elle mute."
+fi
+
+echo "== Dispatch bas de fichier : ZSH_EVAL_CONTEXT ne détecte plus l'exécution directe sous zsh (rc=0 silencieux revient) =="
+if command -v zsh >/dev/null 2>&1; then
+  essai 'sous zsh, vbc__executee_directement rend toujours faux — vbc_verifier n est plus jamais appelée en exécution directe' <<'PY'
+old = '''  if [ -n "${ZSH_EVAL_CONTEXT:-}" ]; then
+    case "$ZSH_EVAL_CONTEXT" in
+      *file*) return 1 ;;
+      *) return 0 ;;
+    esac
+  fi'''
+new = '''  if [ -n "${ZSH_EVAL_CONTEXT:-}" ]; then
+    return 1
+  fi'''
+assert old in s
+s = s.replace(old, new)
+PY
+else
+  echo "  ⚠️ zsh indisponible sur ce poste — cette mutation dépend du nouveau test d'exécution directe zsh de test-verifie-brief-chef.sh (lui-même sauté sans zsh) : sautée pour rester cohérente avec l'instrument qu'elle mute."
 fi
 
 echo

@@ -29,6 +29,21 @@
 #     chef est un arbitrage du dirigeant (hors-scope explicite du ticket).
 #   • Il ne vérifie pas le CONTENU des listes « ce qui s'applique ici » —
 #     seulement qu'elles sont citées.
+#   • LIMITE CONNUE (VBC_SEUIL_MOTIF) — un compte de caractères ne peut
+#     structurellement pas distinguer une explication réelle d'un
+#     remplissage sans substance : un motif de 15 caractères utiles
+#     grammaticalement creux (« texte texte texte ») passe la garde au même
+#     titre qu'une vraie explication. Volontairement laissé tel quel — un
+#     correctif naïf sur ce seuil risquerait d'introduire d'autres faux
+#     négatifs ; documenté ici plutôt que « corrigé » à la légère.
+#   • LIMITE CONNUE (vbc_champ_brd, grain module) — le signal ajouté pour
+#     détecter le grain module (§ vbc_grain_module_associes) associe les
+#     mots « grain » et « module » par simple proximité de caractères, sans
+#     analyse sémantique : un brief qui emploierait fortuitement ces deux
+#     mots l'un près de l'autre SANS rapport avec le grain du BRD (rare en
+#     pratique, mais possible) serait faussement compté PASSE. Compromis
+#     documenté, pas une garantie de précision parfaite (voir commentaire
+#     de la fonction).
 #
 # ENTRÉES (variables d'environnement — points d'injection des tests)
 #   VBC_BRIEF_TEXTE      texte intégral du brief (peut être multi-lignes).
@@ -93,6 +108,16 @@ VBC_SEUIL_MOTIF=15
 # borné : un « module » cité à l'autre bout d'un long brief ne prouve rien
 # sur LE BRD qui y est mentionné.
 VBC_FENETRE_PROXIMITE=80
+
+# Fenêtre de proximité (en caractères, de part et d'autre de « grain ») dans
+# laquelle le mot « module » est recherché — signal DISTINCT de
+# VBC_FENETRE_PROXIMITE ci-dessus, volontairement NON ancré sur la position
+# de « brd » (voir vbc_grain_module_associes). Choisie à 40 : assez large
+# pour couvrir une même phrase complète (repro réelle mesurée : 25
+# caractères entre « grain » et « module » dans « le grain retenu ici est
+# celui du module facturation »), assez étroite pour rester une
+# association de PHRASE plutôt qu'une coïncidence de paragraphe.
+VBC_FENETRE_GRAIN_MODULE=40
 
 # Motif d'une référence ADR par numéro nu : « ADR », 0 à 2 séparateurs
 # (tiret, souligné, espace), puis 2 à 4 chiffres. Volontairement simple —
@@ -292,6 +317,38 @@ vbc_champ_adr() {
   fi
 }
 
+# vbc_grain_module_associes <texte-normalisé> — vrai si « grain » et
+# « module » apparaissent l'un près de l'autre (≤ VBC_FENETRE_GRAIN_MODULE
+# caractères), sans égard à leur position par rapport à « brd ». Ancrer ce
+# signal sur la première occurrence de « brd » (comme les deux autres
+# signaux de vbc_champ_brd) aurait manqué le cas réel qui a motivé ce
+# signal : un brief peut préciser le grain module dans une PHRASE distincte
+# de celle qui cite le BRD (repro réelle, revue 2026-09-22 : « Le BRD
+# applicable [...] est a jour [...] Le grain retenu ici est celui du
+# module facturation. » — écart de ~210 caractères entre « brd » et
+# « module », très au-delà de VBC_FENETRE_PROXIMITE, mais « grain » et
+# « module » restent à 25 caractères l'un de l'autre). Ne considère QUE la
+# première occurrence de « grain » — cohérent avec le parti pris du reste
+# du fichier (ADR, BRD : toujours la première mention qui compte).
+# LIMITE : heuristique de PROXIMITÉ, pas d'analyse sémantique — voir la
+# note dans « CE QUE CE FICHIER NE FAIT PAS » en tête de fichier.
+vbc_grain_module_associes() {
+  local LC_ALL=C
+  local texte="$1"
+  [[ "$texte" == *"grain"* ]] || return 1
+  [[ "$texte" == *"module"* ]] || return 1
+
+  local avant pos_grain debut longueur fenetre
+  avant="${texte%%grain*}"
+  pos_grain=${#avant}
+  debut=$(( pos_grain - VBC_FENETRE_GRAIN_MODULE ))
+  [ "$debut" -lt 0 ] && debut=0
+  longueur=$(( VBC_FENETRE_GRAIN_MODULE * 2 + 5 ))
+  fenetre="${texte:debut:longueur}"
+
+  [[ "$fenetre" == *"module"* ]]
+}
+
 # vbc_champ_brd <texte-normalisé> <module_id-brut>
 vbc_champ_brd() {
   local LC_ALL=C
@@ -307,9 +364,21 @@ vbc_champ_brd() {
     return
   fi
 
-  # Grain module requis : fenêtre de proximité autour de la PREMIÈRE
-  # occurrence de « brd », où l'on cherche soit le mot « module », soit la
-  # valeur de module_id elle-même, soit un chemin « /…/brd ».
+  # Grain module requis : le mot NU « module » seul n'est plus un signal
+  # suffisant (faux positif reproduit sur repro réelle, revue 2026-09-22 :
+  # « Ce lot ajoute un nouveau MODULE de notification [...] Le BRD est a
+  # jour et couvre ce lot. » avec module_id=facturation — « module » y
+  # désigne un module FONCTIONNEL sans rapport avec le grain du BRD, à 49
+  # caractères de « brd », dans la fenêtre). Le signal exigé est désormais
+  # PLUS SPÉCIFIQUE qu'un mot isolé :
+  #   1. la valeur EXACTE de module_id, à proximité de « brd »
+  #      (VBC_FENETRE_PROXIMITE) — signal le plus fiable, inchangé ;
+  #   2. un chemin « /…/brd », à proximité de « brd » — inchangé ;
+  #   3. la phrase « brd du module » / « brd au module », où qu'elle
+  #      apparaisse — brd et module directement reliés par un article ;
+  #   4. « grain » et « module » associés (vbc_grain_module_associes,
+  #      document entier — voir sa note pour le pourquoi de ne PAS
+  #      l'ancrer sur « brd »).
   local avant debut longueur fenetre
   avant="${texte_norm%%brd*}"
   debut=$(( ${#avant} - VBC_FENETRE_PROXIMITE ))
@@ -320,9 +389,11 @@ vbc_champ_brd() {
   local module_id_norm
   module_id_norm="$(vbc_normaliser_recherche "$module_id")"
 
-  if [[ "$fenetre" == *"module"* ]] \
-     || { [ -n "$module_id_norm" ] && [[ "$fenetre" == *"$module_id_norm"* ]]; } \
-     || [[ "$fenetre" == *"/"*"/brd"* ]]; then
+  if { [ -n "$module_id_norm" ] && [[ "$fenetre" == *"$module_id_norm"* ]]; } \
+     || [[ "$fenetre" == *"/"*"/brd"* ]] \
+     || [[ "$texte_norm" == *"brd du module"* ]] \
+     || [[ "$texte_norm" == *"brd au module"* ]] \
+     || vbc_grain_module_associes "$texte_norm"; then
     printf 'PASSE\n%s' ""
   else
     printf 'REFUS\n%s' "BRD mentionne, mais rien n indique le grain MODULE (module_id=${module_id}) — le BRD du module est requis, pas celui de l application"
@@ -473,7 +544,54 @@ vbc_verifier() {
   return "$rc"
 }
 
-if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+# vbc__executee_directement — vrai (rc 0) si CE fichier est exécuté
+# DIRECTEMENT (pas sourcé) — portable bash/zsh/sh, contrairement au seul
+# `[ "${BASH_SOURCE[0]}" = "${0}" ]` (bash-only) qui précédait ce bloc :
+# BASH_SOURCE est un tableau bash-only, TOUJOURS vide sous zsh, donc cette
+# comparaison était perpétuellement FAUSSE sous zsh — y compris en
+# exécution DIRECTE (`zsh verifie-brief-chef.sh < entree`) — et ce bloc
+# entier restait sauté : `vbc_verifier` n'était jamais appelée, sa propre
+# garde BASH_VERSION interne (ci-dessus) n'était donc jamais atteinte.
+# Résultat mesuré (repro, revue 2026-09-22) : rc=0, ZÉRO ligne de sortie —
+# un succès silencieux et totalement faux, pire que le REFUS visible que
+# corrige la garde BASH_VERSION de vbc_verifier.
+#
+# ⚠️ L'idiome `! (return 0 2>/dev/null)` seul (suggéré comme portable
+# bash/zsh/sh) a été ÉPROUVÉ et ÉCARTÉ : sous zsh, `return` À L'INTÉRIEUR
+# D'UN SOUS-SHELL réussit TOUJOURS (rc=0), qu'on soit sourcé ou exécuté
+# directement — vérifié empiriquement (`zsh script.sh` ET
+# `zsh -c 'source script.sh'` rendent tous les deux rc=0 pour ce test). Cet
+# idiome ne distingue donc RIEN sous zsh ; s'y fier aurait remplacé un bug
+# par un autre. zsh expose ZSH_EVAL_CONTEXT (positionnée UNIQUEMENT par
+# zsh) : chaque niveau (script top-level, source, fonction) y AJOUTE un
+# segment séparé par « : » — vérifié empiriquement que la valeur DANS
+# CETTE FONCTION est « toplevel:shfunc » en exécution directe (pas
+# « toplevel » seul, comme une première version de ce correctif l'avait
+# supposé à tort — un `case "toplevel")` exact aurait donc manqué CE cas
+# précis, puisqu'on teste la variable DEPUIS l'intérieur d'une fonction).
+# Le signal fiable est la PRÉSENCE du segment « file » n'importe où dans la
+# chaîne (il apparaît dès qu'un `source`/`.` a eu lieu, à n'importe quel
+# niveau) — son ABSENCE signifie qu'aucun `source` n'est dans la pile
+# d'appel, donc exécution directe, même depuis l'intérieur d'une fonction.
+vbc__executee_directement() {
+  if [ -n "${BASH_VERSION:-}" ]; then
+    [ "${BASH_SOURCE[0]}" = "${0}" ]
+    return
+  fi
+  if [ -n "${ZSH_EVAL_CONTEXT:-}" ]; then
+    case "$ZSH_EVAL_CONTEXT" in
+      *file*) return 1 ;;
+      *) return 0 ;;
+    esac
+  fi
+  # sh/dash/autres — l'idiome return-in-subshell, fiable HORS zsh (voir
+  # avertissement ci-dessus : sous zsh spécifiquement, ce même idiome
+  # réussit toujours et NE distingue rien — d'où le branchement explicite
+  # sur ZSH_EVAL_CONTEXT au-dessus plutôt que de s'y fier partout).
+  ! (return 0 2>/dev/null)
+}
+
+if vbc__executee_directement; then
   if [ -z "${VBC_BRIEF_TEXTE+x}" ]; then
     VBC_BRIEF_TEXTE="$(cat)"
     export VBC_BRIEF_TEXTE

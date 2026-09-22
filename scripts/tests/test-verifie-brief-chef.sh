@@ -225,6 +225,30 @@ executer "VBC_BRIEF_TEXTE=$(brief "$FIX_ADR_TITRE" "$FIX_BRD_AVEC_GRAIN" "$FIX_O
   || ko "grain module présent → attendu PASSE, obtenu '$(champ BRD)'"
 
 # =================================================================
+# 5-bis. Contre-exemples réels du champ BRD (revue indépendante,
+#    2026-09-22) — le mot NU « module » ne suffit plus, une PHRASE plus
+#    spécifique (ou l'association grain+module) est exigée.
+# =================================================================
+
+# FAUX POSITIF corrigé : « module » y désigne un module FONCTIONNEL
+# (notification) sans aucun rapport avec le grain du BRD — le bare-word
+# « module » dans la fenêtre autour de « brd » ne doit plus suffire.
+executer "VBC_BRIEF_TEXTE=Ce lot ajoute un nouveau module de notification pour les utilisateurs actifs. Le BRD est a jour et couvre ce lot." \
+  "VBC_MODULE_ID=facturation"
+[ "$(champ BRD)" = "REFUS" ] \
+  && ok "« module » cite comme module FONCTIONNEL sans rapport avec le grain du BRD → REFUS (faux positif corrige)" \
+  || ko "faux positif module fonctionnel → attendu REFUS, obtenu '$(champ BRD)'"
+
+# FAUX REFUS corrigé : le grain module est bel et bien cité (« le grain
+# retenu ici est celui du module facturation »), mais dans une phrase
+# distincte, à ~210 caractères de « brd » — au-delà de VBC_FENETRE_PROXIMITE.
+executer "VBC_BRIEF_TEXTE=Le BRD applicable a ce lot est a jour et a ete verifie en detail, avec relecture complete section par section pour confirmer que rien ne manque a ce jour. Le grain retenu ici est celui du module facturation." \
+  "VBC_MODULE_ID=facturation"
+[ "$(champ BRD)" = "PASSE" ] \
+  && ok "grain module cite loin de « brd » dans le texte (~210 car.) → PASSE (faux refus corrige)" \
+  || ko "faux refus grain eloigne → attendu PASSE, obtenu '$(champ BRD)'"
+
+# =================================================================
 # « Ce qui s'applique ici » — absente/présente, variante d'apostrophe.
 # =================================================================
 executer "VBC_BRIEF_TEXTE=$(brief "$FIX_ADR_TITRE" "$FIX_BRD_APPLI" "$FIX_ONTO_PRESENTE" "$FIX_APPLICABLE_ABSENTE")"
@@ -354,6 +378,36 @@ if command -v zsh >/dev/null 2>&1; then
     || ko "motif zsh peu clair ou absent : $SORTIE_ZSH"
 else
   echo "  ⚠️ zsh indisponible sur ce poste d'exécution — le mécanisme de la garde d'interpréteur n'a PAS pu être éprouvé en conditions réelles ici (couvert autrement par la mutation ci-dessous, qui simule l'absence de BASH_VERSION sous bash)."
+fi
+
+# =================================================================
+# EXÉCUTION DIRECTE sous ZSH (pas un `source` — repro EXACTE du défaut
+# réel trouvé par une revue indépendante, adversariale, 2026-09-22) :
+# `zsh verifie-brief-chef.sh < entree`. Le cas ci-dessus (sourcé) ne
+# couvre PAS ce chemin : `BASH_SOURCE` est un tableau bash-only, TOUJOURS
+# vide sous zsh, donc `[ "${BASH_SOURCE[0]}" = "${0}" ]` était
+# PERPÉTUELLEMENT faux sous zsh — y compris en exécution DIRECTE — et le
+# bloc du bas du fichier restait sauté : `vbc_verifier` n'était JAMAIS
+# appelée, sa propre garde BASH_VERSION n'était donc jamais atteinte.
+# Résultat mesuré AVANT correctif : rc=0, ZÉRO ligne de sortie — un succès
+# silencieux et totalement faux, pire que le cas sourcé ci-dessus (qui
+# rendait au moins un REFUS visible).
+# =================================================================
+if command -v zsh >/dev/null 2>&1; then
+  BRIEF_CONFORME_EXEC_DIRECT="$(brief "$FIX_ADR_TITRE" "$FIX_BRD_APPLI" "$FIX_ONTO_PRESENTE" "$FIX_APPLICABLE_PRESENTE")"
+  SORTIE_EXEC_DIRECT_ZSH="$(printf '%s' "$BRIEF_CONFORME_EXEC_DIRECT" | zsh "$LIB" 2>&1)"
+  RC_EXEC_DIRECT_ZSH=$?
+  printf '%s\n' "$SORTIE_EXEC_DIRECT_ZSH" | grep -q '^VERDICT=NON_MESURE$' \
+    && ok "exécution DIRECTE sous zsh (zsh fichier.sh < entree, brief pourtant CONFORME) → VERDICT=NON_MESURE, jamais rc=0 silencieux" \
+    || ko "exécution directe zsh : attendu NON_MESURE, obtenu : $SORTIE_EXEC_DIRECT_ZSH (rc=$RC_EXEC_DIRECT_ZSH)"
+  [ "$RC_EXEC_DIRECT_ZSH" = "4" ] \
+    && ok "code de retour de l'exécution directe sous zsh = 4 (jamais 0 — le défaut réel produisait rc=0)" \
+    || ko "rc de l'exécution directe sous zsh attendu 4, obtenu $RC_EXEC_DIRECT_ZSH"
+  [ -n "$SORTIE_EXEC_DIRECT_ZSH" ] \
+    && ok "au moins une ligne de sortie (le défaut réel produisait ZÉRO ligne)" \
+    || ko "aucune ligne de sortie — le défaut du dispatch bas de fichier n'est pas corrigé"
+else
+  echo "  ⚠️ zsh indisponible sur ce poste d'exécution — le test d'exécution directe sous zsh n'a PAS pu être éprouvé en conditions réelles ici."
 fi
 
 echo
