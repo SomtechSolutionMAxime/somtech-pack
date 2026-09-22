@@ -189,6 +189,83 @@ PLAN=$(mwt_plan_delete "$HEAD_BRANCH")
      (retire le worktree ET la branche locale en une fois)
      ```
 
+## Etape 6.5 : Fermeture des stories que ce merge ferme (STD-030, T-20260922-0084)
+
+> **Regle d'or n°13 · STD-030, principe realite-miroir.** L'ordre opposable est
+> `in_progress → ready_to_deploy → /merge → completed` : le passage a
+> `completed` se fait **dans le meme geste que le merge**, pour **TOUTES** les
+> stories que ce merge ferme — pas seulement la principale, pas plus tard. Un
+> statut differe fait mentir le ServiceDesk pendant l'intervalle, et
+> l'intervalle n'a pas de fin garantie.
+>
+> 🔴 **Fermer une story a tort est PIRE que ne pas la fermer** : un `completed`
+> faux est **terminal en cascade** — un premier enfant `completed` qui est
+> aussi le seul peut faire passer sa demande en `delivered`, **terminal,
+> description gelee**. En cas de doute, NE PAS fermer et le dire — jamais
+> deviner.
+
+**Mecanisme** : `lib/merge-closes-stories.sh` (`mfs_tickets_du_corps`) lit le
+**corps de la PR venant d'etre mergee** et determine, de facon deterministe et
+testable, quels IDs `T-YYYYMMDD-NNNN` elle ferme. Voir le motif complet (ce que
+la regle couvre, ce qu'elle NE couvre PAS, mesure sur 60 PR reelles de ce
+depot, et les deux tours de revue qui ont resserre la frontiere du label)
+en tete du fichier. Resume : seule une ligne du corps qui **commence par le
+mot ENTIER** d'un label reconnu (`Ticket`, `Tickets`, `Story`, `Stories` —
+immediatement suivi de la fin de ligne, d'un espace ou de `:`, jamais d'un
+autre caractere) porte les IDs a fermer ; un ID cite ailleurs dans le corps
+(narration, tableau, ou une ligne qui commence seulement par un mot
+PREFIXE du label comme "Ticketing"/"Ticket-tracking") n'est jamais retenu.
+
+1. **Recuperer le corps de la PR venant d'etre mergee** (si pas deja en main) :
+   ```bash
+   gh pr view <numero> --json body -q .body > /tmp/pr-body-<numero>.txt
+   ```
+2. **Determiner les tickets candidats** :
+   ```bash
+   source .claude/skills/merge/lib/merge-closes-stories.sh
+   mfs_tickets_du_corps /tmp/pr-body-<numero>.txt
+   ```
+   - **rc=1 (INDETERMINE)** : aucune ligne etiquetee exploitable. **Le dire
+     explicitement a l'utilisateur** — « Ce merge ne permet pas de determiner
+     quelle(s) story(ies) il ferme (aucune ligne `Ticket(s)`/`Story(ies)` dans
+     le corps de la PR) — aucune fermeture automatique. » **Ne rien fermer**,
+     passer a l'Etape 7.
+   - **rc=0** : la lib rend un ou plusieurs IDs candidats (un par ligne).
+3. **Resoudre `application_id`** du depot courant (une fois par session) :
+   ```
+   mcp__servicedesk__applications (action=list, filtre repo_url == origin du depot courant)
+   ```
+4. **Pour CHAQUE ID candidat, valider AVANT de fermer** — via
+   `mcp__servicedesk__tickets` (action=`get`, `id=<T-ID>`) :
+   - Le ticket doit **exister** (get reussit).
+   - Il doit appartenir a **`application_id` du depot courant** (jamais un
+     ticket d'une autre application — une confusion de numero ferme le
+     mauvais dossier).
+   - Son statut ne doit pas deja etre terminal (`completed`/`failed`) — le
+     re-fermer serait un no-op a signaler, pas une erreur.
+   - **Si une de ces conditions echoue** : **NE PAS fermer ce ticket**, le
+     nommer explicitement dans le compte-rendu (« `T-XXXXXXXX-NNNN` candidat
+     mais [introuvable | hors application | deja terminal] — non ferme »), et
+     continuer avec les autres candidats.
+5. **Fermer chaque ticket valide, dans ce geste** :
+   ```
+   mcp__servicedesk__tickets (action=update, id=<uuid>, status=completed)
+   ```
+6. **Recap explicite** : lister les tickets fermes, ceux ecartes (et pourquoi),
+   et le cas INDETERMINE le cas echeant. Ce recap fait foi comme preuve que la
+   fermeture (ou son abstention) a eu lieu **dans le meme geste que le merge**.
+
+> **Mecanisme CI** : `lib/merge-closes-stories.sh` est garde par
+> `scripts/tests/test-merge-closes-stories.sh` (unitaire), `scripts/tests/
+> test-merge-closes-stories-corpus.sh` (60 PR reelles mergees de ce depot,
+> fixture figee dans `scripts/tests/fixtures/`) et `scripts/tests/
+> test-mutations-merge-closes-stories.sh` (mutation — chaque defaut reel
+> reintroduit fait rougir au moins une des deux suites). Les trois tournent
+> via `scripts/tests/*.sh`, deja execute par `.github/workflows/tests.yml`
+> (job `shell-tests`) sur chaque PR — **aucune modification du workflow
+> n'etait necessaire**, le mecanisme existant les prend en charge des leur
+> depot dans `scripts/tests/`.
+
 ## Etape 7 : Resynchronisation locale (worktree-aware)
 
 > **Garde-fou worktree** : si la session tourne dans un worktree **lié** (`claude-swt`), `main` est checked-out dans le worktree principal et `git checkout main` ÉCHOUERA ici. Détecter le contexte d'abord :
@@ -455,3 +532,5 @@ Proposer a l'utilisateur de monitorer jusqu'a completion des workflows via le to
 - `lib/worktree-aware-delete.sh` — plan de suppression de branche worktree-aware (`mwt_plan_delete` → PROTECTED / DELETE / DEFER ; `mwt_in_linked_worktree`). Sourçable, pur, testable.
 - `tests/test-worktree-aware-delete.sh` — test (repo jetable + worktrees réels) couvrant les 4 plans + la détection de worktree lié. Lancer : `bash .claude/skills/merge/tests/test-worktree-aware-delete.sh`.
 - `tests/test-migration-before-merge.sh` — garde-fou anti-régression : verifie que les sections « migrations », « gate de coherence » et « Edge Functions » apparaissent toutes AVANT la section « Merge de la PR » dans ce SKILL.md. Lancer : `bash .claude/skills/merge/tests/test-migration-before-merge.sh`.
+- `lib/merge-closes-stories.sh` — détermine quelles stories (`T-YYYYMMDD-NNNN`) un merge ferme, à partir du corps de la PR (`mfs_tickets_du_corps`). Sourçable, pur, testable, zéro appel MCP (Étape 6.5 fait la validation + l'écriture du statut). Motif complet, mesuré sur 60 PR réelles de ce dépôt, en tête du fichier.
+- Gardé par `scripts/tests/test-merge-closes-stories.sh` (unitaire), `scripts/tests/test-merge-closes-stories-corpus.sh` (corpus réel figé), `scripts/tests/test-mutations-merge-closes-stories.sh` (mutation) — **exécutés en CI** via `scripts/tests/*.sh` (`.github/workflows/tests.yml`, job `shell-tests`), pas via `.claude/skills/merge/tests/` (non exécuté en CI).
