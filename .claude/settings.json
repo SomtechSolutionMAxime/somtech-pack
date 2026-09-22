@@ -31,6 +31,14 @@
             "command": ".claude/hooks/session-start-registre.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/session-start-preflight-std029.sh"
+          }
+        ]
       }
     ],
     "PostToolUse": [
