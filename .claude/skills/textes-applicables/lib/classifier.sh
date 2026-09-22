@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # ============================================================
-# classifier.sh — v1.0.0
+# classifier.sh — v1.1.0
 # Classe la reponse de `applications get_applicable_texts` en TROIS etats,
 # jamais deux — T-20260922-0135 (D-20260921-0016 Q2b).
 #
@@ -62,15 +62,31 @@ tap_classifie() {
 
   # UNE SEULE porte, pas trois gardes qui se recouvrent : la panne de
   # l'appelant (rc_appel != 0), un fichier absent, un JSON illisible et une
-  # reponse success=false convergent tous ici vers "count" vide — verifie par
+  # reponse success=false convergent tous ici vers "valide" vide — verifie par
   # mutation (test-mutations-classifier.sh) : chaque garde retiree separement
   # etait deja couverte par celle-ci, donc morte. On ne garde pas une garde
   # qui ne garde rien (cf. memoire "muter ce dont la garde depend").
-  local count=""
+  #
+  # 🔴 CORRECTIF (revue de fond, T-20260922-0135) : la decision et le rendu
+  # doivent porter sur le MEME champ, jamais deux lectures independantes. La
+  # v1 lisait `.count` pour decider et `.applicable_texts` pour rendre — une
+  # reponse avec `count` non nul mais `applicable_texts` absent/null tombait
+  # en "textes-declares" (SUCCES) avec un stdout vide, silencieusement, en
+  # violation directe de la garantie "la panne prime toujours sur le contenu"
+  # ecrite plus haut. Desormais tout — validite, compte, rendu — derive de
+  # `.applicable_texts` et RIEN d'autre ; `.count` du serveur n'est jamais lu.
+  local valide=""
   if [ "$rc_appel" -eq 0 ]; then
-    count="$(jq -r 'if .success == true then (.count // (.applicable_texts | length)) else empty end' "$fichier" 2>/dev/null)"
+    valide="$(jq -r 'if .success == true and (.applicable_texts | type) == "array" then "ok" else empty end' "$fichier" 2>/dev/null)"
   fi
 
+  if [ "$valide" != "ok" ]; then
+    printf '[non mesure]\n'
+    return 2
+  fi
+
+  local count
+  count="$(jq -r '.applicable_texts | length' "$fichier" 2>/dev/null)"
   if ! [[ "$count" =~ ^[0-9]+$ ]]; then
     printf '[non mesure]\n'
     return 2
@@ -81,6 +97,12 @@ tap_classifie() {
     return 1
   fi
 
-  jq -r '.applicable_texts[] | "\(.text_ref) — \(.title) (\(.somcraft_uuid))"' "$fichier"
+  local rendu
+  rendu="$(jq -r '.applicable_texts[] | "\(.text_ref) — \(.title) (\(.somcraft_uuid))"' "$fichier" 2>/dev/null)"
+  if [ $? -ne 0 ]; then
+    printf '[non mesure]\n'
+    return 2
+  fi
+  printf '%s\n' "$rendu"
   return 0
 }

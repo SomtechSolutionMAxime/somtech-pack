@@ -78,6 +78,44 @@ else
   ko "liste vide mal classee (rc=$rc, sortie='$sortie')"
 fi
 
+# ---- 4bis. le champ "count" du serveur ne dirige plus RIEN : seul le tableau compte ----
+# Defaut trouve en revue de fond (T-20260922-0135) : la v1 lisait `.count`
+# pour decider et `.applicable_texts` pour rendre — deux lectures
+# independantes. Un `count` truthy avec `applicable_texts` ABSENT tombait en
+# "textes-declares" (SUCCES) avec un stdout VIDE, silencieusement — exactement
+# la panne que cette garde pretend fermer. Desormais tout derive du meme
+# champ : `.count` du serveur n'est jamais lu.
+cat > "$WORK/count-menteur-absent.json" <<'JSON'
+{"success":true,"count":3}
+JSON
+sortie="$(tap_classifie "$WORK/count-menteur-absent.json" 0)"; rc=$?
+if [ "$rc" -eq 2 ] && [[ "$sortie" == *"[non mesure]"* ]]; then
+  ok "count=3 mais applicable_texts absent -> rc=2, [non mesure] (jamais textes-declares silencieux)"
+else
+  ko "count menteur (applicable_texts absent) mal classe (rc=$rc, sortie='$sortie')"
+fi
+
+cat > "$WORK/count-menteur-vide.json" <<'JSON'
+{"success":true,"count":3,"applicable_texts":[]}
+JSON
+sortie="$(tap_classifie "$WORK/count-menteur-vide.json" 0)"; rc=$?
+if [ "$rc" -eq 1 ] && [[ "$sortie" == *"aucun texte declare"* ]]; then
+  ok "count=3 mais applicable_texts=[] -> rc=1, aucun texte declare (le tableau reel decide, pas count)"
+else
+  ko "count menteur (applicable_texts vide) mal classe (rc=$rc, sortie='$sortie')"
+fi
+
+# ---- 4ter. applicable_texts n'est pas un tableau (type invalide) -> non-mesure ----
+cat > "$WORK/type-invalide.json" <<'JSON'
+{"success":true,"applicable_texts":"oups une chaine"}
+JSON
+sortie="$(tap_classifie "$WORK/type-invalide.json" 0)"; rc=$?
+if [ "$rc" -eq 2 ] && [[ "$sortie" == *"[non mesure]"* ]]; then
+  ok "applicable_texts n'est pas un tableau -> rc=2, [non mesure]"
+else
+  ko "type invalide mal classe (rc=$rc, sortie='$sortie')"
+fi
+
 # ---- 5. appel reussi, pointeurs presents -> textes-declares, rend les pointeurs ----
 cat > "$WORK/peuple.json" <<'JSON'
 {"success":true,"count":2,"applicable_texts":[
@@ -103,6 +141,24 @@ if [ "$rc" -eq 0 ] && [[ "$sortie" == *"STD-009"* ]] && [[ "$sortie" != *"CONTEN
   ok "le pointeur sort, le contenu/note libre ne sort pas"
 else
   ko "fuite de contenu dans le rendu (rc=$rc, sortie='$sortie')"
+fi
+
+# ---- 7. le format exact de la ligne rendue, pas juste une sous-chaine ----
+# Trouve en revue de fond : les assertions precedentes (substring + compte de
+# lignes) ne detectent PAS une inversion text_ref/title dans le formatage —
+# un bug reel qui melangerait l'identite de chaque pointeur passerait
+# inapercu. Ici on compare la ligne ENTIERE, position par position.
+cat > "$WORK/un-seul.json" <<'JSON'
+{"success":true,"applicable_texts":[
+  {"text_ref":"ADR-001","title":"Titre du texte","somcraft_uuid":"uuid-123"}
+]}
+JSON
+sortie="$(tap_classifie "$WORK/un-seul.json" 0)"; rc=$?
+attendu="ADR-001 — Titre du texte (uuid-123)"
+if [ "$rc" -eq 0 ] && [ "$sortie" = "$attendu" ]; then
+  ok "format exact respecte : '$attendu'"
+else
+  ko "format exact viole (attendu '$attendu', obtenu rc=$rc sortie='$sortie')"
 fi
 
 echo ""
