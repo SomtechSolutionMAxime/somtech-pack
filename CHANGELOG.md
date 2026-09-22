@@ -7,6 +7,14 @@ Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version 
 
 ## [Non-versionne] - 2026-09-22
 
+*Livraison `J-20260814-0002`, demande `D-20260921-0017` (lot 4, garde 2/5) — ticket `T-20260922-0084`.*
+
+### Ajoute
+
+- **`/merge` ferme les stories qu'il merge, dans le même geste** (STD-030, règle d'or n°13) — nouvelle Étape 6.5 du skill (`lib/merge-closes-stories.sh`) : détermine les IDs `T-YYYYMMDD-NNNN` à fermer en `completed` depuis une ligne étiquetée (`Ticket(s)`/`Story`/`Stories`) du corps de la PR mergée, ancrée au mot ENTIER (liste blanche : fin de ligne, espace, ou `:` uniquement après le label), avec troncature à la phrase et tokenisation stricte de l'ID (rejet entier d'un ID mal formé, jamais de troncature silencieuse vers un ID voisin). Mesuré sur 60 PR réelles mergées de ce dépôt : 37 tickets fermés correctement, 0 fermeture à tort ; s'abstient explicitement (ne devine jamais) quand aucune ligne étiquetée n'est exploitable. Deux tours de revue de fond ont durci la frontière du label (une liste noire "lettre seulement" laissait encore passer des phrases de narration commençant par "Ticket-"/"Story'"/etc.). Gardé par trois bancs (`scripts/tests/test-merge-closes-stories.sh`, `-corpus.sh`, et `scripts/tests/test-mutations-merge-closes-stories.sh`), exécutés via `scripts/tests/*.sh`, déjà dans le job CI `shell-tests`.
+
+## [Non-versionne] - 2026-09-22
+
 *Livraison `J-20260814-0002`, demande `D-20260921-0017` (lot 4, garde 1/5) — ticket `T-20260922-0072`.*
 
 ### Ajoute
