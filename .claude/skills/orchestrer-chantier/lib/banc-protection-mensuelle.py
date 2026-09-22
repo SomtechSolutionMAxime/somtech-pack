@@ -183,18 +183,24 @@ def classer_entree(entree, racine, fichiers_cache):
         banc = mecanisme_connu.get("banc", "")
         chemin_ok = os.path.isfile(os.path.join(racine, chemin))
         banc_ok = os.path.isfile(os.path.join(racine, banc))
-        # DÉFAUT TROUVÉ EN REVUE DE FOND, CORRIGÉ ICI — la citation doit être
-        # trouvée DANS le mécanisme ou son banc, PAS n'importe où dans le
-        # dépôt scanné. `grep_repo` (ci-dessous, `hits`) sert seulement au
-        # repli prose/non_etabli, jamais à décider `protege` : sans cette
-        # distinction, un mécanisme VIDÉ DE SON CONTENU (fichier gardé, logique
-        # retirée) continuait de rendre `protege` tant que la chaîne cherchée
-        # traînait ailleurs dans le dépôt (ex. "service_role" cité dans un
-        # SKILL.md ou un prompt d'audit, sans rapport avec le gate réel) —
-        # exactement le défaut de silence que ce ticket existe pour détecter.
-        cite_dans_mecanisme = (chemin_ok and grep_fichier(racine, chemin, citations)) or (
-            banc_ok and grep_fichier(racine, banc, citations)
-        )
+        # DÉFAUT TROUVÉ EN REVUE DE FOND (1er tour), CORRIGÉ ICI — la citation
+        # doit être trouvée DANS le mécanisme, PAS n'importe où dans le dépôt
+        # scanné. `grep_repo` (ci-dessous, `hits`) sert seulement au repli
+        # prose/non_etabli, jamais à décider `protege`.
+        #
+        # DÉFAUT n°2 TROUVÉ AU 2e TOUR DE REVUE DE FOND, CORRIGÉ ICI — le
+        # premier correctif acceptait la citation dans `chemin` OU `banc`.
+        # Or un fichier de test est NOMMÉ d'après ce qu'il teste et cite
+        # presque toujours la même chaîne que son mécanisme, QUE LE
+        # MÉCANISME FONCTIONNE ENCORE OU NON : reproduit concrètement sur
+        # STD-038 réel du corpus — `staging-secret-key-gate.sh` vidé à 0
+        # octet (logique totalement retirée) restait classé `protege` parce
+        # que `test-staging-secret-key-gate.sh` continuait, normalement, de
+        # citer "service_role"/"sb_secret_". **Seul `chemin` (l'implémentation
+        # réelle) compte désormais** — `banc` doit exister (un mécanisme sans
+        # aucun test n'est jamais `protege`), mais son CONTENU ne prouve rien
+        # sur l'état du mécanisme qu'il est censé éprouver.
+        cite_dans_mecanisme = chemin_ok and grep_fichier(racine, chemin, citations)
         hits = grep_repo(racine, citations, fichiers_cache)
         if chemin_ok and banc_ok and cite_dans_mecanisme:
             return ("protege", chemin, None, None, None)

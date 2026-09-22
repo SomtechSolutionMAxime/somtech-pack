@@ -75,13 +75,11 @@ else
   echo "Assertions JOUÉES : $((PASS + FAIL))  —  ${PASS} OK, ${FAIL} KO"; exit 1
 fi
 
-echo "== (a) Discriminant non_etabli vs protege : la vérification du fichier mécanisme est retirée =="
-essai 'chemin_ok toujours vrai — un mecanisme_connu inexistant sur disque passerait quand meme pour protege' <<'PY'
-old = '        chemin_ok = os.path.isfile(os.path.join(racine, chemin))'
-new = '        chemin_ok = True'
-assert old in s
-s = s.replace(old, new)
-PY
+echo "== (a) Discriminant non_etabli vs protege : la vérification du fichier mécanisme (chemin_ok) est retirée =="
+echo "   RETIRÉ (2e tour de revue de fond, correctif du OU chemin/banc) : cite_dans_mecanisme appelle grep_fichier(chemin, ...),"
+echo "   qui revérifie lui-même l'existence du fichier (voir sa définition) — forcer chemin_ok=True n'a donc PLUS AUCUN EFFET"
+echo "   observable (défense en profondeur, pas un trou : grep_fichier() est exercé par (a-ter), (Discriminant 1-ter) et le"
+echo "   témoin positif). Garder ce test produirait une MUTATION INOPÉRANTE permanente, jamais un signal utile."
 
 echo "== (a-bis) Discriminant non_etabli vs protege : la vérification du banc est retirée =="
 essai 'banc_ok toujours vrai — un banc inexistant sur disque passerait quand meme pour protege' <<'PY'
@@ -93,25 +91,29 @@ PY
 
 echo "== (a-ter) Discriminant non_etabli vs prose : une citation manquante ne dégrade plus jamais vers non_etabli =="
 essai 'hits toujours non-vide — une regle sans AUCUNE citation trouvee dans le depot serait quand meme prose/protege' <<'PY'
-old = '''        cite_dans_mecanisme = (chemin_ok and grep_fichier(racine, chemin, citations)) or (
-            banc_ok and grep_fichier(racine, banc, citations)
-        )
+old = '''        cite_dans_mecanisme = chemin_ok and grep_fichier(racine, chemin, citations)
         hits = grep_repo(racine, citations, fichiers_cache)'''
-new = '''        cite_dans_mecanisme = (chemin_ok and grep_fichier(racine, chemin, citations)) or (
-            banc_ok and grep_fichier(racine, banc, citations)
-        )
+new = '''        cite_dans_mecanisme = chemin_ok and grep_fichier(racine, chemin, citations)
         hits = ["invente-un-hit-qui-nexiste-pas.txt"]'''
 assert old in s
 assert s.count(old) == 1, "le motif doit etre unique dans le fichier (sinon la mutation deborde sur une autre branche)"
 s = s.replace(old, new)
 PY
 
-echo "== (a-quater) — RÉGRESSION (revue de fond) : la citation n'est plus exigée DANS le mécanisme/banc déclaré =="
+echo "== (a-quater) — RÉGRESSION (revue de fond, 1er tour) : la citation n'est plus exigée DANS le mécanisme déclaré =="
 essai 'cite_dans_mecanisme toujours vrai — un mecanisme sans rapport avec la regle (citation trouvee ailleurs dans le depot) serait quand meme protege' <<'PY'
-old = '''        cite_dans_mecanisme = (chemin_ok and grep_fichier(racine, chemin, citations)) or (
+old = '''        cite_dans_mecanisme = chemin_ok and grep_fichier(racine, chemin, citations)'''
+new = '''        cite_dans_mecanisme = True'''
+assert old in s
+s = s.replace(old, new)
+PY
+
+echo "== (a-quinquies) — RÉGRESSION (revue de fond, 2e tour) : le OU chemin/banc revient — un chemin VIDÉ reste protege si son banc cite encore =="
+essai 'OU chemin/banc reintroduit — un mecanisme gutted (chemin sans citation) reste protege si son fichier de test, lui, cite toujours la chaine' <<'PY'
+old = '''        cite_dans_mecanisme = chemin_ok and grep_fichier(racine, chemin, citations)'''
+new = '''        cite_dans_mecanisme = (chemin_ok and grep_fichier(racine, chemin, citations)) or (
             banc_ok and grep_fichier(racine, banc, citations)
         )'''
-new = '''        cite_dans_mecanisme = True'''
 assert old in s
 s = s.replace(old, new)
 PY

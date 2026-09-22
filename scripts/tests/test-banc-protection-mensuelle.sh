@@ -114,6 +114,20 @@ executer '{
   && ok "aucun REGLE_..._MECANISME émis (cohérent avec prose, pas protege)" \
   || ko "REGLE_..._MECANISME émis alors que la classe n'est pas protege : $(champ REGLE_R_MECANISME_VIDE_MECANISME)"
 
+echo "== Discriminant 1-ter — RÉGRESSION (2e tour de revue de fond) : mécanisme VIDÉ (chemin sans citation), banc intact qui cite -> jamais protege =="
+echo "   (défaut réel, reproduit sur STD-038 réel du corpus : staging-secret-key-gate.sh vidé à 0 octet restait"
+echo "    'protege' parce que test-staging-secret-key-gate.sh, normalement nommé d'après ce qu'il teste, cite encore"
+echo "    la même chaîne — un fichier de test ne prouve RIEN sur l'état du mécanisme qu'il est censé éprouver)"
+: > "${DEPOT}/.claude/skills/x/lib/vide.sh"
+executer '{
+  "id": "R-MECANISME-GUTTED",
+  "citations_attendues": ["MARQUEUR_MECHA"],
+  "mecanisme_connu": {"chemin": ".claude/skills/x/lib/vide.sh", "banc": ".claude/skills/x/tests/test-mecha.sh"}
+}'
+[ "$(champ REGLE_R_MECANISME_GUTTED_CLASSE)" = "prose" ] \
+  && ok "chemin vidé (0 octet) mais banc intact qui cite -> prose, PAS protege" \
+  || ko "attendu prose, obtenu $(champ REGLE_R_MECANISME_GUTTED_CLASSE) (BUG : le banc de test crédite le mécanisme d'une citation qu'il ne porte plus lui-même)"
+
 echo "== Discriminant 4 : contredit (fichier contredisant existe, citation trouvee dedans) =="
 executer '{
   "id": "R-CONTREDIT",
