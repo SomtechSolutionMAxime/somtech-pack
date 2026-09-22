@@ -154,16 +154,35 @@ check_drift_schema() {
     return
   fi
 
-  local current base new_committed uncommitted signal=""
-  current="$(git branch --show-current 2>/dev/null)"
+  # Ce check ne se contente PAS du gate GIT_OK partagé (revue de fond,
+  # T-20260922-0093 : le gate ne sonde que `rev-parse --is-inside-work-tree` —
+  # un git présent mais brisé pour `diff`/`status` spécifiquement (index
+  # corrompu, permissions, etc.) passerait le gate et retomberait ici sur
+  # « ne s'exécute pas », un verdict qui se lit comme un OK implicite alors
+  # qu'une migration existe peut-être bel et bien. Chaque appel de MESURE
+  # (diff, status) vérifie donc son PROPRE $?, comme les checks 1 et 2.
+  local current base new_committed uncommitted status_out signal="" probe_failed=0
+  current="$(git branch --show-current 2>/dev/null)" || probe_failed=1
   base="$(resolve_base_ref "$current")"
 
   if [ -n "$base" ]; then
     new_committed="$(git diff --name-only --diff-filter=A "${base}...HEAD" -- supabase/migrations 2>/dev/null)"
+    [ $? -ne 0 ] && probe_failed=1
     [ -n "$new_committed" ] && signal="$new_committed"
   fi
 
-  uncommitted="$(git status --porcelain -- supabase/migrations 2>/dev/null | awk '{print $2}')"
+  status_out="$(git status --porcelain -- supabase/migrations 2>/dev/null)"
+  if [ $? -ne 0 ]; then
+    probe_failed=1
+  else
+    uncommitted="$(printf '%s\n' "$status_out" | awk '{print $2}')"
+  fi
+
+  if [ "$probe_failed" -eq 1 ]; then
+    echo "[non mesuré] — un appel git (branche/diff/status) a échoué pendant la détection de migration ; supabase/migrations existe mais le hook ne peut pas conclure"
+    return
+  fi
+
   if [ -n "$uncommitted" ]; then
     if [ -n "$signal" ]; then
       signal="${signal}

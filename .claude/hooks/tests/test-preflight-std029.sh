@@ -107,7 +107,6 @@ echo "== H1. Ontologie présente (/ontologie/) → check s'applique =="
 R="$(mkrepo)"; git -C "$R" checkout -q -b feat/x; mkdir -p "$R/ontologie"; touch "$R/ontologie/02_ontologie.yaml"
 commit_days_ago "$R" 0 f1.txt
 out="$(run_hook "$R")"
-echo "$out" | grep -qi "ontologie" | true
 echo "$out" | grep -v "\[non applicable\]" | grep -qi "ontologie" \
   && ok "ontologie présente → check s'applique (pas [non applicable])" || ko "attendu check ontologie applicable : $out"
 rm -rf "$R"
@@ -144,6 +143,60 @@ out="$(run_hook "$R")"
 echo "$out" | grep -q "\[non applicable\].*aucun commit\|aucun commit.*\[non applicable\]" \
   && ok "dépôt vide → [non applicable] sur la fraîcheur" || ko "attendu [non applicable] sur dépôt vide : $out"
 rm -rf "$R"
+
+echo "== I4. Sonde PARTIELLEMENT cassée : git fonctionne pour le gate mais échoue sur diff/status =="
+echo "    (revue de fond T-20260922-0093 : le gate GIT_OK ne sonde que --is-inside-work-tree ;"
+echo "     un git présent mais brisé sur diff/status spécifiquement doit quand même faire"
+echo "     rougir le check 5 en [non mesuré], PAS retomber sur 'ne s'exécute pas' — qui se"
+echo "     lirait comme un OK implicite alors qu'une migration existe sur la branche.)"
+R="$(mkrepo)"; mkdir -p "$R/supabase/migrations"; commit_days_ago "$R" 0 f1.txt
+git -C "$R" checkout -q -b feat/x
+echo "alter table x add column y int;" > "$R/supabase/migrations/20260922000000_ajout.sql"
+git -C "$R" add supabase/migrations
+git -C "$R" commit -q -m "feat: migration"
+REALGIT="$(command -v git)"
+FAKEBIN2="$(mktemp -d)"
+cat > "$FAKEBIN2/git" <<EOF
+#!/usr/bin/env bash
+case "\$1" in
+  diff|status) exit 1 ;;
+  *) exec "$REALGIT" "\$@" ;;
+esac
+EOF
+chmod +x "$FAKEBIN2/git"
+out="$( cd "$R" && PATH="$FAKEBIN2:$PATH" bash "$HOOK" )"
+echo "$out" | grep -qi "\[non mesuré\]" && echo "$out" | grep -qi "migration" \
+  && ok "diff/status brisés (gate intact) → [non mesuré] sur le check migration" \
+  || ko "attendu [non mesuré] sur le check drift quand diff/status échouent : $out"
+! echo "$out" | grep -qi "ne s'exécute pas" \
+  && ok "pas de faux 'ne s'exécute pas' (OK implicite) quand la sonde est partiellement cassée" \
+  || ko "'ne s'exécute pas' est apparu alors que diff/status ont échoué — sonde cassée masquée : $out"
+rm -rf "$FAKEBIN2" "$R"
+
+echo "== I5. git status échoue SEUL (aucune ref de base résoluble, diff jamais appelé) → [non mesuré] =="
+echo "    (isole la vérification \$? de 'git status' ; I4 casse diff ET status ensemble et ne"
+echo "     suffit pas à distinguer les deux gardes l'une de l'autre.)"
+R="$(mktemp -d)"; git -C "$R" init -q -b onlybranch
+git -C "$R" config user.email "test@somtech.ca"; git -C "$R" config user.name "test"
+mkdir -p "$R/supabase/migrations"; echo x > "$R/f.txt"; git -C "$R" add f.txt; git -C "$R" commit -q -m x
+REALGIT="$(command -v git)"
+FAKEBIN3="$(mktemp -d)"
+cat > "$FAKEBIN3/git" <<EOF
+#!/usr/bin/env bash
+case "\$1" in
+  status) exit 1 ;;
+  *) exec "$REALGIT" "\$@" ;;
+esac
+EOF
+chmod +x "$FAKEBIN3/git"
+out="$( cd "$R" && PATH="$FAKEBIN3:$PATH" bash "$HOOK" )"
+echo "$out" | grep -qi "\[non mesuré\]" && echo "$out" | grep -qi "migration" \
+  && ok "git status cassé seul → [non mesuré] sur le check migration" \
+  || ko "attendu [non mesuré] quand status échoue seul : $out"
+! echo "$out" | grep -qi "ne s'exécute pas" \
+  && ok "pas de faux 'ne s'exécute pas' quand status échoue seul" \
+  || ko "'ne s'exécute pas' est apparu alors que status a échoué seul : $out"
+rm -rf "$FAKEBIN3" "$R"
 
 echo "== J. SONDE CASSÉE (git indisponible) → [non mesuré], DISTINCT d'un OK — c'est la contrainte du lot =="
 R="$(mkrepo)"; git -C "$R" checkout -q -b feat/x; commit_days_ago "$R" 0 f1.txt
