@@ -791,6 +791,9 @@
   "refus": [
     "NotebookEdit"
   ],
+  "dossiersHorsDepot": [
+    "~/somtech-token-audit"
+  ],
   "hooks": [
     {
       "evenement": "PreToolUse",
