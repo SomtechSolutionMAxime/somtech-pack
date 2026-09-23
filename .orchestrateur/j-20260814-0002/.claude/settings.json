@@ -2,6 +2,9 @@
   "permissions": {
     "deny": [
       "NotebookEdit"
+    ],
+    "additionalDirectories": [
+      "~/somtech-token-audit"
     ]
   },
   "somtech": {
