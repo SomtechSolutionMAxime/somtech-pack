@@ -169,6 +169,11 @@ export function rendre(classement) {
     }
   }
   const refus = new Set(Array.isArray(classement?.refus) ? classement.refus : []);
+  // ⚠️ Portée écrite bornée (GF-ORC-007, T-20260922-0156) : la LISTE COURTE et FERMÉE de
+  // dossiers communs hors dépôt qu'un lieu de ce rôle peut lire. Nommés un par un dans le
+  // classement — jamais une catégorie — pour que `permissions.additionalDirectories` du
+  // fichier de droits les réalise mot pour mot, comme `refus`/`droits` le font déjà.
+  const dossiersHorsDepot = Array.isArray(classement?.dossiersHorsDepot) ? classement.dossiersHorsDepot : [];
 
   for (const i of items) {
     if (i.couche === 'hook' && hooks.length === 0) {
@@ -339,8 +344,9 @@ export function rendre(classement) {
   // `allow` déclenche un écran de confiance que la pré-approbation ne fait pas
   // taire, et l'agent naît alors injoignable (STD-047 R3). `deny` est la moitié
   // qui garantit, et elle tient dès la naissance.
-  if (refus.size || hooks.length || classement?.droits) {
+  if (refus.size || hooks.length || classement?.droits || dossiersHorsDepot.length) {
     const st = { permissions: { deny: [...refus] } };
+    if (dossiersHorsDepot.length) st.permissions.additionalDirectories = [...dossiersHorsDepot];
     if (classement?.droits) st.somtech = { droitsAccordes: classement.droits };
     if (hooks.length) {
       st.hooks = {};

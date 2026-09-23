@@ -280,6 +280,27 @@ export async function cmdLieuUpdate(flags, roleNom) {
   // une seule fois, pour naître. Dès qu'il existe, il redevient intouchable comme les autres.
   const aDeposer = new Set(CREE_SI_ABSENT.filter((rel) => !existsSync(join(target, rel))));
   const files = tous.filter((rel) => !preserveSet.has(rel) || aDeposer.has(rel));
+
+  // ─── LE FICHIER DES DROITS SOURCE DOIT ÊTRE UN JSON LISIBLE — AVANT `applyFiles`, comme la
+  // garde de fraîcheur (T-20260922-0156). `applyFiles` copie ce fichier comme n'importe quel
+  // autre (`copyFileSync`, aucune lecture JSON) : un gabarit dont il est syntaxiquement cassé
+  // serait copié TEL QUEL, la commande rendrait `exit 0`, et `armement()` ne ferait qu'imprimer
+  // un avertissement — un lieu désarmé qui se CROIT à jour, pire qu'un refus. Le refus tombe
+  // ICI, avant toute écriture : soit ce lieu porte encore son ancien fichier de droits (armé ou
+  // non, mais LISIBLE), soit il n'en a jamais eu — jamais un fichier fraîchement cassé.
+  if (files.includes(FICHIER_DES_DROITS)) {
+    const droitsSrc = join(sourceDir, FICHIER_DES_DROITS);
+    try {
+      JSON.parse(readFileSync(droitsSrc, 'utf8'));
+    } catch (e) {
+      throw new Error(
+        `${FICHIER_DES_DROITS} du gabarit (${droitsSrc}) n’est pas un JSON valide (${e.message}). `
+          + `Rien n’a été modifié dans « ${target} » : converger vers un fichier de droits cassé `
+          + `désarmerait le lieu en silence.`
+      );
+    }
+  }
+
   const report = applyFiles({
     payloadRoot: sourceDir,
     target,
