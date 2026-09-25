@@ -3994,6 +3994,7 @@ export const CONTROLES = [
       const pane = s.corpsEtendu.split('\n').filter((l) => /Aucun identifiant de pane sur la ligne/i.test(l));
       assert.equal(pane.length, 1, `l’interdiction d’identifiant de pane doit être énoncée une fois exactement (${pane.length})`);
       assert.match(pane[0], /titre de fenêtre/i, 'l’interdiction du pane ne dit plus CE QU’ON DONNE À LA PLACE (le nom de l’agent, le titre de fenêtre) : sans lui, on redonne le pane');
+      assert.ok(!/sauf|ou le pane|si le focus/i.test(ident[0]), `l’interdiction d’identifiant technique souffre une exception : « ${ident[0].trim().slice(0, 120)} »`);
       assert.match(pane[0], /ne lui dit rien/i, 'l’interdiction du pane ne dit plus POURQUOI (un identifiant de pane ne lui dit rien) : sans le motif, la règle se lit comme un détail de forme');
       exigePolarite(
         s.corpsEtendu, /Aucun identifiant de pane sur la ligne/i,
@@ -4111,6 +4112,7 @@ export const CONTROLES = [
       assert.match(q[0], /deux options au plus/i, 'la décision perd sa borne : deux options au plus');
       assert.match(q[0], /ta recommandation/i, 'la décision perd sa recommandation : une question nue fait de toi un guichet');
       assert.match(q[0], /échéance/i, 'la décision perd son échéance : une remontée sans date est une permission de se taire');
+      assert.match(q[0], /Une remontée sans date est une permission de se taire/i, 'la phrase du seuil n’est plus entière : « de se taire » est ce qui fait de la remontée sans date une faute');
       const r = s.corps.split('\n').filter((l) => /Toute autre question/i.test(l));
       assert.equal(r.length, 1, `« toute autre question » doit être énoncée une fois exactement (${r.length})`);
       assert.match(r[0], /va au chef d'équipe, ou se mesure/i, 'le reste ne va plus au chef d’équipe ni ne se mesure : où va-t-il ?');
@@ -4140,7 +4142,25 @@ export const CONTROLES = [
       exigePolarite(
         s.corps, /Aucun accusé seul/i,
         'aucun accusé seul : le LU est la première ligne du message qui porte le fait',
-        { inverse: /peut être un message à lui|n'est pas exigé|accusé seul est permis/i },
+        { inverse: /peut être un message à lui|n'est pas exigé|accusé seul est permis|part seul|LU nu\b|`LU` nu\b|LU seul|accusé seul (?:est|reste|peut)/i },
+      );
+    },
+  },
+
+  {
+    id: 'le-lu-rattrape-part-quand-meme',
+    quoi: 'l’exception à « jamais seul » est écrite là où la ronde rattrape un LU : un LU rattrapé part quand même, seul s’il le faut — un LU tardif vaut mieux que pas de LU',
+    verifier({ metier }) {
+      const s = sectionDe(metier, /Ta propre ligne et ta propre boîte de saisie/i, 'sur le LU rattrapé par la ronde');
+      const l = s.corps.split('\n').filter((x) => /un LU rattrapé part quand même/i.test(x));
+      assert.equal(l.length, 1, `l’exception du LU rattrapé doit être énoncée une fois exactement (${l.length})`);
+      assert.match(l[0], /vaut pour le LU de réception/i, 'l’exception ne dit plus que « jamais seul » vaut pour le LU de RÉCEPTION : la règle normale n’a plus de périmètre');
+      assert.match(l[0], /seul s'il le faut/i, 'l’exception ne dit plus que le LU rattrapé part SEUL s’il le faut');
+      assert.match(l[0], /vaut infiniment mieux que pas de LU/i, 'l’exception perd son motif : un LU tardif vaut mieux que pas de LU');
+      exigePolarite(
+        s.corps, /un LU rattrapé part quand même/i,
+        'le LU rattrapé par la ronde part quand même, seul s’il le faut',
+        { inverse: /LU rattrapé (?:ne part pas|attend)|jamais seul, même/i },
       );
     },
   },
@@ -6228,7 +6248,7 @@ export const MUTATIONS = [
   },
 
   {
-    id: 'le-rien-perd-le-cout-quil-evite',
+    id: 'un-identifiant-technique-est-tolere-sur-la-ligne',
     quoi: 'la règle du « rien » garde son affirmation et perd ce qu’elle évite — elle se relit alors comme un détail de forme, ce qui est exactement comme elle a cessé de mordre la première fois',
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
@@ -6396,6 +6416,50 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       '**le `LU` en est la première ligne**, jamais la dernière.',
       '**le `LU` en est la dernière ligne**.',
+    ),
+  },
+
+  {
+    id: 'un-lu-nu-part-seul-ailleurs-dans-la-section',
+    quoi: 'survivante A3 du réviseur — une phrase « un LU nu part seul » est ajoutée AILLEURS dans la section : la phrase d’origine reste, le contraire aussi',
+    cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Puis `FAIT` avec le résultat**",
+      "**Un LU nu part seul, sans attendre.** **Puis `FAIT` avec le résultat**",
+    ),
+  },
+
+  {
+    id: 'une-exception-au-pane-est-ecrite',
+    quoi: 'survivante F du réviseur — « sauf le pane si le focus échoue » ajouté à l’interdiction d’identifiant technique',
+    cible: 'la-formule-jai-besoin-de-toi',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "ni identifiant de session, ni commit.",
+      "ni identifiant de session, ni commit, sauf le pane si le focus échoue.",
+    ),
+  },
+
+  {
+    id: 'la-remontee-sans-date-nest-plus-une-faute',
+    quoi: 'survivante I du réviseur — « de se taire » retiré : « une remontée sans date est une permission »',
+    cible: 'une-question-au-dirigeant-est-une-decision',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'Une remontée sans date est une permission de se taire',
+      'Une remontée sans date est une permission',
+    ),
+  },
+
+  {
+    id: 'le-lu-rattrape-ne-part-plus-seul',
+    quoi: 'la ronde perd l’exception : « jamais seul » redevient sans périmètre et contredit « un LU tardif vaut mieux que pas de LU »',
+    cible: 'le-lu-rattrape-part-quand-meme',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**« Jamais seul » vaut pour le LU de réception ; un LU rattrapé part quand même, seul s'il le faut** : un LU tardif vaut infiniment mieux que pas de LU,",
+      "**Un LU tardif vaut mieux que pas de LU** :",
     ),
   },
 

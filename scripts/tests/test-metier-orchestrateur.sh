@@ -1588,6 +1588,42 @@ else
   ko "12c — la section recommande encore de donner l'identifiant de pane au dirigeant"
 fi
 
+# F — l'interdiction ne souffre AUCUNE exception dans sa phrase (sauf le pane, si le focus échoue…).
+if printf '%s' "$S_DER" | grep -qF "**Jamais d'identifiant technique sur la ligne** — ni pane, ni canal, ni identifiant de session, ni commit." \
+   && ! printf '%s' "$S_DER" | grep -iE "identifiant" | grep -qiE "sauf|ou le pane|si le focus"; then
+  ok "12c — l'interdiction d'identifiant technique est entière, sans exception (sauf / ou le pane / si le focus)"
+else
+  ko "12c — l'interdiction d'identifiant technique n'est plus entière, ou une exception y est écrite"
+fi
+# I — la phrase entière du seuil : « une remontée sans date est une permission de se taire ».
+if printf '%s' "$S_MONTE" | grep -qF "**Une remontée sans date est une permission de se taire ; une question rendue nue fait de toi un guichet**"; then
+  ok "12b — « une remontée sans date est une permission de se taire » est entière"
+else
+  ko "12b — la phrase « une remontée sans date est une permission de se taire » n'est plus entière"
+fi
+# 1 — le LU rattrapé par la ronde est l'exception écrite à « jamais seul », dans la section de la ronde.
+S_RATT="$(section 'Ta propre ligne et ta propre boîte de saisie')"
+if printf '%s' "$S_RATT" | grep -qF "un LU rattrapé part quand même, seul s'il le faut" \
+   && printf '%s' "$S_RATT" | grep -qF "vaut pour le LU de réception"; then
+  ok "12f — le LU rattrapé par la ronde part quand même, seul s'il le faut : l'exception à « jamais seul » est écrite"
+else
+  ko "12f — la ronde n'écrit plus l'exception : « jamais seul » contredit « un LU tardif vaut mieux que pas de LU »"
+fi
+# 5 — la borne du doute : un exemple de ce qui n'attend rien.
+if printf '%s' "$S_DER" | grep -qF "n'attend rien" && printf '%s' "$S_DER" | grep -qF "je continue"; then
+  ok "12e — la borne du doute a son exemple : « j'ai tranché X, je continue » n'attend rien"
+else
+  ko "12e — le doute n'a plus de borne : aucun exemple de message qui n'attend rien"
+fi
+# m8 — la concision est le défaut, jamais un plafond (gardé aussi côté bash).
+S_FAITS="$(section 'Des faits, pas ton raisonnement')"
+if printf '%s' "$S_FAITS" | grep -qF "**Et la concision est le défaut, jamais un plafond.**" \
+   && ! printf '%s' "$S_FAITS" | grep -qiE "réponds toujours court|jamais plus de trois lignes|même quand il demande une analyse"; then
+  ok "12g — la concision est le défaut, jamais un plafond (phrase entière, contraire absent)"
+else
+  ko "12g — « la concision est le défaut, jamais un plafond » n'est plus entière, ou son contraire est écrit"
+fi
+
 # ── (d) Le LU part avec le PREMIER fait utile : jamais seul, jamais un message à lui.
 S_LU="$(section 'Accuser LU')"
 if printf '%s' "$S_LU" | grep -qF "**Aucun accusé seul** : le \`LU\` n'est jamais un message à lui. Il part avec le PREMIER fait utile — « LU — je commence X », « LU — état : … » —, jamais seul, jamais après vingt minutes." \
@@ -1595,6 +1631,13 @@ if printf '%s' "$S_LU" | grep -qF "**Aucun accusé seul** : le \`LU\` n'est jama
   ok "12d — aucun accusé seul : le LU part avec le premier fait utile (phrase entière, contraire absent)"
 else
   ko "12d — la phrase « aucun accusé seul… premier fait utile » n'est plus entière, ou son contraire est écrit : le LU redevient un message à lui"
+fi
+# A3 — un contraire écrit AILLEURS dans la section ne doit pas passer : on lit la section ENTIÈRE,
+# hors la phrase « Aucun accusé seul » elle-même (qui nomme « message à lui » pour l'interdire).
+if ! printf '%s' "$S_LU" | grep -v 'Aucun accusé seul' | grep -qiE "part seul|LU nu|LU seul|accusé seul (est|reste|peut)|message à lui"; then
+  ok "12d — aucun contraire (« LU nu », « part seul », « message à lui ») n'est écrit ailleurs dans la section"
+else
+  ko "12d — un contraire (« un LU nu part seul »…) est écrit dans la section de l'accusé : l'accusé seul redevient permis"
 fi
 if printf '%s' "$S_LU" | grep -qF "le \`LU\` en est la première ligne" \
    && printf '%s' "$S_LU" | grep -qF "deux agents ont été réellement gelés"; then
