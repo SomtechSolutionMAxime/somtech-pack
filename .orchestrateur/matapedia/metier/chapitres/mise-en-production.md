@@ -107,7 +107,7 @@ node "$HOME/.somtech/ligne-directe/bin/ligne-directe.js" fermer \
   --bilan "<ce qui a été livré, ce qui reste, ce qui appartient au CTO>"
 ```
 
-**Le bilan est un message comme les autres** : des faits, et `J'ai besoin de toi : …` en dernière ligne — `rien.` s'il ne reste rien qui lui appartienne, et c'est précisément le cas où l'écrire compte, puisque c'est le dernier mot du chantier.
+**Le bilan est un message comme les autres** : des faits ; `J'ai besoin de toi : …` en dernière ligne **seulement** s'il reste quelque chose qui lui appartienne.
 
 Une ligne qu'on abandonne sans la refermer laisse un canal ouvert sur une question sans réponse.
 

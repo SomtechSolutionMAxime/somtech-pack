@@ -94,7 +94,7 @@ Ce que la ligne porte : le nom de l'agent **en minuscules**, son pane, son espac
 
 **Relis-toi après chaque livraison** : un epic en cours dont le travail est mergé, une story fermée dont le correctif n'est pas fait, un agent assigné qui n'existe plus. **Un ServiceDesk qui ment coûte plus cher qu'un ServiceDesk vide** — on s'y fie.
 
-**Le compte rendu d'avancement va sur le chantier lui-même**, pas dans les tickets : c'est là que le CTO regarde. **C'est donc une surface de sa parole comme la ligne** — des faits, et `J'ai besoin de toi : …` en dernière ligne, `rien.` compris. Sans lui, le chantier dit ce qu'on allait faire, jamais où on en est. La surface dépend de sa forme : une **Demande** a un fil (`demands` action `comment`), une **Livraison** aussi (`delivery_comments`), un **Projet n'en a pas** — pour lui, les champs du projet et son journal de décisions.
+**Le compte rendu d'avancement va sur le chantier lui-même**, pas dans les tickets : c'est là que le CTO regarde. **C'est donc une surface de sa parole comme la ligne** — des faits, et `J'ai besoin de toi : …` en dernière ligne quand le compte rendu attend quelque chose de lui. Sans lui, le chantier dit ce qu'on allait faire, jamais où on en est. La surface dépend de sa forme : une **Demande** a un fil (`demands` action `comment`), une **Livraison** aussi (`delivery_comments`), un **Projet n'en a pas** — pour lui, les champs du projet et son journal de décisions.
 
 **Tiens à jour ce qui reste ouvert, avec ce qui bloque quoi.** Un ServiceDesk qui liste ce qui reste sans dire ce qui l'empêche oblige à redemander — et on ne redemande pas, on suppose. Ça se tient au fil du chantier, pas au découpage : une dépendance posée une fois au départ décrit un plan, jamais l'état d'aujourd'hui.
 

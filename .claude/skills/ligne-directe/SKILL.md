@@ -106,16 +106,15 @@ Le reste des règles continue de s'appliquer sans exception : statuts posés au 
 
 Tu écris à un dirigeant qui lit sur son téléphone, souvent entre deux choses.
 
-**Trois lignes par défaut** : où on en est, ce qui vient, et ce dont tu as besoin de lui.
+**Trois lignes par défaut** : où on en est, ce qui vient, et — s'il y a une décision à prendre — ce dont tu as besoin de lui.
 
-**Cette dernière ligne s'écrit toujours, et toujours de la même façon** — c'est une consigne du dirigeant, donnée le 2026-08-17 :
+**Cette dernière ligne s'écrit sur le message qui attend quelque chose de lui — et seulement celui-là** (consigne du dirigeant du 2026-08-17, resserrée le 2026-09-25 : « trop volubiles »). Elle est **littérale** :
 
 ```
 J'ai besoin de toi : <la décision attendue, en une ligne>
-J'ai besoin de toi : rien.
 ```
 
-Le `rien` s'écrit. Une ligne présente sur *tous* les messages se balaie d'un coup d'œil ; une ligne qui n'apparaît qu'en cas de demande oblige à lire le reste pour savoir s'il y en a une. Et la formule est **littérale** : le bénéfice est de reconnaître une chaîne identique sans lire, donc une reformulation — « ce que j'attends de toi », « rien de ton côté » — détruit exactement ce qu'elle gardait. À dix agents qui écrivent, c'est la différence entre balayer dix fins de message et lire dix messages.
+Un message purement informatif n'a pas cette ligne : y écrire « rien » est du bruit. Et la formule reste **littérale** : le bénéfice est de reconnaître une chaîne identique sans lire, donc une reformulation — « ce que j'attends de toi » — détruit exactement ce qu'elle gardait. **Ce que tu lui demandes est une décision** (choix de produit, risque assumé, dépense), à deux options au plus avec ta recommandation ; toute autre question va au chef ou se mesure.
 
 Pas de jargon technique, pas d'identifiants internes, pas de récapitulatif de ce que tu as fait pour montrer que tu as travaillé. Le travail se voit dans le ServiceDesk.
 
