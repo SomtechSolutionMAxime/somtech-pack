@@ -159,7 +159,12 @@ function fichiersTexte(racine) {
 // de package.json) ET parle d'installer est fautif. Le texte de remplacement ne nomme pas la
 // commande — il nomme les étiquettes launchd — et n'a donc pas à être exempté.
 const COMMANDE = /rendez-vous\.js|orchestrateur-rendez-vous/;
-const INSTALLER = /\binstall/i;
+// ⚠️ PAS DE `\b` (second tour de revue) : en JS sans drapeau `u`, `\b` est ASCII — « é » y est
+// un non-mot, donc `\binstall` matchait à l'INTÉRIEUR de « préinstallé », et pas dans
+// « désinstaller » : un déclenchement qui suivait un artefact d'expression, pas une intention.
+// La règle, explicite : « install… », « réinstall… », « reinstall… » en début de mot, au sens
+// Unicode. « désinstaller » et « préinstallé » ne prescrivent pas de poser les lanceurs.
+const INSTALLER = /(?<!\p{L})(?:ré|re)?install/iu;
 
 function paragraphesFautifs(texte) {
   return texte.split(/\n\s*\n/).filter((p) => COMMANDE.test(p) && INSTALLER.test(p));
@@ -174,13 +179,25 @@ test('le témoin textuel attrape l’invocation, la phrase coupée ET la paraphr
   );
   assert.equal(paragraphesFautifs('Installe la ligne.\n\nPuis `rendez-vous.js service etat`.').length, 0,
     'deux paragraphes distincts ne se contaminent pas');
+  assert.equal(paragraphesFautifs('réinstalle les rendez-vous avec rendez-vous.js').length, 1,
+    '« réinstaller » prescrit bien de poser les lanceurs');
+  assert.equal(paragraphesFautifs('désinstalle-les : rendez-vous.js service retirer').length, 0,
+    '« désinstaller » ne prescrit pas de les poser');
+  assert.equal(paragraphesFautifs('le paquet préinstallé ne touche pas rendez-vous.js').length, 0,
+    '« préinstallé » ne doit pas matcher par un artefact de `\\b` sur l’accent');
 });
 
 test('aucun texte lu par un agent ne prescrit d’installer les rendez-vous du pack', () => {
   const fichiers = LIEUX_LUS.flatMap((l) => fichiersTexte(join(REPO_ROOT, l)));
   assert.ok(fichiers.length > 20, `balayage vide — ${fichiers.length} fichiers : le témoin ne regarderait rien`);
   const fautifs = fichiers.filter((f) => paragraphesFautifs(readFileSync(f, 'utf8')).length > 0);
-  assert.deepEqual(fautifs.map((f) => relative(REPO_ROOT, f)), []);
+  assert.deepEqual(
+    fautifs.map((f) => relative(REPO_ROOT, f)),
+    [],
+    'Ces fichiers ont un paragraphe qui nomme rendez-vous.js / orchestrateur-rendez-vous ET parle ' +
+      "d'(ré)installer. Si c'est une prescription, retire-la : le registre des rondes est la seule " +
+      "source de réveil (T-20260925-0068). Si c'est légitime, sépare les deux en paragraphes distincts."
+  );
 });
 
 test('la compétence orchestrateur REMPLACE l’instruction : elle prescrit de vérifier l’affectation au registre', () => {
