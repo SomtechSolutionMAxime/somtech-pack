@@ -1380,6 +1380,45 @@ export const CONTROLES = [
   },
 
   {
+    id: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    quoi: 'avant de fermer le pane d’un chef ou de retirer son espace, l’orchestrateur LUI DEMANDE — pouvoir lire son espace ne l’en dispense pas, et le métier dit pourquoi',
+    verifier({ metier }) {
+      // T-20260925-0015. `git log origin/<cible>..HEAD` ne voit que ce qui est COMMITÉ : son
+      // « zéro commit » est vrai et TROMPEUR devant un fichier non suivi, une base, un correctif
+      // jamais indexé. Cas réel : le chef portait l'unique exemplaire d'un correctif et une base
+      // de 58 Mo ; la portée refusait la lecture de son répertoire, ce qui a forcé à demander.
+      // Desserrer la portée (T-20260922-0156) retire ce refus : le geste de remplacement est la
+      // question, écrite. ⚠️ Elle est éprouvée DANS la section de fermeture seule — une phrase
+      // déplacée ailleurs ne garde plus le geste qu'elle prétend garder.
+      const s = sectionDe(metier, /^Fermer proprement\b/, 'qui enseigne la fermeture d’un chef');
+      const corps = s.corps.replace(/\s+/g, ' ');
+      const exige = [
+        [/ne t['’]exempte pas de LUI DEMANDER avant de fermer son pane ou de retirer son espace/,
+          'la lecture n’exempte pas de DEMANDER au chef avant de fermer son pane ou de retirer son espace'],
+        [/ne voit que ce qui est \*\*commité\*\*[^.]*« zéro commit » est vrai et \*\*trompeur\*\* devant un fichier non suivi/,
+          'le motif : git log ne voit que le commité, son zéro est vrai et trompeur devant un fichier non suivi'],
+        [/seule la question répond à « qu['’]est-ce qui n['’]existe QUE là »/,
+          'la lecture répond à « qu’y a-t-il », seule la question à « qu’est-ce qui n’existe QUE là »'],
+        [/N['’]utilise JAMAIS `@\{u\}`/, 'la garde `@{u}`, dans la même section'],
+        [/les deux, jamais l['’]une pour l['’]autre/, 'les deux gardes (`@{u}` et la question) se lisent ENSEMBLE'],
+      ];
+      for (const [motif, dit] of exige) {
+        assert.match(
+          corps, motif,
+          `la section de fermeture d’un chef ne dit plus : ${dit}. Une lecture permise ferait `
+            + `croire des fichiers redondants sur un « zéro commit » — et l'espace serait détruit.`,
+        );
+      }
+      const contraire = corps.match(/la lecture (?:suffit|remplace la question)|lire suffit|inutile de demander|pas besoin de demander/i);
+      assert.ok(
+        !contraire,
+        `la section de fermeture d’un chef écrit le contraire de la règle (« ${contraire && contraire[0]} ») : `
+          + `la lecture répond à « qu’y a-t-il », jamais à « qu’est-ce qui n’existe que là ».`,
+      );
+    },
+  },
+
+  {
     id: 'pas-de-chemin-de-machine',
     quoi: 'le gabarit ne porte aucun chemin de poste — il est déposé dans des dépôts qui ne sont pas celui-ci',
     verifier({ metier, contexte }) {
@@ -4888,6 +4927,35 @@ export const MUTATIONS = [
       'log --oneline origin/<branche-cible>..HEAD',
       'log --oneline origin/<branche-cible>..HEAD 2>/dev/null',
     ),
+  },
+  // ── fermer un chef : la question, pas seulement la lecture (T-20260925-0015)
+  {
+    id: 'la-question-avant-de-fermer-est-retiree',
+    quoi: 'le paragraphe « La question » disparaît — la lecture permise suffit alors, et le « zéro commit » fait fermer',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(/> \*\*2\. La question\.\*\*[^\n]*\n\n?/, ''),
+  },
+  {
+    id: 'la-lecture-suffit-est-ecrit',
+    quoi: 'le contraire est écrit dans la section — « la lecture suffit », les positives restant intactes',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'un refus de lecture a forcé à demander.)*',
+      'un refus de lecture a forcé à demander.)* La lecture suffit.',
+    ),
+  },
+  {
+    id: 'la-question-est-deplacee-hors-de-la-section',
+    quoi: 'le paragraphe « La question » est intact mais vit dans une AUTRE section — il ne garde plus la fermeture',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => {
+      const m = t.match(/> \*\*2\. La question\.\*\*[^\n]*\n/);
+      if (!m) return t;
+      return `${t.replace(m[0], '')}\n\n## Annexe déplacée\n\n${m[0]}\n`;
+    },
   },
   {
     id: 'un-chemin-de-machine-entre-dans-le-gabarit',

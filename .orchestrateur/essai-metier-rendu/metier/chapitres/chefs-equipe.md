@@ -308,13 +308,11 @@ git -C <repo> branch -D wt/<timestamp>
 git -C <repo> worktree prune
 ```
 
-> ⚠️ **N'utilise JAMAIS `@{u}` pour ce contrôle, et n'avale jamais son erreur.** C'est le défaut le plus coûteux de cette page : il **détruit du travail**.
+> ⚠️ **N'utilise JAMAIS `@{u}` pour ce contrôle, et n'avale jamais son erreur.** Deux gardes, deux défauts, un seul geste : **les deux, jamais l'une pour l'autre.**
 >
-> Une branche-socle `wt/<timestamp>` est créée par `git worktree add -b wt/$TS origin/main` — **elle n'a pas d'upstream**, et elle n'en aura jamais. `git log @{u}..` échoue donc *toujours*, et un `2>/dev/null` transforme cet échec en **sortie vide**. Une sortie vide se lit « tout est poussé ». **Tu détruis alors l'espace de travail avec les commits qu'il portait**, et rien ne t'aura prévenu — l'erreur qui aurait dû t'arrêter a été avalée par la redirection.
+> **1. La référence.** Une branche `wt/<timestamp>` **n'a pas d'upstream** : `git log @{u}..` échoue *toujours*, et un `2>/dev/null` change cet échec en sortie vide, qui se lit « tout est poussé » : tu détruis ses commits. `origin/<branche-cible>..HEAD` **échoue bruyamment** si la référence est fausse.
 >
-> `origin/<branche-cible>..HEAD` compare à ce qui existe vraiment, et **échoue bruyamment** si la référence est fausse. Un échec qu'on voit vaut infiniment mieux qu'un vide qu'on croit.
->
-> *Deux orchestrateurs ont exécuté la version fautive aujourd'hui sans rien perdre — **par vigilance, pas par conception**. Le geste ne les protégeait pas.*
+> **2. La question.** Pouvoir lire l'espace d'un chef ne t'exempte pas de LUI DEMANDER avant de fermer son pane ou de retirer son espace. Ce log ne voit que ce qui est **commité** : son « zéro commit » est vrai et **trompeur** devant un fichier non suivi, une base de données, un correctif jamais ajouté à l'index. Ta lecture répond à « qu'y a-t-il » ; seule la question répond à « qu'est-ce qui n'existe QUE là ». *(Un chef à zéro commit portait seul un correctif et une base de 58 Mo : un refus de lecture a forcé à demander.)*
 
 ⚠️ **Ferme le pane, jamais le tab.** Un tab héberge souvent plusieurs panes — donc plusieurs agents, **dont potentiellement toi**. `herdr tab close` les emporte tous, sans confirmation. `herdr agent list` donne le `tab_id` de chacun.
 

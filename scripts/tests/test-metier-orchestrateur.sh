@@ -1030,6 +1030,65 @@ porte "Deux gardes justes, chacune bornée à sa section, ne gardent pas leur AC
   "2026-09-20"
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ⑨bis LA FERMETURE D'UN CHEF SE DEMANDE, ELLE NE SE DÉDUIT PAS DE LA LECTURE
+#                                                          (T-20260925-0015)
+#
+# Lire l'espace d'un chef (additionalDirectories, T-20260922-0156) répond à
+# « qu'y a-t-il ». Seule la question répond à « qu'est-ce qui n'existe QUE là ».
+# Cas réel : zéro commit hors main, et le chef portait l'unique exemplaire d'un
+# correctif d'extraction plus une base de 58 Mo — le refus de lecture avait forcé
+# à demander. Chaque assertion porte sur une PHRASE ENTIÈRE, dans la section de
+# fermeture seule ; chaque négative est appariée à ses positives.
+# ═══════════════════════════════════════════════════════════════════════════
+echo "⑨bis fermer un chef : demander avant de fermer — T-20260925-0015"
+
+# ⚠️ `section` s'arrête au premier « # » de colonne 0 — y compris un COMMENTAIRE de bloc bash,
+# et la fermeture en porte. On lit donc ici la section en ignorant les clôtures ```.
+section_hors_blocs() {
+  awk -v motif="$1" '
+    /^```/ { fence = !fence }
+    !fence && /^#+ / {
+      n = 0; while (substr($0, n+1, 1) == "#") n++
+      if (dedans && n <= niv) { dedans = 0 }
+      if (!dedans && index($0, motif) > 0) { dedans = 1; niv = n; next }
+    }
+    dedans { print }
+  ' "$METIER"
+}
+S_FERMER="$(section_hors_blocs 'Fermer proprement')"
+garde_ferme() {
+  if printf '%s' "$S_FERMER" | grep -qF -- "$1"; then ok "$2"; else ko "$3"; fi
+}
+garde_ferme "Pouvoir lire l'espace d'un chef ne t'exempte pas de LUI DEMANDER avant de fermer son pane ou de retirer son espace." \
+  "« Fermer proprement » exige de DEMANDER au chef avant de fermer, et dit que la lecture n'exempte pas" \
+  "« Fermer proprement » n'exige plus de demander au chef — une lecture permise ferait fermer sur un « zéro commit »"
+garde_ferme "Ce log ne voit que ce qui est **commité** : son « zéro commit » est vrai et **trompeur** devant un fichier non suivi, une base de données, un correctif jamais ajouté à l'index." \
+  "« Fermer proprement » dit le motif : git log ne voit que le commité, son zéro est vrai et trompeur" \
+  "« Fermer proprement » ne dit plus pourquoi la question s'impose — la règle deviendrait une formalité"
+garde_ferme "Ta lecture répond à « qu'y a-t-il » ; seule la question répond à « qu'est-ce qui n'existe QUE là »." \
+  "« Fermer proprement » sépare ce que répond la lecture de ce que répond la question" \
+  "« Fermer proprement » ne sépare plus la lecture de la question"
+garde_ferme "N'utilise JAMAIS \`@{u}\` pour ce contrôle, et n'avale jamais son erreur." \
+  "la garde @{u} est toujours là, dans la même section" \
+  "la garde @{u} a disparu de « Fermer proprement »"
+garde_ferme "Deux gardes, deux défauts, un seul geste : **les deux, jamais l'une pour l'autre.**" \
+  "les deux gardes se lisent ENSEMBLE : deux défauts, un seul geste" \
+  "les deux gardes ne se lisent plus ensemble — l'une ferait croire que l'autre suffit"
+
+contraire_absent() {
+  if printf '%s' "$S_FERMER" | grep -qiF -- "$1"; then
+    ko "« Fermer proprement » écrit le contraire : « $1 »"
+  else
+    ok "« Fermer proprement » n'écrit pas « $1 »"
+  fi
+}
+contraire_absent "lire suffit"
+contraire_absent "la lecture suffit"
+contraire_absent "inutile de demander"
+contraire_absent "la lecture remplace la question"
+contraire_absent "n'a pas besoin de demander"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ⑩ LE TEXTE NE GONFLE PAS
 #
 # Il est lu EN ENTIER à chaque naissance. Un métier qui gonfle à chaque leçon
