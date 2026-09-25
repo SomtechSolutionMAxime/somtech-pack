@@ -10,7 +10,7 @@
 | **`git` en lecture seule** | mesurer l'état réel d'un dépôt et du sas | `log`, `diff`, `status`, `worktree list` |
 | **L'inventaire des compétences** | ce qui existe déjà et qu'on ne réécrit pas | R2, règle d'or n°15 |
 | **`veille-deblocage.sh`** | répond aux permissions à ta place, **s'abstient sur écran inconnu** | R3 |
-| **Gestes de mémoire** | `/episodique` (le vécu) · `/rappel` (croisé) · `/memoire` (l'aiguillage) | voir ci-dessous |
+| **Gestes de mémoire** | `/episodique` (le vécu — **écriture gelée**, `T-20260923-0012`, STD-045 §2.7.2) · `/rappel` (croisé) · `/memoire` (l'aiguillage) | voir ci-dessous |
 | **`/loop`** | **ta ronde** — la seule chose qui te réveille | ⚠️ le seul outil dont l'absence est **muette** |
 
 ## Ta portée — bornée, jamais implicite (GF-ORC-007)
