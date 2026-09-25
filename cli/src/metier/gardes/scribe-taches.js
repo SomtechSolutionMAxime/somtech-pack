@@ -496,6 +496,15 @@ export async function trouverProchaineTache({ demandeId, demandeCreatedAt, direc
  *   fichier d'état du lieu (JSON illisible — à distinguer d'une forme inattendue,
  *   tolérée). Fait refuser IMMÉDIATEMENT, avant toute autre validation : repartir
  *   d'un journal vide risquerait de rejouer une écriture déjà faite (Z3).
+ * @param {boolean|undefined} entree.stopHookActive  L'HÔTE dit-il « j'ai déjà
+ *   relancé sur ce tour » ? (revue de fond, T-20260925-0080, R1-R3). Un REFUS
+ *   (bloc malformé, ServiceDesk injoignable, état corrompu, etc.) rendu sous
+ *   `stopHookActive:true` ne bloque JAMAIS — la raison a déjà été dite comme
+ *   `decision:block` au tour précédent ; la répéter ne fait que boucler, surtout
+ *   quand le refus lui-même empêche le plafond de compter (état corrompu : les
+ *   horodatages ne peuvent pas être lus). Seule une RELANCE légitime
+ *   (« prochaine tâche ») reste un `decision:block` sous `stopHookActive`,
+ *   bornée par le plafond comme toujours — c'est la chaîne voulue.
  * @returns {Promise<{
  *   silence:boolean,
  *   sortie:{decision?:'block', reason?:string, systemMessage?:string},
@@ -504,17 +513,23 @@ export async function trouverProchaineTache({ demandeId, demandeCreatedAt, direc
  * }>}
  */
 export async function deciderStop(entree) {
-  const { texteAssistant, contenuDemande, appeler, horodatagesRelances, plafondParHeure, maintenant, journalPrecedent, onEtapeReussie, etatCorrompu } = entree;
+  const {
+    texteAssistant, contenuDemande, appeler, horodatagesRelances, plafondParHeure, maintenant,
+    journalPrecedent, onEtapeReussie, etatCorrompu, stopHookActive,
+  } = entree;
 
   // ── Pas de bloc (ou un bloc cité, pas terminal) : silence total, zéro appel —
   // la SEULE sortie muette.
   const extrait = extraireBloc(texteAssistant);
   if (!extrait.presence) return { silence: true, sortie: {}, blocEmis: false };
 
-  // Petit relais commun : un « candidat » de refus/relance passe par le plafond ;
-  // un « arrêt » sort directement (jamais compté dans le plafond, puisqu'il
-  // n'aurait jamais bloqué).
-  const gate = (raison) => gaterEtEmettre({ raison, horodatagesRelances, plafondParHeure, maintenant });
+  // Petit relais commun : un « candidat » de REFUS passe par le plafond ET par
+  // R2 (stop_hook_active désarme un refus, jamais une relance légitime) ; un
+  // « candidat » de RELANCE (la suite trouvée) passe par le plafond SEUL —
+  // c'est la chaîne voulue, même sous stop_hook_active. Un « arrêt » sort
+  // directement (jamais compté dans le plafond, puisqu'il n'aurait jamais bloqué).
+  const gate = (raison) => gaterEtEmettre({ raison, horodatagesRelances, plafondParHeure, maintenant, estRefus: true, stopHookActive });
+  const gateRelance = (raison) => gaterEtEmettre({ raison, horodatagesRelances, plafondParHeure, maintenant, estRefus: false, stopHookActive });
   const arret = (systemMessage) => ({ silence: false, sortie: systemMessage ? { systemMessage } : {}, blocEmis: false });
 
   // ── Z3 — ÉTAT DU LIEU CORROMPU (revue de fond, T-20260925-0080). PRIORITAIRE
@@ -655,15 +670,40 @@ export async function deciderStop(entree) {
   const noteReprise = ecriture.sautees.length
     ? `(reprise : ${ecriture.sautees.length} étape(s) déjà faite(s) sautée(s) — ${ecriture.sautees.join(' · ')}) `
     : '';
-  return { ...gate(`${noteReprise}prochaine tâche : ${suite.tache.code} — ${suite.tache.titre}`), journalAEnregistrer };
+  // R2 : une RELANCE légitime, jamais un refus — reste `decision:block` même
+  // sous `stopHookActive`, seulement bornée par le plafond.
+  return { ...gateRelance(`${noteReprise}prochaine tâche : ${suite.tache.code} — ${suite.tache.titre}`), journalAEnregistrer };
 }
 
 /**
- * Applique le plafond ① à un candidat de sortie `decision:block`.
+ * Applique R2 (`stopHookActive`) PUIS le plafond ① à un candidat de sortie
+ * `decision:block`.
  *
- * @param {{raison:string, horodatagesRelances:number[], plafondParHeure:number|null|undefined, maintenant:number}} args
+ * 🔴 R2, ET C'EST UNE RÈGLE GÉNÉRALE, PAS UN CORRECTIF AU CAS PAR CAS (revue
+ * de fond, T-20260925-0080, passe reproduite par exécution du vrai fil mince) :
+ * un état corrompu combiné à `stopHookActive:true` produisait encore
+ * `decision:block` — et un état corrompu ne peut PAS faire compter le plafond
+ * (les horodatages ne se lisent pas d'un fichier illisible), donc RIEN ne
+ * bornait la boucle. Le correctif ne vise pas « l'état corrompu » seul : TOUT
+ * REFUS (`estRefus:true`) rendu sous `stopHookActive:true` désarme, avant même
+ * de consulter le plafond — la raison a déjà été dite comme block au tour
+ * précédent ; la répéter n'apprend rien à l'agent et ne sert qu'à boucler.
+ * Une RELANCE légitime (`estRefus:false`, « prochaine tâche ») ignore
+ * `stopHookActive` et reste bornée par le plafond SEUL — c'est la chaîne
+ * voulue : le hook peut continuer à pousser du travail réel même après un
+ * premier blocage sur ce tour, jusqu'à ce que le plafond, lui, morde.
+ *
+ * @param {{raison:string, horodatagesRelances:number[], plafondParHeure:number|null|undefined,
+ *   maintenant:number, estRefus:boolean, stopHookActive?:boolean}} args
  */
-function gaterEtEmettre({ raison, horodatagesRelances, plafondParHeure, maintenant }) {
+function gaterEtEmettre({ raison, horodatagesRelances, plafondParHeure, maintenant, estRefus, stopHookActive }) {
+  if (estRefus && stopHookActive === true) {
+    return {
+      silence: false,
+      sortie: { systemMessage: `scribe des tâches : arrêt permis (stop_hook_active) — ${raison}` },
+      blocEmis: false,
+    };
+  }
   const verdict = jugerPlafond({ horodatages: horodatagesRelances, maintenant, plafondParHeure });
   if (verdict.autorise) {
     return { silence: false, sortie: { decision: 'block', reason: raison }, blocEmis: true };

@@ -233,6 +233,11 @@ async function main() {
       maintenant,
       journalPrecedent: journal,
       etatCorrompu: corrompu,
+      // ⚠️ R3 (revue de fond, T-20260925-0080) : lu ici, passé à la décision
+      // pure, qui le teste elle-même (R2) — jamais devinée, jamais oubliée sur
+      // un chemin de refus. Un `stop_hook_active` manquant ou non-booléen
+      // vaut `false` : seule la valeur EXACTE `true` change quoi que ce soit.
+      stopHookActive: requete?.stop_hook_active === true,
       // ⚠️ FERME LE TROU DU DÉLAI INTERNE (T-20260925-0080, revue de fond, passe 3) :
       // si le minuteur ci-dessus tue le process AU MILIEU du plan d'écritures, cette
       // fonction `deciderStop` ne rend JAMAIS son `journalAEnregistrer` — le process

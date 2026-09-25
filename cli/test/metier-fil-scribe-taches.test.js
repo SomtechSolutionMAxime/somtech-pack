@@ -511,3 +511,57 @@ test('Z3 bout en bout — fichier d\'état corrompu → le hook NE PLANTE PAS, r
   assert.equal(readFileSync(fichierEtat, 'utf8'), contenuCorrompu,
     'le fichier d\'état corrompu ne doit JAMAIS être réécrit par ce hook');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// R1/R2/R3, BOUT EN BOUT — reproduction exacte du défaut trouvé en revue de
+// fond (exécution du VRAI fil mince) : état corrompu + stop_hook_active:true
+// rendait encore decision:block, et l'état corrompu empêche le plafond de
+// compter (les horodatages ne se lisent pas d'un fichier illisible) → boucle
+// sans fin. Le fil doit lire `stop_hook_active` et le transmettre à la
+// décision (R3) ; la décision le teste (R2) ; l'ordre protège le cas sans
+// bloc (R1).
+// ═══════════════════════════════════════════════════════════════════════════
+
+function ecrireEtatCorrompu(tmp) {
+  const etat = join(tmp, 'etat');
+  mkdirSync(etat, { recursive: true });
+  const sha1 = createHash('sha1').update(tmp).digest('hex');
+  const fichierEtat = join(etat, `${sha1}.json`);
+  const contenuCorrompu = '{ "horodatages": [1,2,3], "journal": { "empreinte": "abc", "etapes": [ INVALIDE ICI';
+  writeFileSync(fichierEtat, contenuCorrompu);
+  return { etat, fichierEtat, contenuCorrompu };
+}
+
+test('R1 bout en bout — état corrompu SANS bloc → silence total (même reproduction que le défaut, mais sans bloc)', () => {
+  const t = join(TMP, 'transcript.jsonl');
+  writeFileSync(t, transcriptAvec('un message ordinaire, aucun bloc ici'));
+  writeFileSync(join(TMP, '.demande'), 'D-20260925-0003\n');
+  const { etat, fichierEtat, contenuCorrompu } = ecrireEtatCorrompu(TMP);
+
+  const sortie = executerGarde({ cwd: TMP, transcriptPath: t, env: { SOMTECH_SCRIBE_ETAT: etat, SOMTECH_SCRIBE_RELANCES_PAR_HEURE: '30' } });
+  assert.equal(sortie, '', `sans bloc, même avec un état corrompu, la sortie doit être VIDE : ${JSON.stringify(sortie)}`);
+  assert.equal(readFileSync(fichierEtat, 'utf8'), contenuCorrompu, 'le fichier corrompu ne doit jamais être touché');
+});
+
+test('R2/R3 bout en bout — REPRODUCTION EXACTE du défaut : état corrompu + bloc + stop_hook_active:true → PAS de block (la boucle sans fin est fermée)', () => {
+  const t = join(TMP, 'transcript.jsonl');
+  writeFileSync(t, transcriptAvec(['```taches', 'attend: dirigeant', '```'].join('\n')));
+  writeFileSync(join(TMP, '.demande'), 'D-20260925-0003\n');
+  const { etat, fichierEtat, contenuCorrompu } = ecrireEtatCorrompu(TMP);
+
+  const sortie = JSON.parse(executerGarde({ cwd: TMP, transcriptPath: t, stopHookActive: true, env: { SOMTECH_SCRIBE_ETAT: etat, SOMTECH_SCRIBE_RELANCES_PAR_HEURE: '30' } }));
+  assert.equal(sortie.decision, undefined, `REPRODUCTION du défaut si ceci échoue : ${JSON.stringify(sortie)}`);
+  assert.match(sortie.systemMessage, /corrompu/);
+  assert.equal(readFileSync(fichierEtat, 'utf8'), contenuCorrompu, 'le fichier corrompu ne doit jamais être touché, même sous stop_hook_active');
+});
+
+test('R2/R3 bout en bout — état corrompu + bloc + stop_hook_active:false → block nommé, INCHANGÉ', () => {
+  const t = join(TMP, 'transcript.jsonl');
+  writeFileSync(t, transcriptAvec(['```taches', 'attend: dirigeant', '```'].join('\n')));
+  writeFileSync(join(TMP, '.demande'), 'D-20260925-0003\n');
+  const { etat } = ecrireEtatCorrompu(TMP);
+
+  const sortie = JSON.parse(executerGarde({ cwd: TMP, transcriptPath: t, stopHookActive: false, env: { SOMTECH_SCRIBE_ETAT: etat, SOMTECH_SCRIBE_RELANCES_PAR_HEURE: '30' } }));
+  assert.equal(sortie.decision, 'block');
+  assert.match(sortie.reason, /corrompu/);
+});

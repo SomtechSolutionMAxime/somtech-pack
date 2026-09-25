@@ -813,3 +813,98 @@ test('Z3 — état corrompu, plafond atteint → arrêt permis quand même, ET D
   assert.equal(r.sortie.decision, undefined);
   assert.match(r.sortie.systemMessage, /plafond/);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// R1/R2/R3 — `stop_hook_active` (revue de fond, T-20260925-0080, reproduite par
+// exécution du vrai fil mince : état corrompu + stop_hook_active:true rendait
+// ENCORE decision:block — et un état corrompu empêche le plafond de compter
+// (les horodatages ne se lisent pas d'un fichier illisible) → boucle sans fin.
+//
+// RÈGLE GÉNÉRALE (pas un correctif au cas par cas) : TOUT refus rendu sous
+// stop_hook_active:true laisse s'arrêter (systemMessage), jamais un block —
+// SAUF une relance légitime (« prochaine tâche »), qui reste block, bornée
+// par le plafond comme toujours.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test('R1 — état corrompu SANS bloc terminal → SILENCE, toujours (l\'ordre protège même le cas où le plafond ne pourrait pas compter)', async () => {
+  const r = await deciderStop({
+    texteAssistant: 'un message ordinaire, aucun bloc `taches` ici',
+    contenuDemande: 'D-20260925-0003',
+    appeler: appelerQuiCrieSiAppele,
+    horodatagesRelances: [], plafondParHeure: 30, maintenant: 1000,
+    etatCorrompu: true, // même corrompu : sans bloc, ça ne doit JAMAIS se voir
+  });
+  assert.deepEqual(r, { silence: true, sortie: {}, blocEmis: false });
+});
+
+test('R2 — état corrompu + bloc + stop_hook_active:true → PAS de block, systemMessage nommé (la boucle sans fin fermée)', async () => {
+  const r = await deciderStop({
+    texteAssistant: ['```taches', 'attend: dirigeant', '```'].join('\n'),
+    contenuDemande: 'D-20260925-0003',
+    appeler: appelerQuiCrieSiAppele,
+    horodatagesRelances: [], plafondParHeure: 30, maintenant: 1000,
+    etatCorrompu: true, stopHookActive: true,
+  });
+  assert.equal(r.sortie.decision, undefined, `stop_hook_active:true ne doit JAMAIS produire de block sur un refus : ${JSON.stringify(r.sortie)}`);
+  assert.match(r.sortie.systemMessage, /corrompu/);
+  assert.equal(r.blocEmis, false);
+});
+
+test('R2 — état corrompu + bloc + stop_hook_active:false (ou absent) → block nommé, INCHANGÉ', async () => {
+  for (const stopHookActive of [false, undefined]) {
+    const r = await deciderStop({
+      texteAssistant: ['```taches', 'attend: dirigeant', '```'].join('\n'),
+      contenuDemande: 'D-20260925-0003',
+      appeler: appelerQuiCrieSiAppele,
+      horodatagesRelances: [], plafondParHeure: 30, maintenant: 1000,
+      etatCorrompu: true, stopHookActive,
+    });
+    assert.equal(r.sortie.decision, 'block', `stopHookActive=${stopHookActive} : le block doit rester`);
+    assert.match(r.sortie.reason, /corrompu/);
+  }
+});
+
+test('R2 — clé absente + stop_hook_active:true → PAS de block', async () => {
+  const r = await deciderStop({
+    texteAssistant: ['```taches', 'attend: dirigeant', '```'].join('\n'),
+    contenuDemande: 'D-20260925-0003',
+    appeler: null,
+    horodatagesRelances: [], plafondParHeure: 30, maintenant: 1000,
+    stopHookActive: true,
+  });
+  assert.equal(r.sortie.decision, undefined);
+  assert.match(r.sortie.systemMessage, /clé absente/);
+});
+
+test('R2 — relance légitime (prochaine tâche trouvée) + stop_hook_active:true → RESTE decision:block (la chaîne voulue)', async () => {
+  const { appeler } = construireAppeler({
+    demandes: { 'D-20260925-0003': { id: 'uuid-demande', created_at: '2026-09-25T00:00:00Z', direct_ticket_count: 0 } },
+    listePages: [[{ id: 'n', ticket_id: 'T-20260925-0009', title: 'nouvelle tâche', status: 'new', demand_id: 'uuid-demande', created_at: '2026-09-25T01:00:00Z', sequence_order: null }]],
+  });
+  const texte = ['```taches', 'ouvrir: nouvelle tâche', '```'].join('\n');
+  const r = await deciderStop({
+    texteAssistant: texte, contenuDemande: 'D-20260925-0003', appeler,
+    horodatagesRelances: [], plafondParHeure: 30, maintenant: 1000,
+    stopHookActive: true,
+  });
+  assert.equal(r.sortie.decision, 'block', `une relance légitime doit rester block même sous stop_hook_active : ${JSON.stringify(r.sortie)}`);
+  assert.match(r.sortie.reason, /prochaine tâche/);
+  assert.equal(r.blocEmis, true);
+});
+
+test('R2 — relance légitime + stop_hook_active:true + plafond ATTEINT → arrêt permis quand même (le plafond reste la seule borne d\'une relance)', async () => {
+  const { appeler } = construireAppeler({
+    demandes: { 'D-20260925-0003': { id: 'uuid-demande', created_at: '2026-09-25T00:00:00Z', direct_ticket_count: 0 } },
+    listePages: [[{ id: 'n', ticket_id: 'T-20260925-0009', title: 'nouvelle tâche', status: 'new', demand_id: 'uuid-demande', created_at: '2026-09-25T01:00:00Z', sequence_order: null }]],
+  });
+  const texte = ['```taches', 'ouvrir: nouvelle tâche', '```'].join('\n');
+  const maintenant = 1_000_000;
+  const horodatagesRelances = Array.from({ length: 30 }, (_, i) => maintenant - i * 1000);
+  const r = await deciderStop({
+    texteAssistant: texte, contenuDemande: 'D-20260925-0003', appeler,
+    horodatagesRelances, plafondParHeure: 30, maintenant,
+    stopHookActive: true,
+  });
+  assert.equal(r.sortie.decision, undefined);
+  assert.match(r.sortie.systemMessage, /plafond/);
+});
