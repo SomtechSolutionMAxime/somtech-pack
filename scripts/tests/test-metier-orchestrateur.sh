@@ -1126,13 +1126,34 @@ skill_sans '^git .*worktree remove.*--force' "aucun « worktree remove --force �
 # séparées (« Sauf si git log est vide. », « Un espace propre à ta lecture se ferme sans rien demander. »).
 exceptions_absentes() { # $1 nom, $2 texte
   if printf '%s' "$2" | grep -qF -- "DEMANDER" \
-     && ! printf '%s' "$2" | grep -qiE "sauf si|hormis|excepté|à moins|se ferme sans rien demander|sans rien demander|sans demander"; then
+     && ! printf '%s' "$2" | grep -qiE "sauf si|hormis|excepté|à moins|se ferme sans rien demander|sans rien demander|sans demander|se ferm(e|ent) directement|se ferme sans|ferme directement|sans poser la question"; then
     ok "$1 : aucune exception à la question (sauf si / hormis / à moins / sans demander…)"
   else
     ko "$1 : une exception à la question est écrite — ou la question a disparu"
   fi
 }
 exceptions_absentes "« Fermer proprement »" "$S_FERMER"
+
+# ORDRE et --force / -f : dans le bloc de fermeture (métier ET étape f du skill), la question précède
+# `herdr pane close`, et aucun `worktree remove` ne force. Chaque négatif est apparié à la présence
+# de la question — un bloc sans question ne prouve rien.
+ordre_et_force() { # $1 libellé, $2 texte
+  local d c
+  d="$(printf '%s\n' "$2" | grep -n '^# 3\. DEMANDER au chef' | head -1 | cut -d: -f1)"
+  c="$(printf '%s\n' "$2" | grep -n '^herdr pane close' | head -1 | cut -d: -f1)"
+  if [ -n "$d" ] && [ -n "$c" ] && [ "$d" -lt "$c" ]; then
+    ok "$1 : la ligne « DEMANDER » vient AVANT « herdr pane close »"
+  else
+    ko "$1 : la ligne « DEMANDER » ne précède plus « herdr pane close » (ou l'une des deux a disparu)"
+  fi
+  if [ -n "$d" ] && ! printf '%s\n' "$2" | grep -E '^git .*worktree remove' | grep -qE -- '(^|[[:space:]])(--force|-f)([[:space:]]|$)'; then
+    ok "$1 : aucun « worktree remove » ne force (--force, -f) — et la question est là"
+  else
+    ko "$1 : un « worktree remove » force (--force / -f), ou la question a disparu"
+  fi
+}
+ordre_et_force "« Fermer proprement »" "$S_FERMER"
+ordre_et_force "skill étape f" "$S_SKILL_F"
 exceptions_absentes "skill étape f" "$S_SKILL_F"
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -1413,7 +1413,12 @@ export const CONTROLES = [
             + `croire des fichiers redondants sur un « zéro commit » — et l'espace serait détruit.`,
         );
       }
-      const contraire = corps.match(/la lecture (?:suffit|remplace la question)|lire suffit|inutile de demander|pas besoin de demander|sauf si|hormis|excepté|à moins|sans rien demander|sans demander/i);
+      const iq = s.corps.search(/^# 3\. DEMANDER au chef/m);
+      const ic = s.corps.search(/^herdr pane close/m);
+      assert.ok(iq >= 0 && ic >= 0 && iq < ic, 'la fermeture d’un chef : la ligne « DEMANDER » ne précède plus `herdr pane close`');
+      const force = s.corps.split('\n').filter((l) => /^git .*worktree remove/.test(l) && /(?:^|\s)(?:--force|-f)(?:\s|$)/.test(l));
+      assert.deepEqual(force, [], 'la fermeture d’un chef : un `worktree remove` force (--force / -f) — un worktree qui refuse est un signal');
+      const contraire = corps.match(/la lecture (?:suffit|remplace la question)|lire suffit|inutile de demander|pas besoin de demander|sauf si|hormis|excepté|à moins|sans rien demander|sans demander|se ferm(?:e|ent) directement|se ferme sans|ferme directement|sans poser la question/i);
       assert.ok(
         !contraire,
         `la section de fermeture d’un chef écrit le contraire de la règle (« ${contraire && contraire[0]} ») : `
@@ -1447,7 +1452,14 @@ export const CONTROLES = [
       const fautives = lignes.filter((l) => /^git\b/.test(l) && (
         (/\blog\b/.test(l) && /@\{u\}/.test(l)) || (/\blog\b/.test(l) && /2\s*>\s*\/dev\/null/.test(l)) || (/worktree remove/.test(l) && /--force/.test(l))));
       assert.deepEqual(fautives, [], 'étape f du skill : une ligne exécutable enseigne le défaut (@{u}, erreur avalée, ou --force)');
-      const exc = f.match(/sauf si|hormis|excepté|à moins|sans rien demander|sans demander/i);
+      const iqs = f.search(/^# 3\. DEMANDER au chef/m);
+      const ics = f.search(/^herdr pane close/m);
+      assert.ok(iqs >= 0 && ics >= 0 && iqs < ics, 'étape f du skill : la ligne « DEMANDER » ne précède plus `herdr pane close`');
+      assert.deepEqual(
+        lignes.filter((l) => /^git .*worktree remove/.test(l) && /(?:^|\s)(?:--force|-f)(?:\s|$)/.test(l)), [],
+        'étape f du skill : un `worktree remove` force (--force / -f)',
+      );
+      const exc = f.match(/sauf si|hormis|excepté|à moins|sans rien demander|sans demander|se ferm(?:e|ent) directement|se ferme sans|ferme directement|sans poser la question/i);
       assert.ok(!exc, `étape f du skill : une exception à la question est écrite (« ${exc && exc[0]} »)`);
     },
   },
@@ -4976,8 +4988,8 @@ export const MUTATIONS = [
     cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
     fichier: 'metier',
     muter: (t) => t.replace(
-      'un correctif unique et 58 Mo de base.)*',
-      'un correctif unique et 58 Mo de base.)* La lecture suffit.',
+      'ajouté à l\'index. Ta lecture',
+      'ajouté à l\'index. La lecture suffit. Ta lecture',
     ),
   },
   {
@@ -5025,6 +5037,41 @@ export const MUTATIONS = [
     cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
     fichier: 'metier',
     muter: (t) => t.replace('jamais de fermeture faute de réponse.', 'jamais de fermeture faute de réponse. Un espace propre à ta lecture se ferme sans rien demander.'),
+  },
+  {
+    id: 'la-question-passe-apres-la-fermeture-du-pane',
+    quoi: 'le métier place « DEMANDER » APRÈS `herdr pane close` — la question existe encore, mais on ferme avant de la poser',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(/(# 3\. DEMANDER au chef[^\n]*\n\n)(# 4\. fermer SON pane, pas son tab\nherdr pane close "\$P"\n\n)/, '$2$1'),
+  },
+  {
+    id: 'le-worktree-est-force-dans-le-metier',
+    quoi: 'le métier écrit `worktree remove --force` dans son bloc de fermeture',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace('git -C <repo> worktree remove ~/worktrees/<repo>/<timestamp>\n', 'git -C <repo> worktree remove --force ~/worktrees/<repo>/<timestamp>\n'),
+  },
+  {
+    id: 'la-fermeture-ecrit-se-ferment-directement',
+    quoi: 'le métier écrit en prose « Une branche à zéro commit et un status propre se ferment directement. »',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace('jamais de fermeture faute de réponse.', 'jamais de fermeture faute de réponse. Une branche à zéro commit et un status propre se ferment directement.'),
+  },
+  {
+    id: 'le-skill-pose-la-question-apres-le-pane',
+    quoi: 'le skill place « DEMANDER » après `herdr pane close`',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace(/(# 3\. DEMANDER au chef[^\n]*\n[^\n]*\n\n)(# 4\. fermer SON pane, pas son tab\nherdr pane close "\$P"\n\n)/, '$2$1'),
+  },
+  {
+    id: 'le-skill-force-avec-f',
+    quoi: 'le skill écrit `worktree remove -f` — la forme courte du même défaut',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace('git -C <repo> worktree remove ~/worktrees/<repo>/<timestamp>\n', 'git -C <repo> worktree remove -f ~/worktrees/<repo>/<timestamp>\n'),
   },
   {
     id: 'un-chemin-de-machine-entre-dans-le-gabarit',

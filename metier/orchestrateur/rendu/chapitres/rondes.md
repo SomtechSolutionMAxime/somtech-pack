@@ -41,7 +41,7 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 >
 > **Le geste est CIBLÉ** : *un agent passé `done` **dont tu n'as reçu aucun compte rendu** se relit à l'écran avant conclusion.* **Les deux signaux ensemble, jamais l'un seul** — sinon la ronde devient « lire tous les écrans à chaque tour », et une ronde impraticable est une ronde qu'on abandonne.
 >
-> ⚠️ **Et ne ferme pas son pane sur cette lecture-là.** La garde `origin/<cible>..HEAD` protège d'un **oubli de poussée**, pas d'une **confusion sur l'état** : elle se déclenche *après* que tu as décidé qu'il avait fini. Un agent coupé a du travail non poussé.
+> ⚠️ **Et ne ferme pas son pane sur cette lecture-là.** La garde `origin/<cible>..HEAD` **ne suffit pas** : elle protège d'un **oubli de poussée**, pas d'une **confusion sur l'état**, et ne voit que le commité. Un agent coupé a du travail non poussé : relis, puis **demande-lui ce qui n'existe que là**.
 
 > 🔴 **TROIS ÉTATS SE RESSEMBLENT, ET LE SEUL GESTE QUI TRANCHE EST D'ÉCRIRE PUIS DE REMESURER.**
 >
@@ -149,7 +149,7 @@ epics get <ton-epic>
 
 **Et pas le témoin par compte de tours** — *« deux tours sans entrée »* exige de savoir combien de tours ont passé, **une information qui meurt avec la session** ; l'âge, lui, survit à tout.
 
-**L'occurrence et son coût** *(`E-20260818-0007`, 2026-09-19)* : réceptacle **au bon endroit**, **32 jours sans une entrée**, et la ronde n'a repris que parce que le CTO l'a réclamée — **le déclencheur que la dernière ligne de ce même epic interdisait**. Le même jour, **trois écarts rouges sur huit, tous des contrôles périodiques** : 48 espaces de travail orphelins, aucune date de passe de veille. **Un manquement à une tâche périodique n'émet aucun signal — c'est le seul type de défaut dont l'absence de plainte est garantie.**
+**L'occurrence et son coût** *(`E-20260818-0007`, 2026-09-19)* : réceptacle **au bon endroit**, **32 jours sans une entrée**, et la ronde n'a repris que parce que le CTO l'a réclamée — **le déclencheur que la dernière ligne de ce même epic interdisait**. **Un manquement à une tâche périodique n'émet aucun signal — c'est le seul type de défaut dont l'absence de plainte est garantie.**
 
 ## 6 — Le topo du matin, 7 h 00, **sur ta ligne**
 
@@ -161,13 +161,13 @@ Un topo qui ne dit que du bien n'est pas lu longtemps. **Une nuit sans progrès 
 
 **Et deux contrôles de plus, une fois par jour — pas à chaque ronde**, leur objet bouge lentement :
 
-**Les espaces de travail orphelins.** On en accumule un par agent ouvert, et **rien ne les ramasse**. Mesuré sur un seul dépôt : **32 espaces, 9 sans aucun agent vivant dedans**, le plus ancien vieux de près de deux mois. Un orphelin pointe sur un commit périmé, occupe le disque, et — le pire — **ressemble à du travail en cours**.
+**Les espaces de travail orphelins.** On en accumule un par agent ouvert, et **rien ne les ramasse**. Un orphelin pointe sur un commit périmé, occupe le disque, et — le pire — **ressemble à du travail en cours**. **Signale-le, ne le retire pas d'office** : on ne retire un espace qu'après avoir DEMANDÉ ce qui n'existe que là (au chef s'il répond, sinon au CTO), même si sa veille ou un teardown a déjà fermé son chef — jamais faute de réponse.
 
 **Les lignes ouvertes sans personne au bout.** ⚠️ **Attention au critère, il a déjà été faux une fois** : vérifier que le dossier d'une ligne existe **ne prouve rien** — sur 25 lignes ouvertes, les 25 passent ce test.
 
-⚠️ **Et le défaut à chercher est deux lignes de deux CHANTIERS DIFFÉRENTS sur le même terminal — jamais deux lignes qui répondent au même destinataire.** Le second critère a été écrit d'abord, et la première exécution réelle l'a trouvé **faux trois fois sur quatre** : un représentant de client porte **normalement** deux lignes — celle de son client et celle du CTO —, c'est sa définition de poste. Le vrai conflit est **deux chantiers étrangers l'un à l'autre au même bout du fil** : c'est celui-là qui a failli envoyer un message chez le mauvais client.
+⚠️ **Et le défaut à chercher est deux lignes de deux CHANTIERS DIFFÉRENTS sur le même terminal — jamais deux lignes qui répondent au même destinataire.** Le second critère, écrit d'abord, s'est trouvé **faux trois fois sur quatre** : un représentant de client porte **normalement** deux lignes — celle de son client et celle du CTO —, c'est sa définition de poste. Le vrai conflit est **deux chantiers étrangers l'un à l'autre au même bout du fil** : c'est celui-là qui a failli envoyer un message chez le mauvais client.
 
-**C'est le cas d'école de la règle des deux chiffres** (voir la veille de déblocage) : ce critère attrapait quelque chose de réel, et il refusait à tort trois fois sur quatre. Personne ne l'a vu en le relisant — **c'est de l'avoir exécuté qui l'a montré**.
+**Cas d'école de la règle des deux chiffres** : c'est de l'avoir exécuté qui l'a montré, pas la relecture.
 
 ## 8 — Ce qui a changé dans le corpus
 

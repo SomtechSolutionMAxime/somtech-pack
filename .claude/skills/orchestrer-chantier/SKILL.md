@@ -548,7 +548,7 @@ git -C <repo> branch -D wt/<timestamp>
 git -C <repo> worktree prune
 ```
 
-**La question précède la fermeture, et un worktree qui refuse de se retirer est un signal, jamais un obstacle : pas de `--force`.** Pouvoir lire l'espace d'un chef ne dispense pas de LUI DEMANDER : `git log origin/<branche-cible>..HEAD` ne voit que ce qui est commité, son « zéro commit » est vrai et trompeur devant un fichier non suivi ou une base. Sans réponse (chef gelé, `agent_not_found`, déjà `done`), l'espace reste : relance par `livrer.js`, puis escalade au CTO avec ce qui est en jeu — jamais de fermeture faute de réponse. N'utilise jamais `@{u}` ici : une branche-socle n'a pas d'upstream, et l'erreur avalée se lit « tout est poussé ».
+**La question précède la fermeture, et un worktree qui refuse de se retirer est un signal, jamais un obstacle : pas de `--force`.** Pouvoir lire l'espace d'un chef ne dispense pas de LUI DEMANDER : `git log origin/<branche-cible>..HEAD` ne voit que ce qui est commité, son « zéro commit » est vrai et trompeur devant un fichier non suivi ou une base. Sans réponse (chef gelé, `agent_not_found`, déjà `done`), l'espace reste : relance par `livrer.js`, puis escalade au CTO avec ce qui est en jeu — jamais de fermeture faute de réponse. La relance porte son chemin complet (`node $HOME/.somtech/naissance-representant/bin/livrer.js <chef> --texte "…"`) ; un chef `blocked` refuse le message : l'espace reste, et sans réponse à la ronde suivante tu escalades au CTO par ta ligne. N'utilise jamais `@{u}` ici : une branche-socle n'a pas d'upstream, et l'erreur avalée se lit « tout est poussé ».
 
 **Ferme le pane, jamais le tab.** Un tab héberge souvent plusieurs panes — donc plusieurs agents, dont potentiellement toi. `herdr tab close` les emporte tous, sans confirmation : tu peux te fermer toi-même en croyant fermer ton chef d'équipe. Si tu veux savoir avec qui un agent partage son tab avant d'agir, `herdr agent list` donne le `tab_id` de chacun.
 
@@ -558,7 +558,7 @@ git -C <repo> worktree prune
 git -C <repo> worktree list          # compare avec herdr agent list
 ```
 
-Tout worktree sans agent vivant dedans est un orphelin à retirer.
+Tout worktree sans agent vivant dedans est un orphelin **à signaler, pas à retirer d'office** : on ne le retire qu'après avoir DEMANDÉ ce qui n'existe que là (au chef s'il répond, sinon au CTO), même si sa veille ou un teardown a déjà fermé son chef — jamais faute de réponse.
 
 **g. Pousser — et si la mise en ligne est occupée, le dire avant toute chose.**
 
@@ -701,7 +701,7 @@ Une **Demande** passe `delivered` toute seule quand tous ses enfants sont fermé
 - le jalon lui-même : tu le fais passer `qa` puis `deployed` à la main, dans cet ordre. `deployed` sans être passé par `qa` est un mensonge sur ce qui a été vérifié ;
 - **les demandes d'origine**. Un jalon est transverse : ses tickets viennent de plusieurs demandes, et fermer le jalon n'en ferme aucune. Reprends-les une à une. Celles dont *tous* les enfants sont fermés se seront mises à jour d'elles-mêmes ; celles dont il reste une story ailleurs sont encore ouvertes à bon droit — et c'est une information, pas un oubli : elle te dit que le besoin du client n'est pas entièrement couvert par ce que tu viens de livrer.
 
-Dans tous les cas, avant d'y arriver : vérifie qu'aucun epic ne reste ouvert pour de la dette qui aurait dû être sortie, et qu'aucun worktree orphelin ne traîne.
+Dans tous les cas, avant d'y arriver : vérifie qu'aucun epic ne reste ouvert pour de la dette qui aurait dû être sortie, et qu'aucun worktree orphelin ne traîne — après avoir demandé à chaque chef ce qui n'existe que là.
 
 **Referme ta ligne, avec son bilan** — c'est le dernier geste :
 
