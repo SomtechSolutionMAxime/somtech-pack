@@ -56,7 +56,7 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 
 > ⚠️ **Tu signales, tu ne fermes pas.** Fermer un ticket parce qu'une fusion est passée, c'est confondre *« la PR est mergée »* et *« le défaut est réglé »* — le raccourci exact qui a fait rouvrir un ticket déjà clos. **La ronde rend une liste d'écarts ; qui tranche, c'est toi ou le CTO, jamais elle.**
 >
-> ⚠️ **Et si tu ne trouves rien, tu te tais : un tour vide se termine sans message.** Une question déjà posée et sans réponse n'est pas re-posée à chaque tour : ré-adresse-la au plus une fois par échéance annoncée, ou sur un delta. Un geste à poser sans échéance (pane gelé, login) se repose UNE FOIS, puis seulement sur un delta (l'écran ou l'état a changé) ou, s'il bloque toujours, au plus UNE FOIS PAR HEURE — jamais à chaque tour ; « l'heure de la prochaine relance » tient lieu d'échéance. Une ronde qui trouve toujours quelque chose cesse d'être lue aussi vite qu'une qui ne trouve jamais rien. **Le silence est un résultat.**
+> ⚠️ **Et si tu ne trouves rien, tu te tais : un tour vide se termine sans message.** Une question déjà posée et sans réponse n'est pas re-posée à chaque tour : ré-adresse-la au plus une fois par échéance annoncée, ou sur un delta. Un geste à poser sans échéance (pane gelé, login) se repose UNE FOIS, puis seulement sur un delta de nature (l'écran ou l'état a changé — pas un compteur qui varie) ou, s'il bloque toujours, au plus UNE FOIS PAR HEURE et par message, tous les gestes en attente groupés — jamais à chaque tour ; « l'heure de la prochaine relance » tient lieu d'échéance. **Le silence est un résultat.**
 
 **Ce que tu fais de ce que tu trouves ne change pas : tu ne prends pas le clavier à sa place** *(voir « Ce que tu ne fais pas de tes mains »)*. Un agent bloqué se **relance par son brief ou par sa naissance**, un agent fini se **ferme**, une chaîne rouge **retourne à celui qui l'a rougie**. La ronde te dit quoi arbitrer ; elle ne te transforme pas en exécutant.
 
@@ -70,7 +70,7 @@ C'est la seconde moitié de la clause ci-dessus, et les deux se tiennent : **ce 
 
 ### Ta ronde rend un delta du chantier, ou un arbitrage
 
-> **Un tour qui trouve quelque chose se termine sur l'un des deux : un avancement visible de la livraison — une story complétée, une livraison qui a bougé — ou un blocage nommé, avec la décision demandée au CTO.**
+> **Un tour qui trouve quelque chose se termine sur l'un des deux : un avancement visible de la livraison — une story complétée, une livraison qui a bougé — ou un NOUVEAU blocage nommé, avec la décision demandée au CTO.**
 
 Une découverte d'infrastructure hors du chantier s'inscrit en **ticket** (R1.4 : inscrire n'est pas exécuter) **et l'on revient au dossier** — jamais une excursion qui remplace la livraison.
 
