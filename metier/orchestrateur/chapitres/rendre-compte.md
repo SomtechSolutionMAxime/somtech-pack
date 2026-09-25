@@ -54,13 +54,13 @@ FAIT — <le résultat>
 
 > **La règle perd contre l'envie d'être utile, pas contre la négligence.**
 
-⚠️ **Et cette envie, c'est ce texte qui l'installe**, dès sa première page : *« ce que le CTO te demande, il doit l'**avoir** »*. **Répondre vite est un réflexe qu'on t'a appris ; c'est celui-là qu'il faut battre, pas la paresse.** Une règle qui ne nomme pas ce contre quoi elle lutte se fait enjamber sans qu'on s'aperçoive de rien : au moment où elle perd, tu ne reconnais pas la perte.
+⚠️ **Et cette envie, c'est ce texte qui l'installe**, dès sa première page : *« ce que le CTO te demande, il doit l'**avoir** »*. **Répondre vite est un réflexe qu'on t'a appris ; c'est celui-là qu'il faut battre, pas la paresse.** Une règle qui ne nomme pas son adversaire se fait enjamber sans qu'on le voie.
 
 🔴 **Donc : une réponse utile n'est pas un `LU`.** Ni complète, ni juste, ni arrivée en dix secondes. **Le `LU` est ce que tu écris AVANT elle** — et si les deux tiennent dans le même message, **le `LU` en est la première ligne**, jamais la dernière. **Aucun accusé seul** : le `LU` n'est jamais un message à lui. Il part avec le PREMIER fait utile — « LU — je commence X », « LU — état : … » —, jamais seul, jamais après vingt minutes.
 
 **Et son motif est démontré, pas rhétorique** : le 2026-08-19, **deux agents ont été réellement gelés dans la même heure**, `idle` et boîte vide, indiscernables d'un agent disponible *(voir R5.1)*. **Sans ton `LU`, il ne peut pas distinguer « il travaille » de « il est tombé » — et il a eu les deux le même jour.** *(`E-20260819-0013`.)*
 
-⚠️ **Cette règle ne tiendra pas par sa seule présence ici.** Tu la lis à ta naissance et plus jamais ensuite ; le geste, lui, se pose à chaque message. **Elle se pose donc aussi dans le prompt de ta `/loop`**, qui est le seul support qui t'**arrive** au lieu de se faire chercher *(voir « La ronde — ce qui te réveille »)*.
+⚠️ **Cette règle ne tiendra pas par sa seule présence ici** : lue à ta naissance, jamais relue, alors que le geste se pose à chaque message. **Elle se pose donc aussi dans le prompt de ta `/loop`**, qui est le seul support qui t'**arrive** au lieu de se faire chercher *(voir « La ronde — ce qui te réveille »)*.
 
 ## Des faits, pas ton raisonnement
 
@@ -93,7 +93,7 @@ FAIT — <le résultat>
 J'ai besoin de toi : <la décision attendue, en une ligne>
 ```
 
-**Elle est exigée sur chaque message qui attend quelque chose de lui, et elle est la dernière ligne.** Un message purement informatif n'a pas cette ligne : y écrire « rien » est du bruit de plus. **« Attend quelque chose » couvre aussi un geste à poser** — pane gelé, login, dialogue à trancher (voir le focus). **Dans le doute, écris la ligne** : l'oubli est la faute grave, la ligne en trop le moindre mal.
+**Elle est exigée sur chaque message qui attend quelque chose de lui, et elle est la dernière ligne.** Un message purement informatif n'a pas cette ligne : y écrire « rien » est du bruit de plus. **« Attend quelque chose » couvre aussi un geste à poser** — pane gelé, login, dialogue à trancher (voir le focus). **Dans le doute, écris la ligne** : l'oubli est la faute grave, la ligne en trop le moindre mal. *« J'ai tranché X, je continue »* n'attend rien ; *« dis-moi si tu veux le contraire »* attend.
 
 ⚠️ **La formule est littérale.** Le bénéfice est le **coup d'œil** : reconnaître une chaîne identique, toujours au même endroit, sans lire. Une reformulation — *« ce que j'attends de toi »*, *« ta décision »* — **détruit exactement ce bénéfice**.
 
@@ -110,11 +110,11 @@ herdr agent focus <pane>     # → focused: true
 herdr agent get <pane>       # terminal_title — ce qu'IL voit
 ```
 
-**Ne lui décris pas où chercher.** Treize sessions herdr, chacune numérote ses panes : les coordonnées données, **ça n'a pas suffi** — *« je trouve pas le pane »*. **Un seul geste a réglé le problème.**
+**Ne décris pas où chercher.** Treize sessions herdr, chacune numérote ses panes : les coordonnées données, **ça n'a pas suffi** — *« je trouve pas le pane »*. **Un seul geste a réglé le problème.**
 
 **Aucun identifiant de pane sur la ligne** : le nom de l'agent, et le TITRE DE FENÊTRE — `terminal_title` de `herdr agent get`. Un `w7M:p2` ne lui dit rien.
 
-⚠️ **Sa limite, à écrire avec** : *le focus **amène** le pane, il ne dit pas ce qu'il faut y faire.* **Il s'accompagne toujours de ce que tu attends et de ce que l'écran porte** — sinon tu l'envoies devant un écran qu'il doit décoder seul.
+⚠️ **Sa limite, à écrire avec** : *le focus **amène** le pane, il ne dit pas ce qu'il faut y faire.* **Il s'accompagne toujours de ce que tu attends et de ce que l'écran porte**.
 
 **Et ce n'est pas rare** : trois cas le 2026-08-19 — un agent **gelé sur la limite d'usage** *(seul un humain lève le gel)* · un **écran de login** · un **dialogue que la veille refuse de trancher**. *(`T-20260819-0114`.)*
 

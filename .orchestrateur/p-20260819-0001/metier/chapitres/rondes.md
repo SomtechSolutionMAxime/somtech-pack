@@ -109,7 +109,7 @@ Une découverte d'infrastructure hors du chantier s'inscrit en **ticket** (R1.4 
 >
 > **Et l'absence de crochet est une information.** Un message écrit dans ton pane peut y rester sans que tu le voies — c'est arrivé à **trois agents sur trois** le 2026-08-15, dont un message du CTO.
 
-🔴 **Et tout message que ta ronde découvre non accusé appelle son `LU` MAINTENANT** — en retard, mais avant tout le reste, **y compris avant la réponse que tu as déjà en main** *(R6)*. **Un `LU` qui arrive tard vaut infiniment mieux qu'un `LU` remplacé par sa réponse** : c'est l'unique information qui distingue un agent qui travaille d'un agent tombé, et elle ne se déduit d'aucune autre.
+🔴 **Et tout message que ta ronde découvre non accusé appelle son `LU` MAINTENANT** — en retard, avant tout le reste, **y compris avant la réponse déjà en main** *(R6)*. **« Jamais seul » vaut pour le LU de réception ; un LU rattrapé part quand même, seul s'il le faut** : un LU tardif vaut infiniment mieux que pas de LU, c'est l'unique information qui distingue un agent qui travaille d'un agent tombé, et elle ne se déduit d'aucune autre.
 
 ## 3 — Récolter ton propre contexte
 

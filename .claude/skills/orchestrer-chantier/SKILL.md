@@ -705,7 +705,7 @@ node "$HOME/.somtech/ligne-directe/bin/ligne-directe.js" fermer \
   --bilan "<ce qui a été livré, ce qui reste, ce qui appartient au dirigeant>"
 ```
 
-**Le bilan est un message comme les autres** : des faits, et `J'ai besoin de toi : …` en dernière ligne **seulement s'il reste une décision qui lui appartient** — s'il n'en reste aucune, le bilan n'a pas cette ligne.
+**Le bilan est un message comme les autres** : des faits, et `J'ai besoin de toi : …` en dernière ligne **seulement s'il reste une décision ou un geste qui lui appartient** — s'il n'en reste aucun, le bilan n'a pas cette ligne.
 
 Le bilan part d'abord, le canal s'archive ensuite. Une ligne qu'on abandonne sans la refermer laisse un canal ouvert sur une question sans réponse — et le jour où le dirigeant y écrit, personne n'est au bout. (Le veilleur finit par le détecter et referme d'office, mais il le fait à ta place et le dit : autant le faire toi.)
 

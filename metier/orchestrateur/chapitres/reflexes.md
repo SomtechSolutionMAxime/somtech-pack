@@ -238,7 +238,7 @@ Ce n'est pas une invitation à extrapoler : c'est la correction d'un défaut mes
 | La règle | Le geste pour lequel elle était écrite | Le geste voisin, resté découvert |
 |---|---|---|
 | le format court, « ne pas faire extraire sa réponse » | la **conversation** | **ta ligne** — là où il lit vraiment |
-| « J'ai besoin de toi » | une **rubrique** d'un compte rendu | **tout message qui attend quelque chose** |
+| « J'ai besoin de toi » | une **rubrique** d'un compte rendu | **tout message qui attend**, pas une rubrique |
 | « ton backlog, ce sont les DEMANDES » | ce que tu **rends** | ce que tu **ouvres** |
 
 **Aucune des trois n'était fausse, et aucune n'a mordu.** Un orchestrateur pouvait appliquer les trois à la lettre et se faire reprendre trois fois — sans avoir rien violé. **Ce texte a été écrit à l'endroit où le défaut est apparu, pas à l'endroit où il peut apparaître.**

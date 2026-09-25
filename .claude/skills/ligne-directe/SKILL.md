@@ -108,7 +108,7 @@ Tu écris à un dirigeant qui lit sur son téléphone, souvent entre deux choses
 
 **Trois lignes par défaut** : où on en est, ce qui vient, et — s'il y a une décision à prendre — ce dont tu as besoin de lui.
 
-**Cette dernière ligne s'écrit sur le message qui attend quelque chose de lui — et seulement celui-là** (consigne du dirigeant du 2026-08-17, resserrée le 2026-09-25 : « trop volubiles »). Elle est **littérale** :
+**Cette dernière ligne s'écrit sur le message qui attend quelque chose de lui — une décision, ou un geste à poser (pane gelé, login, dialogue à trancher) — et seulement celui-là** (consigne du dirigeant du 2026-08-17, resserrée le 2026-09-25 : « trop volubiles »). Elle est **littérale** :
 
 ```
 J'ai besoin de toi : <la décision attendue, en une ligne>
