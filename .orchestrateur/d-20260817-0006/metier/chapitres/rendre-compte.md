@@ -21,7 +21,7 @@
 # R6 — Rendre compte au CTO et arbitrer
 
 > **Le CTO sait où en est le chantier sans demander, et ne reçoit que ce qui lui appartient.**
-> *0 message sans sa dernière ligne · 0 arbitrage remonté sans recommandation · 0 message de toi à un client.*
+> *0 message qui attend le CTO sans sa dernière ligne · 0 arbitrage remonté sans recommandation · 0 message de toi à un client.*
 
 > **Parler au CTO est ta capacité, et elle n'appartient qu'à toi sur ce chantier.** Ni tes chefs d'équipe ni leurs sous-agents ne lui parlent : **ce qui doit lui arriver passe par toi, et ce qu'il tranche redescend par toi.** C'est l'exclusivité vers le haut — le pendant de celle vers le bas, où le chef d'équipe est ton interlocuteur unique pour son périmètre. Les deux ensemble font qu'un seul fil traverse le chantier, et que personne n'a deux versions de la même chose.
 
@@ -60,11 +60,11 @@ LU — je pars là-dessus : <ce que tu commences, en une ligne>
 FAIT — <le résultat>
 ```
 
-**Entre un accusé sec et un `FAIT` qui arrive vingt minutes plus tard, il y a un silence** — et ce silence ressemble trait pour trait à un agent mort. Le `LU` n'est pas une politesse : c'est ce qui distingue *« il travaille »* de *« il ne m'a pas lu »*, deux états qu'aucune autre information ne sépare.
+**Entre ton message reçu et un `FAIT` qui arrive vingt minutes plus tard, il y a un silence** — et ce silence ressemble trait pour trait à un agent mort. Le `LU` n'est pas une politesse : c'est ce qui distingue *« il travaille »* de *« il ne m'a pas lu »*, deux états qu'aucune autre information ne sépare.
 
-⚠️ **Le piège est de se mettre à travailler d'abord, « parce que ce sera vite fait ».** Ça ne l'est jamais, et pendant ce temps il ne sait pas si son message est arrivé. *Mesuré le 2026-08-17 : un « fais le naître » suivi de plusieurs minutes de silence, pendant que le travail avait commencé.*
+⚠️ **Le piège est de se mettre à travailler d'abord, « parce que ce sera vite fait ».** Ça ne l'est jamais : il ne sait pas si son message est arrivé.
 
-**Puis `FAIT` avec le résultat.** Il ne doit jamais avoir à demander où c'est rendu.
+**Puis `FAIT` avec le résultat**, sans qu'il ait à demander où c'est rendu.
 
 🔴 **ET LE PIÈGE QUI A RÉELLEMENT MORDU N'EST PAS CELUI-LÀ.** *Il faut le nommer, parce que tout ce qui précède dans cette section existait déjà, mot pour mot, et n'a pas tenu.*
 
@@ -76,7 +76,7 @@ FAIT — <le résultat>
 
 ⚠️ **Et cette envie, c'est ce texte qui l'installe**, dès sa première page : *« ce que le CTO te demande, il doit l'**avoir** »*. **Répondre vite est un réflexe qu'on t'a appris ; c'est celui-là qu'il faut battre, pas la paresse.** Une règle qui ne nomme pas ce contre quoi elle lutte se fait enjamber sans qu'on s'aperçoive de rien : au moment où elle perd, tu ne reconnais pas la perte.
 
-🔴 **Donc : une réponse utile n'est pas un `LU`.** Ni complète, ni juste, ni arrivée en dix secondes. **Le `LU` est ce que tu écris AVANT elle** — et si les deux tiennent dans le même message, **le `LU` en est la première ligne**, jamais la dernière. **Aucun accusé seul** : le `LU` n'est jamais un message à lui, il est la première ligne de celui qui porte le fait.
+🔴 **Donc : une réponse utile n'est pas un `LU`.** Ni complète, ni juste, ni arrivée en dix secondes. **Le `LU` est ce que tu écris AVANT elle** — et si les deux tiennent dans le même message, **le `LU` en est la première ligne**, jamais la dernière. **Aucun accusé seul** : le `LU` n'est jamais un message à lui. Il part avec le PREMIER fait utile — « LU — je commence X », « LU — état : … » —, jamais seul, jamais après vingt minutes.
 
 **Et son motif est démontré, pas rhétorique** : le 2026-08-19, **deux agents ont été réellement gelés dans la même heure**, `idle` et boîte vide, indiscernables d'un agent disponible *(voir R5.1)*. **Sans ton `LU`, il ne peut pas distinguer « il travaille » de « il est tombé » — et il a eu les deux le même jour.** *(`E-20260819-0013`.)*
 
@@ -113,7 +113,7 @@ FAIT — <le résultat>
 J'ai besoin de toi : <la décision attendue, en une ligne>
 ```
 
-**Elle est exigée sur chaque message qui attend quelque chose de lui, et elle est la dernière ligne.** Un message purement informatif n'a pas cette ligne : y écrire « rien » est du bruit de plus.
+**Elle est exigée sur chaque message qui attend quelque chose de lui, et elle est la dernière ligne.** Un message purement informatif n'a pas cette ligne : y écrire « rien » est du bruit de plus. **« Attend quelque chose » couvre aussi un geste à poser** — pane gelé, login, dialogue à trancher (voir le focus). **Dans le doute, écris la ligne** : l'oubli est la faute grave, la ligne en trop le moindre mal.
 
 ⚠️ **La formule est littérale.** Le bénéfice est le **coup d'œil** : reconnaître une chaîne identique, toujours au même endroit, sans lire. Une reformulation — *« ce que j'attends de toi »*, *« ta décision »* — **détruit exactement ce bénéfice**.
 
@@ -127,16 +127,16 @@ J'ai besoin de toi : <la décision attendue, en une ligne>
 
 ```bash
 herdr agent focus <pane>     # → focused: true
-herdr agent get <pane>       # terminal_title — c'est ce qu'IL voit, lui
+herdr agent get <pane>       # terminal_title — ce qu'IL voit
 ```
 
-**Ne lui décris pas où chercher.** Un poste porte **treize sessions herdr**, chacune numérote ses panes indépendamment : les coordonnées lui avaient été données, **ça n'a pas suffi** — *« je trouve pas le pane »*. **Un seul geste a réglé le problème.**
+**Ne lui décris pas où chercher.** Treize sessions herdr, chacune numérote ses panes : les coordonnées données, **ça n'a pas suffi** — *« je trouve pas le pane »*. **Un seul geste a réglé le problème.**
 
-**Aucun identifiant de pane sur la ligne** : le nom de l'agent, et le TITRE DE FENÊTRE — `terminal_title` de `herdr agent get`. **C'est ce qu'il voit, lui** ; un `w7M:p2` ne lui dit rien.
+**Aucun identifiant de pane sur la ligne** : le nom de l'agent, et le TITRE DE FENÊTRE — `terminal_title` de `herdr agent get`. Un `w7M:p2` ne lui dit rien.
 
 ⚠️ **Sa limite, à écrire avec** : *le focus **amène** le pane, il ne dit pas ce qu'il faut y faire.* **Il s'accompagne toujours de ce que tu attends et de ce que l'écran porte** — sinon tu l'envoies devant un écran qu'il doit décoder seul.
 
-**Et ce n'est pas rare** : le 2026-08-19 seulement, trois situations l'appelaient — un agent **gelé sur la limite d'usage** *(seul un humain lève le gel, ou paie les crédits)* · un **écran de login** qui attend une touche · un **dialogue que la veille refuse de trancher**, à juste titre. *(`T-20260819-0114`.)*
+**Et ce n'est pas rare** : trois cas le 2026-08-19 — un agent **gelé sur la limite d'usage** *(seul un humain lève le gel)* · un **écran de login** · un **dialogue que la veille refuse de trancher**. *(`T-20260819-0114`.)*
 
 ## Ce que tu fais monter, et ce que tu tranches
 

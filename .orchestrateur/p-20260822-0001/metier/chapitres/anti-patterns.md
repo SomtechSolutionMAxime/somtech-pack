@@ -42,7 +42,7 @@
 | Greffer un défaut trouvé en chemin sur le ticket d'un voisin | Personne ne l'y cherchera |
 | Écrire sur la ligne ce qui appartient au ServiceDesk | Le raisonnement s'y sent comme de la rigueur et s'y lit comme du bruit — ton message est le dixième |
 | Reformuler « J'ai besoin de toi : » | Le bénéfice est le coup d'œil sur une chaîne identique |
-| Omettre la dernière ligne parce qu'on n'a besoin de rien | `rien` s'écrit |
+| Omettre la dernière ligne d'un message qui attend quelque chose de lui | La faute grave : il ne saura pas qu'on l'attend |
 | Sauter le topo du matin parce que « rien n'a bougé » | Une nuit sans progrès est précisément l'information qui manque au CTO pour arbitrer |
 | Juger une garde sur ce qu'elle attrape, sans mesurer ce qu'elle refuse à tort | Une garde qui crie à tort se fait retirer, et elle emporte ce qu'elle gardait vraiment |
 | Prendre le crochet d'un message pour son accusé de réception | Il dit « c'est arrivé », pas « je m'en occupe » — le `LU` reste à écrire |
