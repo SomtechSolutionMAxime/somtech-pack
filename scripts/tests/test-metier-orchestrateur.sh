@@ -1062,12 +1062,15 @@ garde_ferme() {
 garde_ferme "Pouvoir lire l'espace d'un chef ne t'exempte pas de LUI DEMANDER avant de fermer son pane ou de retirer son espace." \
   "« Fermer proprement » exige de DEMANDER au chef avant de fermer, et dit que la lecture n'exempte pas" \
   "« Fermer proprement » n'exige plus de demander au chef — une lecture permise ferait fermer sur un « zéro commit »"
-garde_ferme "Ce log ne voit que ce qui est **commité** : son « zéro commit » est vrai et **trompeur** devant un fichier non suivi, une base de données, un correctif jamais ajouté à l'index." \
-  "« Fermer proprement » dit le motif : git log ne voit que le commité, son zéro est vrai et trompeur" \
-  "« Fermer proprement » ne dit plus pourquoi la question s'impose — la règle deviendrait une formalité"
-garde_ferme "Ta lecture répond à « qu'y a-t-il » ; seule la question répond à « qu'est-ce qui n'existe QUE là »." \
-  "« Fermer proprement » sépare ce que répond la lecture de ce que répond la question" \
-  "« Fermer proprement » ne sépare plus la lecture de la question"
+garde_ferme "Ce log ne voit que ce qui est **commité**, et \`status\` n'en montre que les noms : ni l'un ni l'autre ne dit ce qui n'existe que là — un fichier ignoré par \`.gitignore\` (base de données, dump, \`.env\`), un stash, une autre branche, ce que le chef sait sans l'avoir écrit." \
+  "« Fermer proprement » dit le motif : ni log ni status ne voient l'ignoré, le stash, une autre branche, ce que le chef sait" \
+  "« Fermer proprement » ne nomme plus ce que ni log ni status ne voient — la règle deviendrait une formalité"
+garde_ferme "**Status propre + log vide ne veut pas dire rien à perdre.**" \
+  "« Fermer proprement » : status propre + log vide ne veut pas dire rien à perdre" \
+  "« Fermer proprement » ne dit plus que status propre + log vide n'est pas « rien à perdre »"
+garde_ferme "status --porcelain --ignored" \
+  "« Fermer proprement » : le status montre aussi l'ignoré (--ignored)" \
+  "« Fermer proprement » : le status ne porte plus --ignored — une base de données ignorée serait invisible"
 garde_ferme "N'utilise JAMAIS \`@{u}\` pour ce contrôle, et n'avale jamais son erreur." \
   "la garde @{u} est toujours là, dans la même section" \
   "la garde @{u} a disparu de « Fermer proprement »"
@@ -1092,9 +1095,18 @@ contraire_absent "n'a pas besoin de demander"
 garde_ferme "# 3. DEMANDER au chef ce qui n'existe que dans son espace — rien ne se ferme avant sa réponse" \
   "la question est une ÉTAPE du bloc, avant la fermeture du pane" \
   "la question n'est plus une étape du bloc de fermeture — elle redevient un encadré qu'on saute"
-garde_ferme "l'espace RESTE : tu relances par \`livrer.js\`, puis, toujours sans réponse, tu escalades au CTO avec ce qui est en jeu — jamais de fermeture faute de réponse." \
-  "sans réponse du chef, l'espace reste : relance, puis escalade — jamais de fermeture faute de réponse" \
+garde_ferme "escalade au CTO par ta ligne avec ce qui est en jeu — jamais de fermeture faute de réponse." \
+  "sans réponse du chef : escalade au CTO par « ta ligne », jamais de fermeture faute de réponse" \
   "le cas du chef qui ne répond pas n'est plus écrit — un silence se lirait « rien à perdre »"
+garde_ferme "Un chef \`blocked\` refuse le message : annule son dialogue (voir « Devant un dialogue de choix ouvert par ton chef »), puis demande ; n'escalade que si ça échoue." \
+  "un chef blocked : on annule son dialogue, puis on demande" \
+  "le chef blocked n'est plus traité : annuler le dialogue avant de demander a disparu"
+garde_ferme "par le pane si le nom est introuvable" \
+  "la relance se fait par le pane si le nom est introuvable" \
+  "la relance d'un agent_not_found n'indique plus le pane"
+garde_ferme "Jamais \`worktree remove --force\` ni \`-f\`" \
+  "le chapitre interdit --force et -f en toutes lettres" \
+  "le chapitre n'interdit plus --force / -f en toutes lettres"
 
 # Le skill : son étape f est la seconde surface du même geste.
 S_SKILL_F="$(awk '/^\*\*f\. Fermer proprement/{d=1} /^\*\*Fais l.inventaire/{d=0} d' "$RACINE/.claude/skills/orchestrer-chantier/SKILL.md")"
@@ -1133,6 +1145,72 @@ exceptions_absentes() { # $1 nom, $2 texte
   fi
 }
 exceptions_absentes "« Fermer proprement »" "$S_FERMER"
+
+# ── (3e revue) le skill porte les mêmes phrases ; orphelin, fin de chantier, @{u} partout, « ta ligne »
+garde_skill "Status propre + log vide ne veut pas dire rien à perdre." \
+  "skill étape f : status propre + log vide ne veut pas dire rien à perdre" \
+  "skill étape f : la phrase « status propre + log vide » a disparu"
+garde_skill "git -C ~/worktrees/<repo>/<timestamp> status --porcelain --ignored" \
+  "skill étape f : le status montre l'ignoré (--ignored)" \
+  "skill étape f : le status ne porte plus --ignored"
+garde_skill "annule son dialogue de choix (Escape, sans répondre), puis demande ; n'escalade que si ça échoue." \
+  "skill étape f : un chef blocked — on annule son dialogue, puis on demande" \
+  "skill étape f : le chef blocked n'est plus traité"
+garde_skill "par le pane si le nom est introuvable" \
+  "skill étape f : relance par le pane si le nom est introuvable" \
+  "skill étape f : la relance n'indique plus le pane"
+garde_skill "escalade au CTO par ta ligne avec ce qui est en jeu — jamais de fermeture faute de réponse." \
+  "skill étape f : escalade par « ta ligne », jamais faute de réponse" \
+  "skill étape f : l'escalade par « ta ligne » a disparu"
+
+SKILL="$RACINE/.claude/skills/orchestrer-chantier/SKILL.md"
+L_ORPH_SKILL="$(grep -F -- "Tout worktree sans agent vivant" "$SKILL" | head -1)"
+L_ORPH_RONDES="$(grep -F -- "**Les espaces de travail orphelins.**" "$METIER" | head -1)"
+orphelin() { # $1 libellé, $2 ligne
+  if printf '%s' "$2" | grep -qF -- "à signaler" \
+     && printf '%s' "$2" | grep -qF -- "l'espace RESTE tant qu'il n'a pas tranché, et on ne le retire jamais faute de réponse." \
+     && ! printf '%s' "$2" | grep -qiE "à retirer après|se retire|retire-le|au chef s'il répond"; then
+    ok "$1 : l'orphelin est À SIGNALER au CTO, l'espace RESTE — et rien n'enseigne à le retirer"
+  else
+    ko "$1 : l'orphelin n'est plus « à signaler » / l'espace ne reste plus / un retrait est enseigné"
+  fi
+}
+orphelin "rondes (espaces orphelins)" "$L_ORPH_RONDES"
+orphelin "skill (worktree orphelin)" "$L_ORPH_SKILL"
+
+# @{u} : dans TOUT le skill, aucune ligne exécutable ne l'emploie ; chaque mention est celle qui l'interdit.
+if ! grep -E '^git .*@\{u\}' "$SKILL" | grep -q . \
+   && ! grep -F '@{u}' "$SKILL" | grep -v "N'utilise jamais" | grep -q . \
+   && grep -qF "N'utilise jamais" "$SKILL"; then
+  ok "skill entier : @{u} n'apparaît que dans la phrase qui l'interdit"
+else
+  ko "skill entier : @{u} est employé hors de la phrase qui l'interdit (ou l'interdit a disparu)"
+fi
+L_DONE="$(grep -F -- "ne suffit pas" "$METIER" | grep -F -- "origin/<cible>..HEAD" | head -1)"
+if [ -n "$L_DONE" ] && ! printf '%s' "$L_DONE" | sed 's/ne suffit pas//' | grep -qF "suffit"; then
+  ok "rondes (chef done) : la garde origin/<cible>..HEAD « ne suffit pas » — et rien ne dit qu'elle suffit"
+else
+  ko "rondes (chef done) : la garde origin/<cible>..HEAD n'est plus dite insuffisante, ou « suffit » est écrit"
+fi
+
+# « ta ligne » : canal d'escalade dans le métier ET le skill (apparié à la question).
+if printf '%s' "$S_FERMER" | grep -qF "par ta ligne" && printf '%s' "$S_SKILL_F" | grep -qF "par ta ligne"; then
+  ok "l'escalade au CTO passe par « ta ligne », dans le métier comme dans le skill"
+else
+  ko "l'escalade au CTO ne passe plus par « ta ligne » dans le métier ou le skill"
+fi
+
+# Fin de chantier : les chefs ont déjà été interrogés ; ce qui reste va au BILAN, sans bloquer.
+L_FIN_M="$(grep -F -- "Avant d'y arriver : vérifie qu'aucun epic" "$METIER" | head -1)"
+L_FIN_S="$(grep -F -- "avant d'y arriver : vérifie qu'aucun epic" "$SKILL" | head -1)"
+for pair in "mise-en-production|$L_FIN_M" "skill|$L_FIN_S"; do
+  if printf '%s' "${pair#*|}" | grep -qF "figure au bilan de clôture sans bloquer la clôture." \
+     && ! printf '%s' "${pair#*|}" | grep -qF "après avoir demandé à chaque chef"; then
+    ok "fin de chantier (${pair%%|*}) : l'espace resté figure au bilan, sans bloquer la clôture"
+  else
+    ko "fin de chantier (${pair%%|*}) : « bilan de clôture » a disparu, ou la demande inexécutable est revenue"
+  fi
+done
 
 # ORDRE et --force / -f : dans le bloc de fermeture (métier ET étape f du skill), la question précède
 # `herdr pane close`, et aucun `worktree remove` ne force. Chaque négatif est apparié à la présence

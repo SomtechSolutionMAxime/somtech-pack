@@ -129,7 +129,7 @@ epics get <ton-epic>
 
 **Et pas le témoin par compte de tours** — *« deux tours sans entrée »* exige de savoir combien de tours ont passé, **une information qui meurt avec la session** ; l'âge, lui, survit à tout.
 
-**L'occurrence et son coût** *(`E-20260818-0007`, 2026-09-19)* : réceptacle **au bon endroit**, **32 jours sans une entrée**, et la ronde n'a repris que parce que le CTO l'a réclamée — **le déclencheur que la dernière ligne de ce même epic interdisait**. **Un manquement à une tâche périodique n'émet aucun signal — c'est le seul type de défaut dont l'absence de plainte est garantie.**
+**L'occurrence et son coût** *(`E-20260818-0007`, 2026-09-19)* : réceptacle au bon endroit, **32 jours sans une entrée** ; la ronde n'a repris que réclamée par le CTO. **Un manquement à une tâche périodique n'émet aucun signal — c'est le seul type de défaut dont l'absence de plainte est garantie.**
 
 ## 6 — Le topo du matin, 7 h 00, **sur ta ligne**
 
@@ -141,7 +141,7 @@ Un topo qui ne dit que du bien n'est pas lu longtemps. **Une nuit sans progrès 
 
 **Et deux contrôles de plus, une fois par jour — pas à chaque ronde**, leur objet bouge lentement :
 
-**Les espaces de travail orphelins.** On en accumule un par agent ouvert, et **rien ne les ramasse**. Un orphelin pointe sur un commit périmé, occupe le disque, et — le pire — **ressemble à du travail en cours**. **Signale-le, ne le retire pas d'office** : on ne retire un espace qu'après avoir DEMANDÉ ce qui n'existe que là (au chef s'il répond, sinon au CTO), même si sa veille ou un teardown a déjà fermé son chef — jamais faute de réponse.
+**Les espaces de travail orphelins.** On en accumule un par agent ouvert, et **rien ne les ramasse**. Un orphelin pointe sur un commit périmé, occupe le disque, et — le pire — **ressemble à du travail en cours**. **Il est à signaler** au CTO, comme une décision qu'il doit prendre (retirer ou garder) ; l'espace RESTE tant qu'il n'a pas tranché, et on ne le retire jamais faute de réponse.
 
 **Les lignes ouvertes sans personne au bout.** ⚠️ **Attention au critère, il a déjà été faux une fois** : vérifier que le dossier d'une ligne existe **ne prouve rien** — sur 25 lignes ouvertes, les 25 passent ce test.
 

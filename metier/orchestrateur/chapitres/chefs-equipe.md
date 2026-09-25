@@ -139,7 +139,7 @@ Une seule ligne, sans apostrophe ni retour à la ligne. **La commande sort non n
 
 ⚠️ **`--en-attente` n'est pas décoratif** (`T-20260816-0114`). Il exige une session qui *attend* — c'est la garde du brief de naissance, où « elle a quitté l'attente » **est** la preuve qu'elle a pris. Et il **désarme la délivrance** : une session qui vient de naître peut être derrière un écran de démarrage qu'on ne reconnaît pas, et on ne pose pas un geste irréversible sur ce qu'on ne comprend pas.
 
-⚠️ **C'est `livrer.js` qui sert à parler à un agent, plus `herdr agent prompt`** (`T-20260814-0138`, mesuré contre le vrai service). Le geste nu rend un succès **que la soumission parte ou non** — et, cas grave, **écrire dans une boîte de saisie qui contient déjà quelque chose ne livre pas deux messages, il en livre UN, les deux textes collés**. L'agent travaille alors sur un texte que personne n'a écrit. **Un brief fusionné est pire qu'un brief absent** : l'absent se voit, le fusionné produit un travail plausible et faux.
+⚠️ **C'est `livrer.js` qui sert à parler à un agent, plus `herdr agent prompt`** (`T-20260814-0138`). Le geste nu rend un succès **que la soumission parte ou non** — et, cas grave, **écrire dans une boîte de saisie qui contient déjà quelque chose ne livre pas deux messages, il en livre UN, les deux textes collés**. **Un brief fusionné est pire qu'un brief absent** : l'absent se voit, le fusionné produit un travail plausible et faux.
 
 ⚠️ **Si la boîte du destinataire est bloquée, `livrer.js` la délivre — il ne l'écrase jamais.** Une boîte pleine met en famine **tous** les émetteurs suivants, et seul le destinataire, qui ignore qu'elle bloque, pouvait la libérer ; l'auteur du texte coincé était parfois **déjà mort**. La commande attend **cinq minutes**, relit, et si le texte n'a pas bougé, **le soumet pour son auteur** — la touche d'envoi seule, sans écrire un caractère — puis livre le tien avec un avis. Elle s'abstient dans quatre cas : le texte **a bougé** · la boîte porte un **dialogue de choix** · la session est devant un **écran connu ou inconnu** · la boîte est **illisible**. **Rien ne s'écrit jamais dans une boîte qu'on n'a pas vue vide.**
 
@@ -218,7 +218,7 @@ scripts/orchestration/veille-deblocage.sh --list                    # pane, agen
 
 ⚠️ **`--detach`, jamais un `&` nu — et après le brief, jamais à la naissance nue.** Ce texte prescrivait `… &` : lancée ainsi depuis une session Claude Code, la veille est une tâche de fond du harnais, **et le harnais la tue**. `--detach` détache le script **lui-même** : la survie ne dépend plus de ta discipline (`T-20260818-0109`).
 
-**Pour vérifier qu'elles tournent, `--list`, jamais un compte.** Un `ps | grep` a rendu « 3 » : **aucune des trois ne gardait mes agents.** *Compter ne suffit pas, il faut savoir ce qu'on compte.* `--list` rend le pane, l'agent, le pid et le **motif** de chacune — six motifs nommés, chacun avec son code de sortie. **Un arrêt annoncé sur un agent qui travaille encore n'est pas une fin de mandat : repose une veille.** Elle tient ~5 h 30 et prévient avant de s'éteindre.
+**Pour vérifier qu'elles tournent, `--list`, jamais un compte.** Un `ps | grep` a rendu « 3 » : **aucune des trois ne gardait mes agents.** *Compter ne suffit pas, il faut savoir ce qu'on compte.* `--list` rend le pane, l'agent, le pid et le **motif** de chacune — six motifs nommés. **Un arrêt annoncé sur un agent qui travaille encore n'est pas une fin de mandat : repose une veille.** Elle tient ~5 h 30 et prévient avant de s'éteindre.
 
 > 🔴 **ELLE DÉDUIT LA FIN D'UN MANDAT DE L'ABSENCE DE BUT AFFICHÉ.** Motif au journal : `agent-termine — l'agent a fini (confirmé sur deux relevés, aucun but actif à l'écran)`. **Un agent sans but n'a pas fini : il n'a pas de but** — les deux sont indistinguables à l'écran, et **l'un des deux fait disparaître la garde**.
 >
@@ -276,7 +276,7 @@ herdr agent wait "$P" --until done --until blocked --timeout 1800000   # en arri
 #    complète la description de l'epic : PR #, branche, état, verdict
 
 # 2. vérifier que son travail est bien parti — ⚠️ PAS avec @{u}, voir juste en dessous
-git -C ~/worktrees/<repo>/<timestamp> status --porcelain
+git -C ~/worktrees/<repo>/<timestamp> status --porcelain --ignored
 git -C ~/worktrees/<repo>/<timestamp> log --oneline origin/<branche-cible>..HEAD
 
 # 3. DEMANDER au chef ce qui n'existe que dans son espace — rien ne se ferme avant sa réponse
@@ -294,7 +294,7 @@ git -C <repo> worktree prune
 >
 > **La référence.** Une branche `wt/<timestamp>` **n'a pas d'upstream** : `git log @{u}..` échoue *toujours*, et un `2>/dev/null` change cet échec en sortie vide, lu « tout est poussé » : tu détruis les commits. `origin/<branche-cible>..HEAD` **échoue bruyamment** si elle est fausse.
 >
-> **La question (étape 3).** Pouvoir lire l'espace d'un chef ne t'exempte pas de LUI DEMANDER avant de fermer son pane ou de retirer son espace. Ce log ne voit que ce qui est **commité** : son « zéro commit » est vrai et **trompeur** devant un fichier non suivi, une base de données, un correctif jamais ajouté à l'index. Ta lecture répond à « qu'y a-t-il » ; seule la question répond à « qu'est-ce qui n'existe QUE là ». **Sans réponse** (chef gelé, `agent_not_found`, déjà `done`), l'espace RESTE : tu relances par `livrer.js`, puis, toujours sans réponse, tu escalades au CTO avec ce qui est en jeu — jamais de fermeture faute de réponse. La relance porte son chemin complet (`node $HOME/.somtech/naissance-representant/bin/livrer.js <chef> --texte "…"`) ; un chef `blocked` refuse le message : l'espace reste, et sans réponse à la ronde suivante tu escalades au CTO par ta ligne.
+> **La question (étape 3).** Pouvoir lire l'espace d'un chef ne t'exempte pas de LUI DEMANDER avant de fermer son pane ou de retirer son espace. Ce log ne voit que ce qui est **commité**, et `status` n'en montre que les noms : ni l'un ni l'autre ne dit ce qui n'existe que là — un fichier ignoré par `.gitignore` (base de données, dump, `.env`), un stash, une autre branche, ce que le chef sait sans l'avoir écrit. **Status propre + log vide ne veut pas dire rien à perdre.** **Sans réponse** (chef gelé, `agent_not_found`), l'espace RESTE : relance par `livrer.js` (`livrer.js <pane|nom> --texte "…"` avec son chemin complet, par le pane si le nom est introuvable), puis, sans réponse à la ronde suivante, escalade au CTO par ta ligne avec ce qui est en jeu — jamais de fermeture faute de réponse. Un chef `blocked` refuse le message : annule son dialogue (voir « Devant un dialogue de choix ouvert par ton chef »), puis demande ; n'escalade que si ça échoue. Jamais `worktree remove --force` ni `-f` : un espace qui refuse de se retirer est un signal.
 
 ⚠️ **Ferme le pane, jamais le tab** : il héberge souvent plusieurs agents, **dont toi**, et `herdr tab close` les emporte tous sans confirmation (`herdr agent list` donne le `tab_id`).
 
