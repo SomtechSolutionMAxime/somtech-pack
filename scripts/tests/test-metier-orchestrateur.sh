@@ -1814,29 +1814,50 @@ else
 fi
 
 # ── 6e revue : geste à poser sans échéance, LU rattrapé sans merci, forme, compte de torts.
-if printf '%s' "$S_ROND1" | grep -qF "Un geste à poser sans échéance (pane gelé, login) se repose sur un delta (l'état a changé) ou, s'il bloque, à chaque rappel de la ronde — jamais en boucle serrée."; then
-  ok "16a — rondes : un geste à poser sans échéance se repose sur un delta ou au rappel de la ronde, jamais en boucle serrée"
+if printf '%s' "$S_ROND1" | grep -qF "Un geste à poser sans échéance (pane gelé, login) se repose UNE FOIS, puis seulement sur un delta (l'écran ou l'état a changé) ou, s'il bloque toujours, au plus UNE FOIS PAR HEURE — jamais à chaque tour ; « l'heure de la prochaine relance » tient lieu d'échéance." \
+   && printf '%s' "$S_ROND1" | grep -qiF "une fois par heure" \
+   && ! printf '%s' "$S_ROND1" | grep -qiE "à chaque rappel de la ronde|repose-le à chaque tour|Jamais : un geste"; then
+  ok "16a — rondes : un geste à poser sans échéance se repose UNE FOIS, puis sur un delta ou au plus une fois par heure, jamais à chaque tour"
 else
-  ko "16a — rondes : la règle du geste à poser sans échéance a disparu : il sera reposé à chaque tour"
+  ko "16a — rondes : la borne du geste sans échéance (une fois, puis delta ou une fois par heure) a disparu, ou « à chaque rappel / à chaque tour » est revenu"
 fi
-if printf '%s' "$S_RATT" | grep -qF "appelle son \`LU\` MAINTENANT** (sauf un simple merci, ou un message auquel tu as déjà répondu)"; then
+if printf '%s' "$S_RATT" | grep -qF "appelle son \`LU\` MAINTENANT** (sauf un simple merci, ou un message auquel tu as déjà répondu)" \
+   && printf '%s' "$S_LU" | grep -qF "Il exclut un simple merci et un message auquel tu as déjà répondu (la réponse prouve la réception)."; then
   ok "16b — rondes : le LU rattrapé exclut le simple merci et le message déjà répondu"
 else
   ko "16b — rondes : « tout message non accusé appelle son LU MAINTENANT » redevient sans exception (contredit rendre-compte)"
 fi
-# Défaut de forme lu à chaque naissance : un « ** » fermant collé à une majuscule sans ponctuation.
-FORME="$(grep -vE 'Répond de' "$METIER" | grep -nE "[a-zàâçéèêëîïôûùü0-9]\*\* [A-ZÉÈÀ]" | head -1 | cut -c1-100)"
+# Défaut de forme lu à chaque naissance : un « ** » fermant collé à la phrase suivante (majuscule) après une
+# lettre, un chiffre, « ) » ou « » » — ni « . » ni « ; » ni « : », qui sont la ponctuation légitime.
+# Seul le motif précis de « **Répond de** RA-… » est neutralisé, jamais la ligne entière ; on couvre aussi
+# les skills et le briefing RONDE.md du gabarit.
+FORME=""
+for f in "$METIER" "$SK_LD" "$SK_OC" "$GABARIT/RONDE.md"; do
+  [ -f "$f" ] || continue
+  r="$(sed 's/Répond de\*\* //' "$f" | grep -nE "[a-zàâçéèêëîïôûùü0-9)»]\*\* [A-ZÉÈÀ]" | head -1 | cut -c1-100)"
+  [ -n "$r" ] && FORME="$(basename "$f"): $r" && break
+done
 if [ -z "$FORME" ] && grep -qF "jusqu'à ce que quelqu'un passe.** " "$METIER"; then
-  ok "16c — aucun « ** » fermant collé à une majuscule sans ponctuation (deux phrases collées) dans le métier"
+  ok "16c — aucun « ** » fermant collé à une majuscule sans ponctuation (métier, deux skills, RONDE.md)"
 else
   ko "16c — deux phrases collées (« ** » sans ponctuation avant une majuscule) : $FORME"
 fi
-S_VOIS="$(section 'Coordonner les chantiers voisins')"
-if printf '%s' "$S_VOIS" | grep -qF "Un compte de torts tenu en s'attribuant des torts et aucun à l'autre, pour se placer moralement, était **faux**." \
-   && ! printf '%s' "$S_VOIS" | grep -qF "tenu d'un seul côté"; then
-  ok "16d — le compte de torts d'un pair dit le cas réel : s'attribuer des torts et aucun à l'autre, pour se placer moralement"
+# 16f — le briefing RONDE.md (prompt de la /loop) n'impose plus un LU sur le simple merci.
+if [ -f "$GABARIT/RONDE.md" ] \
+   && grep -qF "accuser réception, en tête, de chaque message reçu qui appelle une réponse (pas un simple merci)." "$GABARIT/RONDE.md" \
+   && ! grep -qF "accuser réception de chaque message reçu" "$GABARIT/RONDE.md" \
+   && grep -qF "\`LU\` en tête de chaque message reçu qui appelle une réponse, jamais d'un simple merci" "$METIER" \
+   && ! grep -qF "LU\` à chaque message reçu" "$METIER"; then
+  ok "16f — RONDE.md (gabarit) et reflexes : le LU vaut pour le message qui appelle une réponse, jamais un simple merci"
 else
-  ko "16d — le compte de torts se lit de nouveau à l'envers du cas réel (« tenu d'un seul côté »)"
+  ko "16f — RONDE.md ou reflexes impose de nouveau un LU sur CHAQUE message reçu, merci compris"
+fi
+S_VOIS="$(section 'Coordonner les chantiers voisins')"
+if printf '%s' "$S_VOIS" | grep -qF "Un compte de torts tenu d'un seul côté — les siens sans ceux de l'autre, ou l'inverse — était **faux**." \
+   && ! printf '%s' "$S_VOIS" | grep -qiE "pour se placer moralement|tenu en s'attribuant"; then
+  ok "16d — le compte de torts d'un pair : tenu d'un seul côté (les siens sans ceux de l'autre, ou l'inverse), sans mobile non attesté"
+else
+  ko "16d — le compte de torts n'est plus « tenu d'un seul côté — les siens sans ceux de l'autre, ou l'inverse », ou un mobile non attesté est revenu"
 fi
 
 echo
