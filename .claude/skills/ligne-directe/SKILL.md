@@ -77,7 +77,7 @@ Deux garde-fous, parce que l'erreur y serait définitive et muette :
 
 **Un canal qu'on cesse de lire annule tout le bénéfice de la ligne.** Le silence n'est pas la politesse : c'est la condition pour que ce que tu écris soit lu.
 
-Tu parles dans deux cas, et deux seulement :
+Tu parles spontanément dans deux cas, plus l'accusé de réception (`LU` + premier fait), la réponse à une question du dirigeant et le geste à poser (pane gelé, login, dialogue) :
 
 **1. Tu as besoin de lui.** Un arbitrage de produit, un risque à assumer, une dépense, un blocage que tu ne peux pas lever. Formule-le comme il décide : **la question, deux options au plus, ta recommandation**. Pas le raisonnement qui t'y a mené.
 
@@ -92,7 +92,7 @@ Tu parles dans deux cas, et deux seulement :
 | Une panne d'infrastructure | Les alertes dédiées |
 | Une annonce à toute l'équipe | Le feed |
 
-Test simple avant d'écrire : **est-ce que ça change quelque chose pour lui, maintenant ?** Sinon, ça attend le prochain jalon.
+Test simple avant d'écrire : **est-ce que ça change quelque chose pour lui, maintenant ?** Le reste attend le prochain jalon.
 
 ## Ce que la ligne n'abroge pas
 
@@ -106,18 +106,17 @@ Le reste des règles continue de s'appliquer sans exception : statuts posés au 
 
 Tu écris à un dirigeant qui lit sur son téléphone, souvent entre deux choses.
 
-**Trois lignes par défaut** : où on en est, ce qui vient, et ce dont tu as besoin de lui.
+**Trois lignes par défaut** : où on en est, ce qui vient, et — s'il y a une décision à prendre — ce dont tu as besoin de lui.
 
-**Cette dernière ligne s'écrit toujours, et toujours de la même façon** — c'est une consigne du dirigeant, donnée le 2026-08-17 :
+**Cette dernière ligne s'écrit sur le message qui attend quelque chose de lui — une décision, ou un geste à poser (pane gelé, login, dialogue à trancher) — et seulement celui-là** (consigne du dirigeant du 2026-08-17, resserrée le 2026-09-25 : « trop volubiles »). Elle est **littérale** :
 
 ```
-J'ai besoin de toi : <la décision attendue, en une ligne>
-J'ai besoin de toi : rien.
+J'ai besoin de toi : <la décision ou le geste attendu, en une ligne>
 ```
 
-Le `rien` s'écrit. Une ligne présente sur *tous* les messages se balaie d'un coup d'œil ; une ligne qui n'apparaît qu'en cas de demande oblige à lire le reste pour savoir s'il y en a une. Et la formule est **littérale** : le bénéfice est de reconnaître une chaîne identique sans lire, donc une reformulation — « ce que j'attends de toi », « rien de ton côté » — détruit exactement ce qu'elle gardait. À dix agents qui écrivent, c'est la différence entre balayer dix fins de message et lire dix messages.
+Un message purement informatif n'a pas cette ligne : y écrire « rien » est du bruit. Et la formule reste **littérale** : le bénéfice est de reconnaître une chaîne identique sans lire, donc une reformulation — « ce que j'attends de toi » — détruit exactement ce qu'elle gardait. **Ce que tu lui demandes est une décision** (choix de produit, risque assumé, dépense), à deux options au plus avec ta recommandation ; toute autre question va au chef d'équipe ou se mesure. **Dans le doute, écris la ligne** : l'oubli est la faute grave. *« J'ai tranché X, je continue »* n'attend rien ; *« dis-moi si tu veux le contraire »* attend.
 
-Pas de jargon technique, pas d'identifiants internes, pas de récapitulatif de ce que tu as fait pour montrer que tu as travaillé. Le travail se voit dans le ServiceDesk.
+**Jamais d'identifiant technique sur la ligne** — ni pane, ni canal, ni identifiant de session, ni commit : sur la ligne du dirigeant, le nom de l'agent ou le code lisible (`D-…`, `P-…`, `E-…`, `T-…`) ; sur une ligne cliente, aucun code de chantier. **Le `LU` part dès la réception avec le premier fait (« je commence X », « en cours, je regarde Y »), jamais nu, jamais retardé jusqu'à la fin du travail : il est la première ligne du message qui porte le fait, jamais un message à lui. Un simple « merci » n'appelle aucun accusé ; un LU rattrapé en retard part quand même, seul s'il le faut.** Pas de jargon technique, pas de récapitulatif de ce que tu as fait pour montrer que tu as travaillé. Le travail se voit dans le ServiceDesk.
 
 S'il demande du détail, donne-le en entier. La concision est le défaut, jamais un plafond.
 

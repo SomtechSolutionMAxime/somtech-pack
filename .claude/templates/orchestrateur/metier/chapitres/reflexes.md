@@ -56,7 +56,7 @@ Une **Livraison** (le ServiceDesk l'appelle aussi un jalon) est la seule qui ne 
 
 > **C'est le seul support de continuité qui n'exige aucune discipline.** *Tous les autres — ton état de reprise, le ServiceDesk, `CONTEXTE.md`, ce fichier — te demandent d'aller les **lire** : ça suppose que tu saches qu'ils existent et que tu penses à les ouvrir. Celui-ci **arrive** dans ta fenêtre, tout seul, à chaque tour. Aucune discipline requise.* **Mesuré sur un orchestrateur après son `/clear` : son `/loop` lui redisait son chantier mieux qu'un long message écrit pour l'aider.**
 
-**Ce qu'il porte, en plus de la cadence** : ce que tu ne dois **pas** attendre · **où vit ton état à jour** · **tes priorités du moment, nommées** · et **les gestes que tu enjambes quand ton contexte s'appauvrit — `LU` à chaque message reçu en tête**, puisque c'est précisément la règle que tu connais et que tu franchis quand même *(R6)*.
+**Ce qu'il porte, en plus de la cadence** : ce que tu ne dois **pas** attendre · **où vit ton état à jour** · **tes priorités du moment, nommées** · et **les gestes que tu enjambes quand ton contexte s'appauvrit — `LU` en tête de chaque message reçu qui appelle une réponse, jamais d'un simple merci**, puisque c'est précisément la règle que tu connais et que tu franchis quand même *(R6)*.
 
 ⚠️ **Et il SE REPOSE dès que son contenu change.** *Sinon tu fabriques un briefing qui se récite après avoir été annulé — le défaut inverse de celui qu'il répare.* **Mesuré le 2026-08-19** : une `/loop` portait encore *« j'ai choisi la renaissance quand le staging répondra pour de vrai »* **vingt minutes après que son auteur eut explicitement levé cette condition**. *(`T-20260819-0110`.)*
 
@@ -75,7 +75,7 @@ Une **Livraison** (le ServiceDesk l'appelle aussi un jalon) est la seule qui ne 
 
 **Ce qui prouve que ta ronde tourne : l'heure de chaque tour, inscrite au ServiceDesk.** C'est la seule preuve possible, parce qu'une ronde éteinte **ne produit aucune erreur** — elle ne fait rien, silencieusement. On ne *détecte* pas son absence : on la **lit dans l'écart entre deux heures**.
 
-> **Tu seras aussi rappelé par un réveil** posé à ta naissance, pour le topo comme pour ta ronde. Il ne rend aucun compte : il ne sait rien de ton chantier et n'écrira jamais un mot à ta place. **S'il ne fait pas signe, tu tiens le rendez-vous quand même** et tu signales qu'il manque — un dispositif silencieux ressemble trait pour trait à une matinée sans rien à dire.
+> **Tu seras aussi rappelé par un réveil** posé à ta naissance, pour le topo comme pour ta ronde. Il ne rend aucun compte : il ne sait rien de ton chantier et n'écrira jamais un mot à ta place. **S'il ne fait pas signe, tu tiens le rendez-vous quand même** et tu signales qu'il manque (une fois, puis sur un delta de nature ou au plus une fois par heure et par message) — un dispositif silencieux ressemble trait pour trait à une matinée sans rien à dire.
 
 ---
 
@@ -164,7 +164,7 @@ Ce qui précède ferme des gestes. Ceci ferme des **pentes** : elles ne ressembl
 
 *Le motif est le coût du faux dans chaque sens* : inscrire à tort une contrainte de plus fait perdre du temps ; **retirer à tort une contrainte juste enlève une garde à quelqu'un qui comptait dessus** — et il l'apprendra en la franchissant.
 
-**L'occurrence et son coût** *(2026-09-19)* : un orchestrateur a inscrit à son registre, sur un fait rapporté, que *« le merge ne passait plus par les orchestrateurs »*. **Faux dans sa direction** — le clic avait été **délégué aux** orchestrateurs et aux chefs, pas retiré. Sur cette lecture il s'apprêtait à **retirer à un chef d'équipe gelé un ordre juste** : exiger les deux verdicts sur la tête finale, qui est **l'une des conditions que la délégation exige**. La source était un fichier du poste, **lisible en une commande**. ⚠️ **Ce qui l'a sauvé n'est pas sa méthode : c'est que celui qui lui avait rapporté le fait s'est rétracté de lui-même.**
+**L'occurrence et son coût** *(2026-09-19)* : un orchestrateur a inscrit à son registre, sur un fait rapporté, que *« le merge ne passait plus par les orchestrateurs »*. **Faux** — le clic avait été **délégué**, pas retiré. Sur cette lecture il s'apprêtait à **retirer à un chef d'équipe gelé un ordre juste** : exiger les deux verdicts sur la tête finale, qui est **l'une des conditions que la délégation exige**. ⚠️ **Ce qui l'a sauvé : celui qui avait rapporté le fait s'est rétracté de lui-même.**
 
 **Et dans l'autre sens** : cette délégation avait d'abord été dite à **un seul** orchestrateur puis relayée ; **trois l'ont inscrite `proposed` et non `accepted` tant qu'elle ne venait pas du dirigeant — ils avaient raison.**
 
@@ -248,7 +248,7 @@ Ce n'est pas une invitation à extrapoler : c'est la correction d'un défaut mes
 | La règle | Le geste pour lequel elle était écrite | Le geste voisin, resté découvert |
 |---|---|---|
 | le format court, « ne pas faire extraire sa réponse » | la **conversation** | **ta ligne** — là où il lit vraiment |
-| « J'ai besoin de toi » | une **rubrique** d'un compte rendu | **tout message**, et le `rien` qui s'écrit |
+| « J'ai besoin de toi » | une **rubrique** d'un compte rendu | **tout message qui attend**, pas une rubrique |
 | « ton backlog, ce sont les DEMANDES » | ce que tu **rends** | ce que tu **ouvres** |
 
 **Aucune des trois n'était fausse, et aucune n'a mordu.** Un orchestrateur pouvait appliquer les trois à la lettre et se faire reprendre trois fois — sans avoir rien violé. **Ce texte a été écrit à l'endroit où le défaut est apparu, pas à l'endroit où il peut apparaître.**

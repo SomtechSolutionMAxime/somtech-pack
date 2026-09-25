@@ -56,8 +56,8 @@
   {
     "id": "si-tu-ne-trouves-rien",
     "quoi": "synonyme (tu te tais → ne dis rien), obligation intacte",
-    "avant": "> ⚠️ **Et si tu ne trouves rien, tu te tais.** Une ronde qui trouve toujours quelque chose cesse d'être lue aussi vite qu'une qui ne trouve jamais rien. **Le silence est un résultat.**",
-    "apres": "> ⚠️ **Et si tu ne trouves rien, ne dis rien.** Une ronde qui trouve toujours quelque chose cesse d'être lue aussi vite qu'une qui ne trouve jamais rien. **Le silence est un résultat.**"
+    "avant": "> ⚠️ **Et si tu ne trouves rien, tu te tais : un tour vide se termine sans message.**",
+    "apres": "> ⚠️ **Et si tu ne trouves rien, ne dis rien : un tour vide se termine sans message.**"
   },
   {
     "id": "peut-etre-la-plus-importante",
@@ -92,14 +92,14 @@
   {
     "id": "des-larrivee-dun-message",
     "quoi": "synonyme (dès l'arrivée de → dès qu'il arrive), changement de personne mineur",
-    "avant": "**Dès l'arrivée d'un message, avant tout autre geste.** Et le `LU` **dit ce que tu commences**, pas seulement que tu as vu.",
-    "apres": "**Dès qu'un message arrive, avant tout autre geste.** Et le `LU` **dit ce que tu commences**, pas seulement que tu l'as vu."
+    "avant": "**Dès l'arrivée d'un message, avant tout autre geste, et toujours avec son premier fait** : le `LU` **dit ce que tu commences**",
+    "apres": "**Dès qu'un message arrive, avant tout autre geste, et toujours avec son premier fait** : le `LU` **dit ce que tu commences**"
   },
   {
     "id": "entre-accuse-sec-et-fait",
     "quoi": "précision de vocabulaire (arrive vingt minutes plus tard → n'arrive que vingt minutes plus tard) qui garde le sens entier",
-    "avant": "**Entre un accusé sec et un `FAIT` qui arrive vingt minutes plus tard, il y a un silence** — et ce silence ressemble trait pour trait à un agent mort.",
-    "apres": "**Entre un accusé sec et un `FAIT` qui n'arrive que vingt minutes plus tard, il y a un silence** — et ce silence ressemble trait pour trait à un agent mort."
+    "avant": "comblent le silence entre ton message reçu et un `FAIT` vingt minutes plus tard** — un silence qui ressemble trait pour trait à un agent mort.",
+    "apres": "comblent le silence entre ton message reçu et un `FAIT` qui n'arrive que vingt minutes plus tard** — un silence qui ressemble trait pour trait à un agent mort."
   },
   {
     "id": "calcul-pas-intuitif",
@@ -108,10 +108,10 @@
     "apres": "**Le calcul qui tranche n'a rien d'intuitif : ce que tu écris se multiplie par le nombre d'agents.**"
   },
   {
-    "id": "le-rien-secrit",
-    "quoi": "synonyme (s'écrit → doit s'écrire, fait fonctionner → fait tenir)",
-    "avant": "**Le `rien` s'écrit — c'est la moitié qui fait fonctionner la règle.**",
-    "apres": "**Le `rien` doit s'écrire — c'est la moitié qui fait tenir la règle.**"
+    "id": "la-ligne-est-exigee-sur-ce-qui-attend",
+    "quoi": "synonyme (de lui → de sa part) qui garde le sens entier",
+    "avant": "**Elle est exigée sur chaque message qui attend quelque chose de lui, et elle est la dernière ligne.**",
+    "apres": "**Elle est exigée sur chaque message qui attend quelque chose de sa part, et elle est la dernière ligne.**"
   },
   {
     "id": "nen-renvoie-au-cto",
