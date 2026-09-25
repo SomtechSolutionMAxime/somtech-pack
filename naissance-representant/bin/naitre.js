@@ -74,6 +74,7 @@ import { etatDeLEcran, refusDEcran, touchesPourFranchir } from '../../ligne-dire
 import { verifierLigneOuvrable } from '../../ligne-directe/src/orchestrateur.js';
 import { verifierLieuRenseigne } from '../../ligne-directe/src/lieu-renseigne.js';
 import { gabaritsDir, preparerLieu } from '../../ligne-directe/src/lieu-agent.js';
+import { resoudreLaSaisieDeLieu } from '../../ligne-directe/src/saisie-de-lieu.js';
 import { nomDeLAgentQuiNait, inscrireNomDansLeLieu, FICHIER_NOM_AGENT } from '../../ligne-directe/src/nom-de-riviere.js';
 import { chargerRegistre } from '../../ligne-directe/src/registre.js';
 import { role as roleDe, rolesConnus, rolesSansLieu, poseAutomatique, poseManuelle } from '../../ligne-directe/src/roles.js';
@@ -288,7 +289,7 @@ function memeRepertoire(a, b) {
 
 async function main() {
   const args = process.argv.slice(2);
-  const nom = args[0];
+  let nom = args[0];
   const workspace = option(args, '--workspace');
   // Le défaut reste `representant` : la commande existait pour lui, et un appelant déjà écrit
   // ne doit pas changer de comportement du seul fait qu'un second rôle existe.
@@ -354,6 +355,23 @@ async function main() {
   // été créé ». L'exigence, elle, n'a pas disparu : `commandes.tabCreate` refuse toujours de
   // composer un onglet sans espace, et toujours avant qu'un pane existe.
   if (!nom || nom.startsWith('--')) usage(1);
+
+  // ═══ LE NOM DE RIVIÈRE EST ACCEPTÉ, ET SE TRADUIT ICI, UNE FOIS (D-20260925-0002). Celui qui
+  // tape pense à l'agent (`bonaventure`) ; le lieu porte le code du mandat. Tout ce qui suit —
+  // pose, versement, garde, déclaration — reçoit le CODE, comme avant : `nom` est ré-affecté
+  // et rien d'autre ne le sait. Un code est rendu tel que tapé ; seuls le nom d'un lieu existant
+  // ou une rivière introuvable changent l'issue. Rien n'a encore été créé, et le refus le dit.
+  if (!chefEquipe && rolesConnus().includes(role)) {
+    const saisie = resoudreLaSaisieDeLieu({ depot: REPO_ROOT, role, saisie: nom });
+    if (!saisie.ok) {
+      process.stderr.write(`${saisie.message}\n  Rien n\u2019a \u00e9t\u00e9 cr\u00e9\u00e9 : ni lieu, ni onglet, ni agent.\n`);
+      process.exit(1);
+    }
+    if (saisie.source === 'nom') {
+      process.stdout.write(`« ${saisie.saisie} » est le nom inscrit dans le lieu « ${saisie.nom} » — la naissance vise ce lieu.\n`);
+    }
+    nom = saisie.nom;
+  }
 
   // L'amorce est lue AVANT qu'un pane existe : un fichier illisible doit arrêter la commande
   // ici, pas après avoir fait naître une session qu'on n'aura rien à dire.

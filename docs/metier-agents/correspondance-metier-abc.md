@@ -156,7 +156,7 @@
 | 55 | Accuser LU — et dire ce que tu commences | 575 | R6.2 | **COUVERT** |
 | 55b | ⤷ 🔴 *une **réponse utile** n'est pas un `LU`* — la règle perd contre l'envie d'être utile, pas contre la négligence | — | **aucun** | **À CRÉER** — quatre violations en une journée sur un texte qui portait déjà la règle |
 | 56 | Des faits, pas ton raisonnement | 482 | R6.3 · RA-ORC-001 | **COUVERT** |
-| 57 | Tout message se termine par « J'ai besoin de toi : » | 189 | R6.4 | **COUVERT** |
+| 57 | La dernière ligne : « J'ai besoin de toi : » — sur le message qui attend quelque chose | 189 | R6.4 | **COUVERT** |
 | 58 | Mets le pane devant lui (focus) | 294 | **aucun** | **À CRÉER** |
 | 59 | Ce que tu fais monter, et ce que tu tranches | 323 | R6.5 · R6.6 · RA-ORC-002 | **COUVERT** |
 | 60 | Tu ne parles jamais à un client | 41 | GF-ORC-005 · HS-ORC-004 | **COUVERT** |

@@ -101,6 +101,14 @@ function ecartsDeRegistre(tableCli, registre) {
       ecarts.push(`« ${nom} » · dossier : le CLI écrit sous « ${cli.dossier} », le registre pose `
         + `sous « ${src.dossier} » — la mise à jour manquerait le lieu réel, en silence.`);
     }
+    // D-20260925-0002 : le CLI n'accepte le nom de rivière que pour les rôles que le registre baptise ainsi.
+    // Même normalisation des deux côtés (comme `baptemeDuRole` : tout ce qui n'est pas « riviere » est « code »).
+    const baptemeSrc = src.bapteme === 'riviere' ? 'riviere' : 'code';
+    const baptemeCli = cli.bapteme === 'riviere' ? 'riviere' : 'code';
+    if (baptemeCli !== baptemeSrc) {
+      ecarts.push(`« ${nom} » · baptême : le CLI dit « ${baptemeCli} », le registre « ${baptemeSrc} » — `
+        + 'la mise à jour accepterait (ou refuserait) un nom de rivière là où la naissance fait l\'inverse.');
+    }
     if (!cli.libelle) ecarts.push(`« ${nom} » : la table du CLI n'a pas de libellé — ses messages diraient « undefined ».`);
     if (!src.libelle) ecarts.push(`« ${nom} » : le registre n'a pas de libellé — ses messages diraient « undefined ».`);
   }
@@ -214,6 +222,22 @@ test('CONTRE-MESURE — une capitale de libellé ne rougit PAS, un libellé abse
   );
   assert.equal(sansLibelle.length, 1, `un libellé absent doit rougir, obtenu ${JSON.stringify(sansLibelle)}`);
   assert.match(sansLibelle[0], /libellé/);
+});
+
+test('CONTRE-MESURE — un baptême qui diverge rougit, et un baptême accordé ne fabrique aucun écart', () => {
+  // D-20260925-0002 : le CLI n'accepte le nom de rivière que pour les rôles baptisés ainsi. Ce champ
+  // DÉCIDE — le désarmer ferait accepter (ou refuser) un nom là où la naissance fait l'inverse.
+  const accorde = ecartsDeRegistre(
+    { orchestrateur: { gabarit: 'g', dossier: '.d', libelle: 'O', bapteme: 'riviere' } },
+    { orchestrateur: { gabarits: 'g', dossier: '.d', libelle: 'o', bapteme: 'riviere' } },
+  );
+  assert.deepEqual(accorde, []);
+  const diverge = ecartsDeRegistre(
+    { orchestrateur: { gabarit: 'g', dossier: '.d', libelle: 'O', bapteme: 'code' } },
+    { orchestrateur: { gabarits: 'g', dossier: '.d', libelle: 'o', bapteme: 'riviere' } },
+  );
+  assert.equal(diverge.length, 1, `un baptême divergent doit rougir, obtenu ${JSON.stringify(diverge)}`);
+  assert.match(diverge[0], /baptême/);
 });
 
 test('le commentaire de representant.js ne promet plus une garde qui n\'existe pas — il cite CELLE-CI', () => {

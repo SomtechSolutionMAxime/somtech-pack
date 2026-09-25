@@ -56,7 +56,7 @@
 // et c'est à garder — un import vers `roles.js` casserait le miroir côté CLI.
 // ─────────────────────────────────────────────────────────────────────────────────────────
 
-import { readdirSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -196,5 +196,150 @@ export function messageLieuAmbigu(nom, parent, homonymes) {
     `Ils ne diffèrent que par la casse, et rien ici ne peut dire lequel est le bon — en ` +
     `choisir un reviendrait à mettre à jour un lieu mort en laissant l'autre périmé. ` +
     `Écarte celui qui ne sert plus (« mv … ….ecarte »), puis relance.`
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// LE NOM DE RIVIÈRE, ACCEPTÉ LÀ OÙ LE CODE DU MANDAT ÉTAIT EXIGÉ (D-20260925-0002)
+//
+// Le dirigeant tape le NOM de l'agent (`bonaventure`) ; le lieu, lui, porte le CODE du mandat
+// (`.orchestrateur/j-20260814-0001/`) et le garde — c'est la traçabilité. À la machine de faire
+// la traduction qu'elle est seule à pouvoir faire sans erreur : lire le `.nom-agent` de chaque
+// lieu existant et rendre celui qui porte le nom.
+//
+// ⚠️ CELA NE VAUT QUE POUR UN LIEU QUI EXISTE DÉJÀ (mise à jour, naissance). La POSE continue
+// de passer par `resoudreLieu` seul : créer un lieu ne se redirige jamais vers un homonyme de
+// nom, sans quoi « poser `bonaventure` » écraserait le lieu d'un mandat qui porte ce nom.
+//
+// ⚠️ ET `parcDesNoms` (`nom-de-riviere.js`) NE RÉSOUT PAS — elle liste les noms déjà PRIS pour
+// éviter les collisions à l'attribution, sans dire de quel lieu ils sont. La brique qui lit un
+// lieu est `nomInscritDansLeLieu`, et elle est INJECTÉE ici (`lireNomInscrit`) plutôt
+// qu'importée : ce fichier n'a droit qu'à `node:fs` et `node:path`, c'est ce qui rend sa copie
+// côté CLI possible (voir l'en-tête). Le poste passe `nomInscritDansLeLieu` ; le CLI passe son
+// propre lecteur, gardé identique par `cli/test/nom-de-riviere-lecteur-miroir.test.js`.
+//
+// Le lecteur rend `{ nom: string|null, illisible?: string }` — TROIS ÉTATS : un nom, aucun nom,
+// ou « on n'a pas su lire ». Le dernier ne conclut RIEN : un lieu illisible n'est ni le bon ni
+// un écarté, et le refus le dit plutôt que de prétendre qu'aucun lieu ne porte le nom.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Les lieux d'un dossier de rôle qui portent `saisie` comme nom d'agent inscrit.
+ *
+ * @param {string}   depot
+ * @param {string}   dossier
+ * @param {string}   saisie           le nom tapé (casse indifférente : le `.nom-agent` est en minuscules)
+ * @param {(lieu: string) => {nom: string|null, illisible?: string}} lireNomInscrit
+ * @returns {{parent: string, porteurs: string[], illisibles: {lieu: string, cause: string}[]}}
+ */
+function lieuxPortantLeNom(depot, dossier, saisie, lireNomInscrit) {
+  const parent = join(depot, dossier);
+  const cible = saisie.toLowerCase();
+  let entrees = [];
+  try {
+    entrees = readdirSync(parent, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name)
+      .sort();
+  } catch {
+    entrees = [];
+  }
+  const porteurs = [];
+  const illisibles = [];
+  for (const entree of entrees) {
+    const lu = lireNomInscrit(join(parent, entree));
+    if (lu?.illisible) illisibles.push({ lieu: entree, cause: lu.illisible });
+    else if (lu?.nom && lu.nom.toLowerCase() === cible) porteurs.push(entree);
+  }
+  return { parent, porteurs, illisibles };
+}
+
+/**
+ * Résout un lieu EXISTANT à partir de ce que l'opérateur a tapé : le CODE d'abord, le NOM
+ * inscrit ensuite.
+ *
+ * LE CODE GAGNE TOUJOURS. Une saisie qui désigne déjà un lieu par son dossier — casse comprise,
+ * ambiguïté de casse comprise — se résout exactement comme avant ce lot : aucun lieu posé ne
+ * change de comportement, et un mot qui serait à la fois le code d'un lieu et le nom d'un autre
+ * désigne le premier.
+ *
+ * @returns {ReturnType<typeof resoudreLieu> & {source: 'code'|'nom', illisibles: {lieu: string, cause: string}[]}}
+ *   Même forme que `resoudreLieu`, plus la source de la résolution et les lieux illisibles.
+ *   `ambigu` + `homonymes` valent pour les deux sources — MAIS ce ne sont pas les mêmes
+ *   ambiguïtés : par la casse (`source: 'code'`, `messageLieuAmbigu`) ou par le nom
+ *   (`source: 'nom'`, `messageNomAmbigu`).
+ */
+export function resoudreLieuParCodeOuNom(depot, dossier, saisie, lireNomInscrit, designe = 'nom') {
+  const parCode = resoudreLieu(depot, dossier, saisie, designe);
+  if (parCode.existe || parCode.ambigu) return { ...parCode, source: 'code', illisibles: [] };
+
+  // ⚠️ UN LIEU QUI EST UN LIEN SYMBOLIQUE EST UN LIEU. `resoudreLieu` ne retient que les
+  // répertoires (`isDirectory()` ne suit pas les liens — voir plus haut), donc `existe` reste
+  // faux pour lui ; l'appelant tranche sur son propre `existsSync`, qui les suit. Ici, sans
+  // ce garde, le code d'un tel lieu tomberait au balayage des noms, ne trouverait aucun porteur
+  // et serait refusé « ni code ni nom » — un refus FAUX, un code qui ne serait plus prioritaire.
+  // Le lien EXISTE (`existsSync` le suit) : on le dit tel — `existe` et `exact`, le chemin ayant été
+  // composé avec le nom tapé —, sans quoi la naissance le prendrait pour un nom introuvable et le
+  // CLI dirait « la casse diffère de » un nom identique (relevé en revue de fond).
+  if (existsSync(parCode.racine)) return { ...parCode, existe: true, exact: true, source: 'code', illisibles: [] };
+  // Un lien CASSÉ n'est pas « aucun lieu » : une entrée de ce nom existe. On ne le balaie pas aux
+  // noms — l'appelant garde son refus d'avant (« n'existe pas »), qui parle de la cible, pas d'un nom.
+  try { lstatSync(parCode.racine); return { ...parCode, source: 'code', illisibles: [] }; } catch { /* aucune entrée */ }
+
+  const { parent, porteurs, illisibles } = lieuxPortantLeNom(depot, dossier, saisie, lireNomInscrit);
+  if (porteurs.length === 1) {
+    return {
+      racine: join(parent, porteurs[0]),
+      parent,
+      nom: porteurs[0],
+      demande: saisie,
+      exact: false,
+      existe: true,
+      ambigu: false,
+      homonymes: porteurs,
+      source: 'nom',
+      illisibles,
+    };
+  }
+  return {
+    ...parCode,
+    existe: false,
+    ambigu: porteurs.length > 1,
+    homonymes: porteurs,
+    source: 'nom',
+    illisibles,
+  };
+}
+
+/** Le refus servi quand PLUSIEURS lieux portent le même nom d'agent — les nomme tous. */
+export function messageNomAmbigu(nom, parent, homonymes) {
+  return (
+    `« ${nom} » est inscrit dans plusieurs lieux sous « ${parent} » : ${homonymes.join(', ')}. ` +
+    `Rien ici ne peut dire lequel tu vises — en choisir un reviendrait à mettre à jour l'un en ` +
+    `laissant l'autre périmé. Redis la commande avec le CODE du mandat du lieu voulu ` +
+    `(le nom de son dossier), ou corrige le « .nom-agent » de celui qui ne doit pas porter ce nom.`
+  );
+}
+
+/**
+ * Le refus servi quand ni un code ni un nom inscrit ne désigne aucun lieu.
+ *
+ * Trois états : si des lieux étaient ILLISIBLES, on n'affirme PAS qu'aucun ne porte le nom — on
+ * dit qu'on n'a pas su lire, et lesquels. Affirmer l'absence sur une mesure manquée serait
+ * conclure sur ce qu'on n'a pas vu.
+ */
+export function messageNomIntrouvable(nom, parent, illisibles = []) {
+  if (illisibles.length > 0) {
+    return (
+      `« ${nom} » n'est ni le code d'un lieu ni un nom lu dans « ${parent} » — mais ` +
+      `${illisibles.length} lieu(x) ont un « .nom-agent » qu'on n'a pas su lire ` +
+      `(${illisibles.map((i) => `${i.lieu} : ${i.cause}`).join(' ; ')}). On n'en conclut RIEN : ` +
+      `l'un d'eux porte peut-être ce nom. Rends-le lisible, ou donne le CODE du mandat.`
+    );
+  }
+  return (
+    `« ${nom} » n'est ni le code d'un lieu, ni un nom inscrit dans aucun lieu de ce dépôt ` +
+    `(sous « ${parent} »). Donne le CODE du mandat (le nom du dossier du lieu), ou un nom ` +
+    `qu'un « .nom-agent » porte.`
   );
 }

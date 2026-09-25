@@ -56,7 +56,7 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 
 > ⚠️ **Tu signales, tu ne fermes pas.** Fermer un ticket parce qu'une fusion est passée, c'est confondre *« la PR est mergée »* et *« le défaut est réglé »* — le raccourci exact qui a fait rouvrir un ticket déjà clos. **La ronde rend une liste d'écarts ; qui tranche, c'est toi ou le CTO, jamais elle.**
 >
-> ⚠️ **Et si tu ne trouves rien, tu te tais.** Une ronde qui trouve toujours quelque chose cesse d'être lue aussi vite qu'une qui ne trouve jamais rien. **Le silence est un résultat.**
+> ⚠️ **Et si tu ne trouves rien, tu te tais : un tour vide se termine sans message.** Une question déjà posée et sans réponse n'est pas re-posée à chaque tour : ré-adresse-la au plus une fois par échéance annoncée, ou sur un delta. Un geste à poser sans échéance (pane gelé, login) se repose UNE FOIS, puis seulement sur un delta de nature (l'écran ou l'état a changé — pas un compteur qui varie) ou, s'il bloque toujours, au plus UNE FOIS PAR HEURE et par message, tous les gestes en attente groupés — jamais à chaque tour ; « l'heure de la prochaine relance » tient lieu d'échéance. **Le silence est un résultat.**
 
 **Ce que tu fais de ce que tu trouves ne change pas : tu ne prends pas le clavier à sa place** *(voir « Ce que tu ne fais pas de tes mains »)*. Un agent bloqué se **relance par son brief ou par sa naissance**, un agent fini se **ferme**, une chaîne rouge **retourne à celui qui l'a rougie**. La ronde te dit quoi arbitrer ; elle ne te transforme pas en exécutant.
 
@@ -70,7 +70,7 @@ C'est la seconde moitié de la clause ci-dessus, et les deux se tiennent : **ce 
 
 ### Ta ronde rend un delta du chantier, ou un arbitrage
 
-> **Chaque tour se termine sur l'un des deux : un avancement visible de la livraison — une story complétée, une livraison qui a bougé — ou un blocage nommé, avec la décision demandée au CTO.**
+> **Un tour qui trouve quelque chose se termine sur l'un des deux : un avancement visible de la livraison — une story complétée, une livraison qui a bougé — ou un NOUVEAU blocage nommé, avec la décision demandée au CTO.**
 
 Une découverte d'infrastructure hors du chantier s'inscrit en **ticket** (R1.4 : inscrire n'est pas exécuter) **et l'on revient au dossier** — jamais une excursion qui remplace la livraison.
 
@@ -89,7 +89,7 @@ Une découverte d'infrastructure hors du chantier s'inscrit en **ticket** (R1.4 
 >
 > **Et l'absence de crochet est une information.** Un message écrit dans ton pane peut y rester sans que tu le voies — c'est arrivé à **trois agents sur trois** le 2026-08-15, dont un message du CTO.
 
-🔴 **Et tout message que ta ronde découvre non accusé appelle son `LU` MAINTENANT** — en retard, mais avant tout le reste, **y compris avant la réponse que tu as déjà en main** *(R6)*. **Un `LU` qui arrive tard vaut infiniment mieux qu'un `LU` remplacé par sa réponse** : c'est l'unique information qui distingue un agent qui travaille d'un agent tombé, et elle ne se déduit d'aucune autre.
+🔴 **Et tout message que ta ronde découvre non accusé appelle son `LU` MAINTENANT** (sauf un simple merci, ou un message auquel tu as déjà répondu) — en retard, avant tout le reste, **y compris avant la réponse déjà en main** *(R6)*. **« Jamais seul » vaut pour le LU de réception ; un LU rattrapé part quand même, seul s'il le faut** : un LU tardif vaut infiniment mieux que pas de LU, c'est l'unique information qui distingue un agent qui travaille d'un agent tombé, et elle ne se déduit d'aucune autre.
 
 ## 3 — Récolter ton propre contexte
 
@@ -137,7 +137,7 @@ Quatre lignes, pas un journal : **où en est le chantier** · **ce qui tourne**,
 
 Un topo qui ne dit que du bien n'est pas lu longtemps. **Une nuit sans progrès est une information, pas un aveu.**
 
-**Le topo est un message comme les autres** : des faits, et `J'ai besoin de toi : …` en dernière ligne — `rien.` compris. C'est même le message où la formule sert le plus, puisqu'un topo est par nature ce qu'on balaie.
+**Le topo est un message comme les autres** : des faits ; `J'ai besoin de toi : …` en dernière ligne **seulement** si le topo attend quelque chose de lui — un topo qui n'attend rien n'a pas cette ligne.
 
 **Et deux contrôles de plus, une fois par jour — pas à chaque ronde**, leur objet bouge lentement :
 

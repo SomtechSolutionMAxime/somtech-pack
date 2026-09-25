@@ -1166,6 +1166,19 @@ export const CONTROLES = [
         );
       }
 
+      // ── LE GEL DE L'ÉCRITURE ÉPISODIQUE (T-20260923-0012 ; STD-045 §2.7.2). Le tableau offre
+      // `/episodique` comme un geste disponible ; l'encoder communique son contenu hors Québec. Un
+      // orchestrateur qui lit la rangée sans le gel ne peut pas tenir la conduite. On garde ce que
+      // la ligne PRESCRIT — le gel, son pointeur, son motif —, PAS sa formulation : la garde
+      // cherche un radical et deux références, jamais la phrase exacte (T-20260925-0053 : une garde
+      // qui rougit quand on reformule dicte la forme du texte sans le dire). Trouvé en revue de
+      // fond : sans ce contrôle, retirer le gel laissait tout vert et le plafond de taille, lui,
+      // se réjouissait de la baisse.
+      const geste = gestes.find((g) => g.includes('/episodique'));
+      assert.match(geste, /gel/i, 'le geste « /episodique » ne dit plus que son écriture est gelée : l’orchestrateur l’offrira comme disponible');
+      assert.match(geste, /T-20260923-0012/, 'le gel ne pointe plus son ticket : il ne se lève ni ne se relit nulle part');
+      assert.match(geste, /STD-045/, 'le gel ne cite plus son motif (STD-045) : une règle sans motif s’assouplit');
+
       // ── QUAND il rappelle. Trois moments, et ils ont en commun d'être AVANT qu'il engage
       // quelqu'un — un rappel fait après le brief ne sert plus à rien. Le COMPTE est la garde :
       // en retirer un ne casse rien et rouvre exactement le défaut que l'ajout ferme.
@@ -4081,9 +4094,9 @@ export const CONTROLES = [
 
   {
     id: 'la-formule-jai-besoin-de-toi',
-    quoi: 'tout message se termine par la formule LITTÉRALE, le « rien » compris — et elle est rappelée là où les messages se fabriquent',
+    quoi: 'la dernière ligne est la formule LITTÉRALE, exigée sur le message qui attend quelque chose du dirigeant — un message purement informatif n’en a pas — et elle est rappelée là où les messages se fabriquent',
     verifier({ metier }) {
-      const s = sectionDe(metier, /Tout message se termine par/i, 'sur la formule de fin de message');
+      const s = sectionDe(metier, /La dernière ligne\s*:/i, 'sur la formule de fin de message');
 
       // ── LA FORMULE, LITTÉRALE — et ici la littéralité EST la règle, pas un raccourci de garde.
       // Le bénéfice décrit par le dirigeant est le coup d'œil : reconnaître une chaîne identique,
@@ -4091,7 +4104,9 @@ export const CONTROLES = [
       // l'intention en laissant tomber le seul effet recherché.
       const LITTERALE = "J'ai besoin de toi :";
       const lignes = s.corps.split('\n').filter((l) => /besoin de toi/i.test(l));
-      assert.ok(lignes.length >= 2, `la formule doit être montrée dans ses DEUX formes — la demande et le « rien » (${lignes.length} ligne·s trouvée·s)`);
+      // D-20260925-0003 : le « rien » n'est plus écrit — la formule ne s'écrit que sur le message
+      // qui ATTEND quelque chose. Une seule forme est donc montrée.
+      assert.ok(lignes.length >= 1, `la formule doit être montrée (${lignes.length} ligne·s trouvée·s)`);
       for (const l of lignes) {
         assert.ok(
           l.includes(LITTERALE),
@@ -4099,8 +4114,8 @@ export const CONTROLES = [
         );
       }
       assert.ok(
-        lignes.some((l) => /:\s*rien\./i.test(l)),
-        'la forme « J’ai besoin de toi : rien. » doit être montrée — c’est celle qu’on omet, et son omission annule la règle',
+        !lignes.some((l) => /:\s*rien\./i.test(l)),
+        'la forme « J’ai besoin de toi : rien. » ne doit plus être prescrite : un message qui n’attend rien n’a pas cette ligne (D-20260925-0003)',
       );
 
       // ── LA VARIANTE PROSCRITE EST NOMMÉE, ET DONNÉE COMME DESTRUCTRICE.
@@ -4113,64 +4128,47 @@ export const CONTROLES = [
         `« ${variantes[0].trim()} » : la variante doit être donnée comme DÉTRUISANT le bénéfice, jamais comme une formulation acceptable`,
       );
 
-      // La sonde accepte « s'écrit » comme « doit s'écrire » : la garantie est que le `rien`
-      // S'ÉCRIT, pas la façon dont l'obligation est conjuguée — mesuré par la campagne de
-      // reformulations légitimes du 2026-08-17, où « Le `rien` doit s'écrire » faisait crier
-      // cette garde sur un texte plus impératif que l'original.
-      // ⚠️ LA POLARITÉ SEULE NE SUFFISAIT PAS, ET UNE PASSE DE REVUE L'A MESURÉ — 2026-08-19.
-      //
-      // La sonde `/Le `rien` s'écrit/` est courte : n'importe quelle phrase de cette section
-      // qui la porte satisfait la garantie. Mesuré — **la MOITIÉ de la phrase (28 mots sur 55)
-      // réinjectée ailleurs dans la section suffisait**, l'énoncé d'origine ayant disparu. La
-      // garde tenait l'AFFIRMATION et laissait partir le MOTIF, qui est ce qui la rend
-      // applicable : sans lui, « le rien s'écrit » est une consigne qu'on peut croire
-      // décorative, et c'est exactement comme ça qu'elle a cessé de mordre la première fois.
-      //
-      // On ancre donc la phrase porteuse sur ses DEUX moitiés — ce qu'elle affirme ET le coût
-      // qu'elle évite —, et la polarité continue de balayer le CORPS : une négation écrite
-      // dans une autre phrase de la section doit rester visible, ce qu'une lecture ligne à
-      // ligne perdrait. Les deux gardes ne se remplacent pas, elles se complètent.
-      const rien = s.corps.split('\n').filter((l) => /Le `rien` (?:s'écrit|doit s'écrire)/i.test(l));
-      assert.equal(rien.length, 1, `la règle du « rien » doit être énoncée une fois exactement (${rien.length})`);
+      // ── LA RÈGLE : EXIGÉE SUR CE QUI ATTEND, ABSENTE DE CE QUI N'ATTEND RIEN.
+      // Ses DEUX moitiés sont ancrées sur la même phrase : ce qu'elle exige (le message qui
+      // attend quelque chose) ET ce qu'elle épargne (le « rien » est du bruit). Une phrase qui
+      // n'en garderait qu'une redeviendrait, soit la ligne sur tout message (la volubilité),
+      // soit une ligne facultative que personne n'écrit plus.
+      const attend = s.corps.split('\n').filter((l) => /exigée sur chaque message qui attend quelque chose/i.test(l));
+      assert.equal(attend.length, 1, `la règle « exigée sur le message qui attend » doit être énoncée une fois exactement (${attend.length})`);
+      exigeContrainte(attend[0], 'la dernière ligne, exigée sur le message qui attend quelque chose');
       assert.match(
-        rien[0], /oblige à lire le reste/i,
-        `« ${rien[0].trim().slice(0, 90)}… » affirme que le « rien » s’écrit sans dire CE QUE ÇA ÉVITE. `
-          + `Le motif — une ligne qui n’apparaît qu’en cas de demande oblige à lire le reste pour savoir `
-          + `s’il y en a une — est ce qui rend la règle applicable ; sans lui elle se lit comme un détail `
-          + `de forme, et c’est ainsi qu’elle a cessé de mordre la première fois.`,
+        attend[0], /purement informatif n'a pas cette ligne/i,
+        `« ${attend[0].trim().slice(0, 90)}… » n’écarte pas le message purement informatif : sans cette moitié, la ligne redevient exigée partout`,
+      );
+      assert.match(
+        attend[0], /« rien » est du bruit/i,
+        `« ${attend[0].trim().slice(0, 90)}… » écarte le message informatif sans dire POURQUOI : le « rien » est du bruit, et c’est ce motif qui empêche de le réécrire`,
       );
       exigePolarite(
-        s.corps, /Le `rien` (?:s'écrit|doit s'écrire)/i,
-        'le « rien » s’écrit — une ligne qui n’apparaît qu’en cas de demande oblige à lire le reste pour savoir s’il y en a une',
-        { inverse: /inutile de l'écrire|seulement quand tu as besoin|on l'omet|facultative/i },
+        s.corps, /exigée sur chaque message qui attend quelque chose/i,
+        'la ligne est exigée sur le message qui attend quelque chose de lui, et sur lui seul',
+        { inverse: /sur tout message|sur chaque message, |même quand rien|`rien\.` compris|le `rien` s'écrit/i },
+      );
+      // ── AUCUN IDENTIFIANT TECHNIQUE SUR LA LIGNE — règle du CLAUDE.md du dirigeant que le métier reprend.
+      const ident = s.corps.split('\n').filter((l) => /Jamais d'identifiant technique sur la ligne/i.test(l));
+      assert.equal(ident.length, 1, `l’interdiction d’identifiant technique doit être énoncée une fois exactement (${ident.length})`);
+      for (const mot of [/pane/i, /canal/i, /commit/i, /session/i]) {
+        assert.match(ident[0], mot, `l’interdiction ne nomme plus ${mot} : ce qui n’est pas nommé s’écrit`);
+      }
+      const pane = s.corpsEtendu.split('\n').filter((l) => /Aucun identifiant de pane sur la ligne/i.test(l));
+      assert.equal(pane.length, 1, `l’interdiction d’identifiant de pane doit être énoncée une fois exactement (${pane.length})`);
+      assert.match(pane[0], /titre de fenêtre/i, 'l’interdiction du pane ne dit plus CE QU’ON DONNE À LA PLACE (le nom de l’agent, le titre de fenêtre) : sans lui, on redonne le pane');
+      assert.ok(!/sauf|ou le pane|si le focus/i.test(ident[0]), `l’interdiction d’identifiant technique souffre une exception : « ${ident[0].trim().slice(0, 120)} »`);
+      assert.match(pane[0], /ne lui dit rien/i, 'l’interdiction du pane ne dit plus POURQUOI (un identifiant de pane ne lui dit rien) : sans le motif, la règle se lit comme un détail de forme');
+      exigePolarite(
+        s.corpsEtendu, /Aucun identifiant de pane sur la ligne/i,
+        'aucun identifiant de pane sur la ligne — le nom de l’agent et le titre de fenêtre',
+        { inverse: /avant l'identifiant de pane|le pane avant/i },
       );
       exigePolarite(
         s.corps, /La formule est littérale/i,
         'la formule est littérale — l’esprit ne suffit pas, c’est la chaîne qui se balaie',
         { inverse: /tu peux la reformuler|formule-la comme tu veux|l'esprit suffit|à ta façon/i },
-      );
-
-      // ⚠️ LA PORTÉE NE S'ÉCRIT PLUS « tous tes messages, sans exception » : la réécriture
-      // l'énonce par le défaut qu'elle corrige — « Ce n'est pas la rubrique d'un compte rendu,
-      // c'est la dernière ligne de tout message. » C'est la même portée, dite à l'envers, et
-      // c'est bien elle qui fait le travail : ce qui la ruine est qu'on la prenne pour la
-      // rubrique d'un geste. La sonde suit donc l'énoncé réel de la portée, et continue
-      // d'exiger qu'il CONTRAIGNE — « il vaut mieux la mettre partout » ne porterait rien.
-      const portees = s.corps.split('\n').filter((l) => /dernière ligne de tout message/i.test(l));
-      assert.equal(portees.length, 1, `la portée de la formule doit être énoncée une fois exactement (${portees.length})`);
-      exigeContrainte(portees[0], 'la portée de la formule');
-      // ⚠️ ET SES DEUX MOITIÉS — mesuré, pas supposé : cinq mots (« dernière ligne de tout
-      // message ») réinjectés ailleurs dans la section suffisaient à satisfaire cette garantie,
-      // l'énoncé d'origine ayant disparu. La portée n'est PAS « la formule va partout » : elle
-      // est écrite à l'envers, PAR LE DÉFAUT QU'ELLE CORRIGE — « ce n'est pas la rubrique d'un
-      // compte rendu ». C'est cette moitié-là qui fait le travail : le métier dit lui-même que
-      // « J'ai besoin de toi » n'a jamais mordu tant qu'elle était bornée à une rubrique. La
-      // laisser partir rendrait la portée vraie et inopérante, comme elle l'était.
-      assert.match(
-        portees[0], /rubrique/i,
-        `« ${portees[0].trim().slice(0, 90)}… » énonce la portée sans nommer CE QU'ELLE CORRIGE. `
-          + `La règle a vécu bornée à la rubrique d'un compte rendu et n'a jamais mordu ; c'est ce `
-          + `défaut nommé qui empêche un lecteur de l'y réduire à nouveau.`,
       );
 
       // ── ⚠️ LA COUVERTURE — ET C'EST ELLE QUI FERME LE DÉFAUT D'ORIGINE.
@@ -4264,6 +4262,95 @@ export const CONTROLES = [
     },
   },
 
+  // ═══ D-20260925-0003 — deux règles de la volubilité, chacune ANCRÉE À SA SECTION et sur la
+  // PHRASE ENTIÈRE : des mots isolés seraient satisfaits par autre chose (« guichet » figure aussi
+  // au chapitre du sous-traitant). Chaque phrase est extraite, puis éprouvée sur ses DEUX moitiés.
+  {
+    id: 'une-question-au-dirigeant-est-une-decision',
+    quoi: 'une question au dirigeant est une décision — deux options au plus, une recommandation — et toute autre question va au chef d’équipe ou se mesure',
+    verifier({ metier }) {
+      const s = sectionDe(metier, /Ce que tu fais monter, et ce que tu tranches/i, 'sur ce qui monte au dirigeant');
+      const q = s.corps.split('\n').filter((l) => /Une question au dirigeant est une décision/i.test(l));
+      assert.equal(q.length, 1, `« une question au dirigeant est une décision » doit être énoncée une fois exactement (${q.length})`);
+      exigeContrainte(q[0], 'une question au dirigeant est une décision');
+      assert.match(q[0], /deux options au plus/i, 'la décision perd sa borne : deux options au plus');
+      assert.match(q[0], /ta recommandation/i, 'la décision perd sa recommandation : une question nue fait de toi un guichet');
+      assert.match(q[0], /échéance/i, 'la décision perd son échéance : une remontée sans date est une permission de se taire');
+      assert.match(q[0], /Une remontée sans date est une permission de se taire/i, 'la phrase du seuil n’est plus entière : « de se taire » est ce qui fait de la remontée sans date une faute');
+      const r = s.corps.split('\n').filter((l) => /Toute autre question/i.test(l));
+      assert.equal(r.length, 1, `« toute autre question » doit être énoncée une fois exactement (${r.length})`);
+      assert.match(r[0], /va au chef d'équipe, ou se mesure/i, 'le reste ne va plus au chef d’équipe ni ne se mesure : où va-t-il ?');
+      assert.match(r[0], /jamais au dirigeant/i, 'la phrase ne dit plus que le reste ne monte JAMAIS au dirigeant');
+      exigePolarite(
+        s.corps, /Toute autre question va au chef d'équipe, ou se mesure/i,
+        'toute autre question va au chef d’équipe ou se mesure, jamais au dirigeant',
+        { inverse: /va aussi au dirigeant|ni au chef ni mesur|peut aller au dirigeant/i },
+      );
+    },
+  },
+
+  {
+    id: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    quoi: 'le LU est obligatoire et n’est JAMAIS un message à lui : il part avec le premier fait utile, en première ligne',
+    verifier({ metier }) {
+      const s = sectionDe(metier, /Accuser LU/i, 'sur l’accusé de réception');
+      const a = s.corps.split('\n').filter((l) => /Aucun accusé seul/i.test(l));
+      assert.equal(a.length, 1, `« aucun accusé seul » doit être énoncé une fois exactement (${a.length})`);
+      exigeContrainte(a[0], 'aucun accusé seul');
+      assert.match(a[0], /n'est jamais un message à lui/i, 'la phrase ne dit plus que le LU n’est jamais un message à lui');
+      assert.match(a[0], /PREMIER fait/i, 'la phrase ne dit plus AVEC QUOI part le LU : le premier fait');
+      assert.match(a[0], /dès la réception/i, 'la phrase ne dit plus QUAND part le LU : dès la réception');
+      assert.match(a[0], /jamais nu, jamais retardé jusqu'à la fin du travail/i, 'la phrase perd ses deux bornes : ni nu, ni retardé jusqu’à la fin du travail');
+      // ── Le paragraphe d'ouverture de la section : le premier fait existe toujours, et le « merci » n'appelle rien.
+      const tete = s.corps.split('\n').filter((l) => /avant tout autre geste, et toujours avec son premier fait/i.test(l));
+      assert.equal(tete.length, 1, `le paragraphe d’ouverture du LU doit être énoncé une fois exactement (${tete.length})`);
+      assert.match(tete[0], /toujours avec son premier fait/i, 'l’ouverture ne dit plus que le LU part TOUJOURS avec son premier fait');
+      assert.match(tete[0], /Jamais de `LU` nu, jamais de `LU` retardé jusqu'à la fin du travail/i, 'l’ouverture perd ses deux interdits : LU nu, LU retardé');
+      assert.match(tete[0], /Un simple « merci », sans travail à faire, n'appelle aucun accusé/i, 'l’ouverture ne dit plus qu’un simple « merci » n’appelle aucun accusé : on accusera tout, et le bruit revient');
+      const p = s.corps.split('\n').filter((l) => /en est la première ligne/i.test(l));
+      assert.equal(p.length, 1, `« le LU en est la première ligne » doit être énoncé une fois exactement (${p.length})`);
+      assert.match(p[0], /jamais la dernière/i, 'la première ligne ne dit plus « jamais la dernière »');
+      exigePolarite(
+        s.corps, /Aucun accusé seul/i,
+        'aucun accusé seul : le LU est la première ligne du message qui porte le fait',
+        { inverse: /peut être un message à lui|n'est pas exigé|accusé seul est permis|part seul|LU nu (?:est|reste|part)|`LU` nu (?:est|reste|part)|nu s'il le faut|LU seul|accusé seul (?:est|reste|peut)/i },
+      );
+    },
+  },
+
+  {
+    id: 'un-tour-vide-se-termine-sans-message',
+    quoi: 'un tour de ronde vide se termine sans message, et une question sans réponse n’est pas re-posée à chaque tour',
+    verifier({ metier }) {
+      const s = sectionDe(metier, /Tes agents et le travail qui tourne/i, 'sur la fin d’un tour de ronde');
+      const v = s.corpsEtendu.split('\n').filter((l) => /un tour vide se termine sans message/i.test(l));
+      assert.equal(v.length, 1, `« un tour vide se termine sans message » doit être énoncé une fois exactement (${v.length})`);
+      assert.match(v[0], /tu te tais|ne dis rien/i, 'le tour vide ne dit plus qu’on se tait');
+      assert.match(v[0], /n'est pas re-posée à chaque tour : ré-adresse-la au plus une fois par échéance annoncée, ou sur un delta/i, 'la question sans réponse n’est plus bornée : au plus une fois par échéance annoncée, ou sur un delta');
+      const u = s.corpsEtendu.split('\n').filter((l) => /Un tour qui trouve quelque chose se termine sur l'un des deux/i.test(l));
+      assert.equal(u.length, 1, `la fin d’un tour qui trouve quelque chose doit être énoncée une fois exactement (${u.length})`);
+      assert.ok(!/Chaque tour se termine sur/i.test(s.corpsEtendu), '« chaque tour se termine sur un delta ou un arbitrage » est revenu : il contredit « un tour vide se tait »');
+    },
+  },
+
+  {
+    id: 'le-lu-rattrape-part-quand-meme',
+    quoi: 'l’exception à « jamais seul » est écrite là où la ronde rattrape un LU : un LU rattrapé part quand même, seul s’il le faut — un LU tardif vaut mieux que pas de LU',
+    verifier({ metier }) {
+      const s = sectionDe(metier, /Ta propre ligne et ta propre boîte de saisie/i, 'sur le LU rattrapé par la ronde');
+      const l = s.corps.split('\n').filter((x) => /un LU rattrapé part quand même/i.test(x));
+      assert.equal(l.length, 1, `l’exception du LU rattrapé doit être énoncée une fois exactement (${l.length})`);
+      assert.match(l[0], /vaut pour le LU de réception/i, 'l’exception ne dit plus que « jamais seul » vaut pour le LU de RÉCEPTION : la règle normale n’a plus de périmètre');
+      assert.match(l[0], /seul s'il le faut/i, 'l’exception ne dit plus que le LU rattrapé part SEUL s’il le faut');
+      assert.match(l[0], /vaut infiniment mieux que pas de LU/i, 'l’exception perd son motif : un LU tardif vaut mieux que pas de LU');
+      exigePolarite(
+        s.corps, /un LU rattrapé part quand même/i,
+        'le LU rattrapé par la ronde part quand même, seul s’il le faut',
+        { inverse: /LU rattrapé (?:ne part pas|attend)|jamais seul, même/i },
+      );
+    },
+  },
+
   {
     id: 'une-regle-vaut-pour-sa-fonction',
     quoi: 'le métier dit comment il se lit — une règle vaut pour la fonction qu’elle sert, pas pour le geste où elle est écrite — ET l’extension est bornée',
@@ -4345,7 +4432,7 @@ export const CONTROLES = [
       // avancement » interdit de se déclarer bloqué, « toujours un arbitrage » dispense
       // d'avancer.
       exigePolarite(
-        s.corps, /un avancement visible de la livraison[\s\S]{0,120}ou un blocage nommé/i,
+        s.corps, /un avancement visible de la livraison[\s\S]{0,120}ou un NOUVEAU blocage nommé/i,
         'les deux sorties d’un tour — l’avancement visible, ou le blocage nommé avec sa décision',
       );
       // La conduite devant une découverte hors chantier, avec sa borne : inscrire N'EST PAS
@@ -4942,6 +5029,21 @@ export const MUTATIONS = [
     // « Gestes de mémoire » de la table des outils. La mutation nomme donc le moteur à la
     // place du geste dans cette rangée-là. Ce qu'elle FAIT est inchangé au mot près.
     muter: (t) => t.replace('`/episodique` (le vécu)', '`/graphiti` (Neo4j)'),
+  },
+  {
+    id: 'l-ecriture-episodique-n-est-plus-dite-gelee',
+    quoi: 'la rangée offre `/episodique` comme un geste disponible — l’orchestrateur encode et communique hors Québec (STD-045 §2.7.2)',
+    cible: 'se-sert-des-memoires',
+    fichier: 'metier',
+    // Retire le gel PAR SON RADICAL, pas par sa phrase : la mutation vise ce que la garde garde.
+    muter: (t) => t.replace(/ — \*\*[^*]*gel[^*]*\*\*[^·|]*/, ' '),
+  },
+  {
+    id: 'le-gel-de-l-ecriture-episodique-ne-pointe-plus-son-ticket',
+    quoi: 'le gel reste dit mais son pointeur mène nulle part — il ne se lève ni ne se relit',
+    cible: 'se-sert-des-memoires',
+    fichier: 'metier',
+    muter: (t) => t.replace('T-20260923-0012', 'T-20260923-0099'),
   },
   {
     id: 'un-moment-du-rappel-disparait',
@@ -6594,8 +6696,8 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "J'ai besoin de toi : rien.",
-      'Rien de ton côté.',
+      "J'ai besoin de toi : <la décision ou le geste attendu, en une ligne>",
+      "Ce que j'attends de toi : <la décision ou le geste attendu, en une ligne>",
     ),
   },
 
@@ -6608,19 +6710,19 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "**Ce n'est pas la rubrique d'un compte rendu, c'est la dernière ligne de tout message.**",
-      '**La formule est la dernière ligne de tout message.**',
+      " n'a pas cette ligne : y écrire « rien » est du bruit de plus.",
+      " n'a pas cette ligne.",
     ),
   },
 
   {
-    id: 'le-rien-perd-le-cout-quil-evite',
+    id: 'un-identifiant-technique-est-tolere-sur-la-ligne',
     quoi: 'la règle du « rien » garde son affirmation et perd ce qu’elle évite — elle se relit alors comme un détail de forme, ce qui est exactement comme elle a cessé de mordre la première fois',
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      " ; une ligne qui n'apparaît **que** lorsqu'il y a une demande oblige à lire le reste pour savoir s'il y en a une — précisément le travail qu'elle devait lui épargner.",
-      '.',
+      "**Jamais d'identifiant technique sur la ligne** — ni pane, ni canal, ni identifiant de session, ni commit. Tu nommes l'agent, ou le code lisible",
+      "**Un identifiant technique sur la ligne est toléré** — pane, canal, session, commit. Tu nommes l'agent, ou le code lisible",
     ),
   },
 
@@ -6630,8 +6732,8 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "**Le `rien` s'écrit — c'est la moitié qui fait fonctionner la règle.**",
-      "**Le `rien` est facultatif — la ligne n'apparaît que si tu as une demande.**",
+      "**Elle est exigée sur chaque message qui attend quelque chose de lui, et elle est la dernière ligne.**",
+      "**Elle est exigée sur tout message, `J'ai besoin de toi : rien.` compris, et elle est la dernière ligne.**",
     ),
   },
 
@@ -6652,7 +6754,7 @@ export const MUTATIONS = [
     // toi : …` en dernière ligne ». La mutation le vide de sa dernière ligne sans retirer une
     // seule règle — c'est le geste exact que la cible doit voir.
     muter: (t) => t.replace(
-      "**Le topo est un message comme les autres** : des faits, et `J'ai besoin de toi : …` en dernière ligne — `rien.` compris.",
+      "**Le topo est un message comme les autres** : des faits ; `J'ai besoin de toi : …` en dernière ligne **seulement** si le topo attend quelque chose de lui — un topo qui n'attend rien n'a pas cette ligne.",
       '**Le topo est un message comme les autres** : des faits.',
     ),
   },
@@ -6663,7 +6765,7 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "**Le bilan est un message comme les autres** : des faits, et `J'ai besoin de toi : …` en dernière ligne — `rien.` s'il ne reste rien qui lui appartienne, et c'est précisément le cas où l'écrire compte, puisque c'est le dernier mot du chantier.\n\n",
+      "**Le bilan est un message comme les autres** : des faits ; `J'ai besoin de toi : …` en dernière ligne **seulement** si le bilan attend quelque chose de lui.\n\n",
       '',
     ),
   },
@@ -6685,7 +6787,7 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "des faits, pas ton raisonnement, et `J'ai besoin de toi : ` en dernière ligne de **chaque** message, `rien.` compris.",
+      "des faits, pas ton raisonnement, et `J'ai besoin de toi : ` en dernière ligne de **chaque message qui attend quelque chose**.",
       'des faits, pas ton raisonnement, et le format court.',
     ),
   },
@@ -6696,7 +6798,7 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "**Et ça part sur ta ligne, donc à sa forme** — `J'ai besoin de toi : <la décision attendue>` en dernière ligne.",
+      "**Et ça part sur ta ligne, donc à sa forme** — `J'ai besoin de toi : <la décision ou le geste attendu>` en dernière ligne : c'est le message qui attend vraiment quelque chose de lui.",
       '**Et ça part sur ta ligne, donc à sa forme** — brièvement, en une ligne.',
     ),
   },
@@ -6714,8 +6816,173 @@ export const MUTATIONS = [
     // rendu diffère d'un tiret de l'ancienne (« — des faits », et non « : des faits »). Un
     // signe suffisait à la rendre muette, et une mutation muette compte comme une preuve.
     muter: (t) => t.replace(
-      " **C'est donc une surface de sa parole comme la ligne** — des faits, et `J'ai besoin de toi : …` en dernière ligne, `rien.` compris.",
+      " **C'est donc une surface de sa parole comme la ligne** — des faits, et `J'ai besoin de toi : …` en dernière ligne quand le compte rendu attend quelque chose de lui.",
       '',
+    ),
+  },
+
+  {
+    id: 'la-question-devient-libre',
+    quoi: 'la question au dirigeant perd sa forme de décision — plus de borne, plus de recommandation : l’orchestrateur redevient un guichet',
+    cible: 'une-question-au-dirigeant-est-une-decision',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Une question au dirigeant est une décision** : les faits qui décident, **deux options au plus**, ta recommandation, une échéance.',
+      '**Une question au dirigeant est une décision** : les faits qui décident, autant d’options que tu veux, une échéance.',
+    ),
+  },
+
+  {
+    id: 'le-reste-monte-aussi-au-dirigeant',
+    quoi: 'mutation du réviseur — « toute autre question va aussi au dirigeant, ni au chef ni mesurée » : la garde contre le guichet est retournée',
+    cible: 'une-question-au-dirigeant-est-une-decision',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Toute autre question va au chef d'équipe, ou se mesure** — jamais au dirigeant.",
+      '**Toute autre question va aussi au dirigeant, ni au chef ni mesurée.**',
+    ),
+  },
+
+  {
+    id: 'le-reste-perd-sa-destination',
+    quoi: 'la phrase « toute autre question » est vidée de sa destination : elle reste, et ne dit plus où va le reste',
+    cible: 'une-question-au-dirigeant-est-une-decision',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Toute autre question va au chef d'équipe, ou se mesure** — jamais au dirigeant.",
+      '**Toute autre question est ton affaire.**',
+    ),
+  },
+
+  {
+    id: 'le-lu-peut-etre-un-message-a-lui',
+    quoi: 'mutation du réviseur — « Aucun accusé seul n’est exigé : le LU peut être un message à lui » : l’accusé seul redevient permis',
+    cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Aucun accusé seul** : le `LU` n'est jamais un message à lui. Il part dès la réception avec le PREMIER fait — « LU — je commence X », « LU — en cours, je regarde Y » —, jamais nu, jamais retardé jusqu'à la fin du travail. Exception : le LU rattrapé par la ronde (voir rondes).",
+      "**Aucun accusé seul n'est exigé** : le `LU` peut être un message à lui.",
+    ),
+  },
+
+  {
+    id: 'le-lu-perd-son-premier-fait',
+    quoi: 'l’accusé garde son « jamais seul » et perd AVEC QUOI il part — le silence de vingt minutes redevient possible',
+    cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      " Il part dès la réception avec le PREMIER fait — « LU — je commence X », « LU — en cours, je regarde Y » —, jamais nu, jamais retardé jusqu'à la fin du travail.",
+      '',
+    ),
+  },
+
+  {
+    id: 'le-lu-passe-en-derniere-ligne',
+    quoi: 'le LU devient la dernière ligne du message qui porte le fait — il n’accuse plus rien à la lecture',
+    cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**le `LU` en est la première ligne**, jamais la dernière.',
+      '**le `LU` en est la dernière ligne**.',
+    ),
+  },
+
+  {
+    id: 'un-lu-nu-part-seul-ailleurs-dans-la-section',
+    quoi: 'survivante A3 du réviseur — une phrase « un LU nu part seul » est ajoutée AILLEURS dans la section : la phrase d’origine reste, le contraire aussi',
+    cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Puis `FAIT` avec le résultat**",
+      "**Un LU nu part seul, sans attendre.** **Puis `FAIT` avec le résultat**",
+    ),
+  },
+
+  {
+    id: 'une-exception-au-pane-est-ecrite',
+    quoi: 'survivante F du réviseur — « sauf le pane si le focus échoue » ajouté à l’interdiction d’identifiant technique',
+    cible: 'la-formule-jai-besoin-de-toi',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "ni identifiant de session, ni commit.",
+      "ni identifiant de session, ni commit, sauf le pane si le focus échoue.",
+    ),
+  },
+
+  {
+    id: 'la-remontee-sans-date-nest-plus-une-faute',
+    quoi: 'survivante I du réviseur — « de se taire » retiré : « une remontée sans date est une permission »',
+    cible: 'une-question-au-dirigeant-est-une-decision',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'Une remontée sans date est une permission de se taire',
+      'Une remontée sans date est une permission',
+    ),
+  },
+
+  {
+    id: 'le-lu-rattrape-ne-part-plus-seul',
+    quoi: 'la ronde perd l’exception : « jamais seul » redevient sans périmètre et contredit « un LU tardif vaut mieux que pas de LU »',
+    cible: 'le-lu-rattrape-part-quand-meme',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**« Jamais seul » vaut pour le LU de réception ; un LU rattrapé part quand même, seul s'il le faut** : un LU tardif vaut infiniment mieux que pas de LU,",
+      "**Un LU tardif vaut mieux que pas de LU** :",
+    ),
+  },
+
+  {
+    id: 'le-lu-nu-est-accepte',
+    quoi: 'mutation du point 1 — un LU nu (un « LU » sans rien après) redevient acceptable : « nu s’il le faut »',
+    cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "jamais nu, jamais retardé jusqu'à la fin du travail. Exception",
+      "nu s'il le faut, retardé jusqu'à la fin du travail. Exception",
+    ),
+  },
+
+  {
+    id: 'le-lu-est-retarde-jusqua-la-fin',
+    quoi: 'mutation du point 1 — le LU peut partir avec le résultat, à la fin : « jamais nu » reste, « jamais retardé » part',
+    cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Jamais de `LU` nu, jamais de `LU` retardé jusqu'à la fin du travail.**",
+      "**Jamais de `LU` nu ; il peut partir avec le résultat.**",
+    ),
+  },
+
+  {
+    id: 'la-precision-merci-est-retiree',
+    quoi: 'mutation du point 1 — la précision « un simple merci n’appelle aucun accusé » disparaît : on accuse tout, et le bruit revient',
+    cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      " Un simple « merci », sans travail à faire, n'appelle aucun accusé : rien à porter, rien d'attendu.",
+      '',
+    ),
+  },
+
+  {
+    id: 'un-tour-vide-doit-quand-meme-parler',
+    quoi: 'mutation du point 3 — « chaque tour se termine sur un delta ou un arbitrage » revient : un tour vide doit parler, la ronde redevient bavarde',
+    cible: 'un-tour-vide-se-termine-sans-message',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Un tour qui trouve quelque chose se termine sur l'un des deux",
+      "**Chaque tour se termine sur l'un des deux",
+    ),
+  },
+
+  {
+    id: 'une-question-sans-reponse-est-reposee',
+    quoi: 'mutation du point 3 — la question restée sans réponse est re-posée à chaque tour : la volubilité que le lot combat',
+    cible: 'un-tour-vide-se-termine-sans-message',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "n'est pas re-posée à chaque tour : ré-adresse-la au plus une fois par échéance annoncée, ou sur un delta.",
+      "est re-posée à chaque tour.",
     ),
   },
 

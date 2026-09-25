@@ -77,6 +77,16 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "G=\"$HOME/.somtech/gardes/scribe-taches.js\"; E=\"$(cat)\"; if [ -f \"$G\" ]; then S=$(printf '%s' \"$E\" | SOMTECH_SCRIBE_RELANCES_PAR_HEURE=30 node \"$G\" 2>/dev/null); RC=$?; if [ $RC -eq 0 ] && [ -z \"$S\" ]; then :; elif [ $RC -eq 0 ]; then V=$(printf '%s' \"$S\" | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{try{var v=JSON.parse(s);if(v&&v.decision===\"block\"&&typeof v.reason===\"string\"&&v.reason)process.stdout.write(JSON.stringify({decision:\"block\",reason:v.reason}));else if(v&&v.decision===undefined&&typeof v.systemMessage===\"string\"&&v.systemMessage)process.stdout.write(JSON.stringify({systemMessage:v.systemMessage}))}catch(e){}})' 2>/dev/null); if [ -n \"$V\" ]; then printf '%s\\n' \"$V\"; else if printf '%s' \"$E\" | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{try{process.exit(JSON.parse(s).stop_hook_active===true?0:1)}catch(e){process.exit(1)}})' 2>/dev/null; then printf '%s\\n' '{\"systemMessage\":\"la garde « scribe-taches » est presente mais a echoue, et l hote signale stop_hook_active — arret permis plutot que de bloquer indefiniment sur une garde cassee.\"}'; else printf '%s\\n' '{\"decision\":\"block\",\"reason\":\"la garde « scribe-taches » est presente mais n a rendu aucun verdict lisible — elle a echoue. Refus par defaut : une garde qui casse ne vaut jamais une garde permissive.\"}'; fi; fi; else if printf '%s' \"$E\" | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{try{process.exit(JSON.parse(s).stop_hook_active===true?0:1)}catch(e){process.exit(1)}})' 2>/dev/null; then printf '%s\\n' '{\"systemMessage\":\"la garde « scribe-taches » est presente mais a echoue, et l hote signale stop_hook_active — arret permis plutot que de bloquer indefiniment sur une garde cassee.\"}'; else printf '%s\\n' '{\"decision\":\"block\",\"reason\":\"la garde « scribe-taches » est presente mais n a rendu aucun verdict lisible — elle a echoue. Refus par defaut : une garde qui casse ne vaut jamais une garde permissive.\"}'; fi; fi; else if printf '%s' \"$E\" | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{try{process.exit(JSON.parse(s).stop_hook_active===true?0:1)}catch(e){process.exit(1)}})' 2>/dev/null; then printf '%s\\n' '{\"systemMessage\":\"la garde « scribe-taches » est introuvable sur ce poste, et l hote signale stop_hook_active — arret permis plutot que de bloquer indefiniment sur une garde absente.\"}'; else printf '%s\\n' '{\"decision\":\"block\",\"reason\":\"la garde « scribe-taches » est introuvable sur ce poste — installe-la avec `npx @somtech-solutions/pack setup`. Refus par defaut : un garde absent ne vaut jamais un garde permissif.\"}'; fi; fi"
+          }
+        ]
+      }
     ]
   }
 }

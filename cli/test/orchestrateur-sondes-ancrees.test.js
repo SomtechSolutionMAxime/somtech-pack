@@ -239,7 +239,7 @@ test('les garanties de la RÈGLE sont ancrées aussi — pas seulement la couver
   //     corrigées — `T-20260819-0030` les porte, avec la mesure et sa méthode.
   const lignes = ORIGINAL.metier.split('\n');
   const S = sections(ORIGINAL.metier);
-  const sec = S.filter((s) => /Tout message se termine par/i.test(s.titre));
+  const sec = S.filter((s) => /La dernière ligne\s*:/i.test(s.titre));
   assert.equal(sec.length, 1, 'la section de la règle doit être unique');
 
   // Les bornes de la section, en index de ligne, et les lignes de bloc de code.

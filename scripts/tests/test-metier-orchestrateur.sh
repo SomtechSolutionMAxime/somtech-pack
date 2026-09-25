@@ -1759,7 +1759,112 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 # les quatre hooks réels restent un chantier ouvert (ticket séparé, ouvert par
 # `batiscan`) — quand ils existeront, la couche de chaque item redeviendra
 # `hook` et ce lot se re-baselinera dans l'autre sens.
-BASELINE=182520
+#
+# ── RE-BASELINE DU 2026-09-25 — T-20260923-0012 (`/episodique` marqué écriture gelée) ──
+#
+#   182 520 → 182 576. MARGE ZÉRO, comme les précédentes. +56. Mesuré sur le rendu FINAL, après
+#   le dernier commit du lot, pas estimé ; `origin/main` mesuré à 182 520 exactement (la « marge
+#   d'environ 30 » du brief n'existait pas : la marge était déjà nulle).
+#
+#   ① LE GESTE PRESCRIT — un orchestrateur qui lit le tableau des outils voit `/episodique`
+#      offert comme disponible alors que son ÉCRITURE est gelée ; il ne peut pas tenir cette
+#      conduite sans le texte.
+#   ② LE DÉFAUT ÉVITÉ, MESURÉ — `T-20260923-0012` et `T-20260923-0013` sont gelés sur
+#      `STD-045` §2.7.2 : encoder une session communique son contenu hors Québec.
+#   ③ LA PART COUPÉE — AUCUNE, et c'est le coordonnateur qui l'assume : couper 56 caractères de
+#      prose que rien ne vérifie pour tenir une contrainte comptable raboterait du texte utile,
+#      le motif exact du précédent du 2026-08-27 (D-20260826-0010).
+#   ④ LE LIEU — la source `metier/orchestrateur/chapitres/outils.md`, parce que c'est le
+#      tableau des outils qui prescrit le geste.
+#
+#   L'ARBITRAGE, avec son canal. `batiscan`, coordonnateur du jalon, relayé au chef d'équipe
+#   `t-20260925-0048` le 2026-09-25 : « le plafond n'est PAS un budget de taille à respecter,
+#   c'est une LIGNE DE BASE qui se re-pose à chaque lot, sur la taille FINALE et EXACTE du rendu,
+#   AUCUNE MARGE. […] TU RELÈVES LA LIGNE DE BASE, à la taille EXACTE de ton rendu final, marge
+#   zéro. » Consigné mot pour mot au ServiceDesk sur `T-20260925-0048`, par `batiscan`.
+#   Il supersède le constat de `T-20260925-0045` (un plafond qui « dicterait » le contenu).
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
+#
+# ── RE-BASELINE DU 2026-09-25 (2ᵉ) — T-20260925-0080 (hook `Stop` scribe des tâches) ──
+#
+#   182 576 → 183 385. MARGE ZÉRO, comme les précédentes. +809. Mesuré sur le rendu FINAL,
+#   après `pack metier rendre --role orchestrateur`, pas estimé.
+#
+#   ① LE GESTE PRESCRIT — l'orchestrateur doit savoir qu'un hook `Stop` lit son dernier
+#      message : sans le texte, il ignore la forme du bloc ```` ```taches ```` (verbes
+#      `ouvrir`/`en-cours`/`fait`/`attend`), la demande qu'il déclare dans `.demande`, et le
+#      fait que `attend: dirigeant` écrit mais ne relance pas.
+#   ② LE DÉFAUT ÉVITÉ, MESURÉ — un scribe que l'agent ne sait pas nourrir reste silencieux :
+#      « pas de bloc → le hook ne fait rien » se lirait comme « le hook ne sert à rien »
+#      plutôt que comme « je n'ai pas rendu mon bloc ce tour-ci ».
+#   ③ LA PART COUPÉE — AUCUNE section existante n'a été retirée ; le paragraphe ajouté est
+#      la forme la plus courte trouvée (bloc + `attend: dirigeant` + pointeur vers `.demande`).
+#   ④ LE LIEU — `metier/orchestrateur/chapitres/servicedesk.md`, section « Le hook `Stop`
+#      écrit tes tâches — et lit ta suite », juste avant « L'hygiène du ServiceDesk » : c'est
+#      le chapitre qui tient déjà la tenue du ServiceDesk du chantier.
+#
+#   L'ARBITRAGE — même règle que les précédentes (arbitrage `batiscan` du 2026-09-25,
+#   `T-20260925-0048` : « TU RELÈVES LA LIGNE DE BASE, à la taille EXACTE de ton rendu
+#   final, marge zéro »), appliquée par le chef d'équipe `t-20260925-0086` sur `T-20260925-0080`.
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
+#
+# ── RE-BASELINE DU 2026-09-25 (3ᵉ) — T-20260925-0080 (revue de fond, défaut D1) ──
+#
+#   183 385 → 183 512. MARGE ZÉRO, comme les précédentes. +127. Mesuré sur le rendu FINAL,
+#   après `pack metier rendre --role orchestrateur`, pas estimé.
+#
+#   ① LE GESTE PRESCRIT — la revue de fond a trouvé un défaut réel : un bloc ```` ```taches ````
+#      CITÉ en exemple (« voici la syntaxe : … » suivi d'autre texte) créait un vrai ticket, parce
+#      que l'extraction balayait tout le message au lieu de ne retenir que le bloc qui le
+#      termine. Corrigé côté code (`extraireBloc`) ; le texte doit dire la règle, pas seulement
+#      la coder — sinon l'orchestrateur continue de croire qu'un exemple cité est sans danger.
+#   ② LE DÉFAUT ÉVITÉ, MESURÉ — un ticket créé depuis un exemple pédagogique, jamais voulu comme
+#      directive.
+#   ③ LA PART COUPÉE — AUCUNE.
+#   ④ LE LIEU — `metier/orchestrateur/chapitres/servicedesk.md`, une phrase ajoutée juste après
+#      la mise en garde sur le bloc mal formé, dans la même section.
+#
+#   L'ARBITRAGE — même règle que les précédentes (arbitrage `batiscan`, `T-20260925-0048` :
+#   « TU RELÈVES LA LIGNE DE BASE, à la taille EXACTE de ton rendu final, marge zéro »), appliquée
+#   après la passe de revue de fond NO-GO sur `T-20260925-0080`.
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
+#
+# ── RE-BASELINE DU 2026-09-25 (4ᵉ) — #378 recalibrée sur main (T-20260925-0086, lot 3) ──
+#
+#   183 512 → 183 469. MARGE ZÉRO. −43 : c'est une BAISSE, et c'est pour elle que ce bloc existe.
+#   Mesuré sur le rendu FINAL de #378 fusionnée avec `main` (après #383), pas estimé.
+#
+#   Un plafond est aveugle par construction à ce qu'on RETIRE : laissée à 183 512, la ligne
+#   aurait offert 43 caractères de marge au lot suivant, sans que personne ne les ait arbitrés.
+#   #378 retire plus qu'elle n'ajoute ; la ligne de base suit la taille exacte, vers le bas aussi.
+#
+#   L'ARBITRAGE — même règle (arbitrage `batiscan`, `T-20260925-0048` : « à la taille EXACTE de
+#   ton rendu final, marge zéro »), mandat `T-20260925-0086` lot 3.
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
+#
+# ── RE-BASELINE DU 2026-09-25 (5ᵉ) — #379 recalibrée sur main (T-20260925-0086, lot 3) ──
+#
+#   183 469 → 183 806. MARGE ZÉRO. +337. Mesuré sur le rendu FINAL de #379 fusionnée avec
+#   `main` (après #383 et #378), après `pack metier rendre --role orchestrateur`, pas estimé.
+#
+#   ① CE QUI PÈSE — le texte de #379 (T-20260925-0015 : demander au chef avant de fermer), déjà
+#      revu dans sa PR, posé sur un `main` qui a entre-temps reçu #378 et #383.
+#   ② LES 22 CONFLITS — tous issus de 3 blocs dans 2 sources (`rondes.md` ×2, `reflexes.md` ×1) :
+#      les deux PR avaient raccourci les MÊMES paragraphes d'anecdote, chacune pour tenir son
+#      budget, sans changer le fond. Résolus bloc par bloc sur la version de #379 (la plus courte
+#      dans 2 cas sur 3), le reste de #378 conservé ; les 20 copies dérivées (rendu, gabarit,
+#      8 lieux) RÉGÉNÉRÉES par `metier rendre` et `orchestrateur-update`, jamais éditées à la main.
+#   ③ LA PART COUPÉE — aucune au-delà de ce que chaque PR avait déjà coupé.
+#
+#   L'ARBITRAGE — même règle (arbitrage `batiscan`, `T-20260925-0048` : « à la taille EXACTE de
+#   ton rendu final, marge zéro »), mandat `T-20260925-0086` lot 3.
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
+BASELINE=183806
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"
@@ -1771,6 +1876,371 @@ if [ "$TAILLE" -le "$PLAFOND" ]; then
   ok "$TAILLE caractères — sous le plafond de $PLAFOND (baseline $BASELINE + marge $MARGE), écart net $((TAILLE - BASELINE))"
 else
   ko "$TAILLE caractères — au-dessus du plafond de $PLAFOND (écart net $((TAILLE - BASELINE)), marge $MARGE) : chaque ajout doit REMPLACER ou PRÉCISER"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ⑫ Volubilité — D-20260925-0003. Quatre causes du MÊME chapitre (rendre-compte),
+#    qui se contredisent si on les sépare. Chaque assertion est ANCRÉE À SA
+#    SECTION, et chaque négative est APPARIÉE à une positive sur le même objet
+#    (sinon supprimer la section les rendrait vertes).
+# ═══════════════════════════════════════════════════════════════════════════
+echo "⑫ volubilité — la dernière ligne, la question, l'identifiant, l'accusé"
+
+# ── (a) La dernière ligne est exigée sur le message QUI ATTEND, plus sur tout message.
+S_DER="$(section 'La dernière ligne')"
+if printf '%s' "$S_DER" | grep -qF "J'ai besoin de toi :" \
+   && printf '%s' "$S_DER" | grep -qi 'attend quelque chose'; then
+  ok "12a — la dernière ligne littérale est exigée sur le message qui attend quelque chose du dirigeant"
+else
+  ko "12a — la section « La dernière ligne » n'exige pas la formule littérale sur le message qui attend quelque chose"
+fi
+if printf '%s' "$S_DER" | grep -qi 'purement informatif' \
+   && printf '%s' "$S_DER" | grep -qi "n'a pas cette ligne"; then
+  ok "12a — un message purement informatif n'a pas cette ligne"
+else
+  ko "12a — rien ne dit qu'un message purement informatif se passe de la ligne : le « rien » redevient obligatoire"
+fi
+# Négatif apparié aux deux positives ci-dessus : l'ancienne exigence a disparu de TOUT le métier.
+if [ -n "$S_DER" ] \
+   && ! grep -qi 'Tout message se termine par' "$METIER" \
+   && ! grep -qF 'rien.` compris' "$METIER" \
+   && ! grep -qF 'tout message**, et le `rien`' "$METIER" \
+   && ! grep -qi 'Le `rien` s.écrit' "$METIER" \
+   && ! grep -qF 'de **chaque** message, `rien.`' "$METIER" \
+   && ! grep -qF '0 message sans sa dernière ligne' "$METIER" \
+   && ! grep -qF 'sa dernière ligne, comme tout message' "$METIER" \
+   && ! grep -qF '`rien` s'"'"'écrit' "$METIER" \
+   && ! grep -qF 'la dernière ligne obligatoire' "$RACINE/metier/orchestrateur/classement.json"; then
+  ok "12a — plus aucun chapitre n'exige « J'ai besoin de toi : rien. » sur tout message"
+else
+  ko "12a — un chapitre exige encore la ligne (ou son « rien ») sur tout message : contradiction avec la règle"
+fi
+
+# ── (b) Une question au dirigeant est une DÉCISION ; le reste va au chef ou se mesure.
+# ⚠️ Assertion sur la PHRASE ENTIÈRE, ancrée à sa section : des mots isolés (« guichet »
+# figure aussi ailleurs, au chapitre du sous-traitant) seraient satisfaits par autre chose.
+S_MONTE="$(section 'Ce que tu fais monter')"
+if printf '%s' "$S_MONTE" | grep -qF "**Une question au dirigeant est une décision** : les faits qui décident, **deux options au plus**, ta recommandation, une échéance."; then
+  ok "12b — une question au dirigeant est une décision : faits, deux options au plus, recommandation, échéance (phrase entière)"
+else
+  ko "12b — la phrase « une question au dirigeant est une décision… deux options au plus, ta recommandation » n'est plus entière dans sa section"
+fi
+if printf '%s' "$S_MONTE" | grep -qF "**Toute autre question va au chef d'équipe, ou se mesure** — jamais au dirigeant." \
+   && ! printf '%s' "$S_MONTE" | grep -qiE "va aussi au dirigeant|ni au chef ni mesur"; then
+  ok "12b — toute autre question va au chef d'équipe ou se mesure, jamais au dirigeant (phrase entière, contraire absent)"
+else
+  ko "12b — la phrase « toute autre question va au chef d'équipe, ou se mesure — jamais au dirigeant » n'est plus entière, ou son contraire est écrit : l'orchestrateur redevient un guichet"
+fi
+if printf '%s' "$S_MONTE" | grep -qF "une question rendue nue fait de toi un guichet"; then
+  ok "12b — la garde contre le guichet reste écrite dans cette section"
+else
+  ko "12b — le motif « une question rendue nue fait de toi un guichet » a quitté sa section"
+fi
+
+# ── (c) Aucun identifiant technique sur la ligne.
+if printf '%s' "$S_DER" | grep -qi "jamais d'identifiant technique" \
+   && printf '%s' "$S_DER" | grep -qi 'pane' \
+   && printf '%s' "$S_DER" | grep -qi 'canal' \
+   && printf '%s' "$S_DER" | grep -qi 'commit'; then
+  ok "12c — jamais d'identifiant technique sur la ligne (pane, canal, session, commit) : le nom de l'agent ou le code lisible"
+else
+  ko "12c — la section ne proscrit pas l'identifiant technique (pane, canal, commit) sur la ligne"
+fi
+if ! printf '%s' "$S_DER" | grep -qi "avant l'identifiant de pane" && [ -n "$S_DER" ]; then
+  ok "12c — la section ne recommande plus de donner un identifiant de pane"
+else
+  ko "12c — la section recommande encore de donner l'identifiant de pane au dirigeant"
+fi
+
+# F — l'interdiction ne souffre AUCUNE exception dans sa phrase (sauf le pane, si le focus échoue…).
+if printf '%s' "$S_DER" | grep -qF "**Jamais d'identifiant technique sur la ligne** — ni pane, ni canal, ni identifiant de session, ni commit." \
+   && ! printf '%s' "$S_DER" | grep -iE "identifiant" | grep -qiE "sauf|ou le pane|si le focus"; then
+  ok "12c — l'interdiction d'identifiant technique est entière, sans exception (sauf / ou le pane / si le focus)"
+else
+  ko "12c — l'interdiction d'identifiant technique n'est plus entière, ou une exception y est écrite"
+fi
+# I — la phrase entière du seuil : « une remontée sans date est une permission de se taire ».
+if printf '%s' "$S_MONTE" | grep -qF "**Une remontée sans date est une permission de se taire ; une question rendue nue fait de toi un guichet**"; then
+  ok "12b — « une remontée sans date est une permission de se taire » est entière"
+else
+  ko "12b — la phrase « une remontée sans date est une permission de se taire » n'est plus entière"
+fi
+# 1 — le LU rattrapé par la ronde est l'exception écrite à « jamais seul », dans la section de la ronde.
+S_RATT="$(section 'Ta propre ligne et ta propre boîte de saisie')"
+if printf '%s' "$S_RATT" | grep -qF "un LU rattrapé part quand même, seul s'il le faut" \
+   && printf '%s' "$S_RATT" | grep -qF "vaut pour le LU de réception"; then
+  ok "12f — le LU rattrapé par la ronde part quand même, seul s'il le faut : l'exception à « jamais seul » est écrite"
+else
+  ko "12f — la ronde n'écrit plus l'exception : « jamais seul » contredit « un LU tardif vaut mieux que pas de LU »"
+fi
+# 5 — la borne du doute : un exemple de ce qui n'attend rien.
+if printf '%s' "$S_DER" | grep -qF "n'attend rien" && printf '%s' "$S_DER" | grep -qF "je continue"; then
+  ok "12e — la borne du doute a son exemple : « j'ai tranché X, je continue » n'attend rien"
+else
+  ko "12e — le doute n'a plus de borne : aucun exemple de message qui n'attend rien"
+fi
+# m8 — la concision est le défaut, jamais un plafond (gardé aussi côté bash).
+S_FAITS="$(section 'Des faits, pas ton raisonnement')"
+if printf '%s' "$S_FAITS" | grep -qF "**Et la concision est le défaut, jamais un plafond.**" \
+   && ! printf '%s' "$S_FAITS" | grep -qiE "réponds toujours court|jamais plus de trois lignes|même quand il demande une analyse"; then
+  ok "12g — la concision est le défaut, jamais un plafond (phrase entière, contraire absent)"
+else
+  ko "12g — « la concision est le défaut, jamais un plafond » n'est plus entière, ou son contraire est écrit"
+fi
+
+# ── (d) Le LU part avec le PREMIER fait utile : jamais seul, jamais un message à lui.
+S_LU="$(section 'Accuser LU')"
+if printf '%s' "$S_LU" | grep -qF "**Aucun accusé seul** : le \`LU\` n'est jamais un message à lui. Il part dès la réception avec le PREMIER fait — « LU — je commence X », « LU — en cours, je regarde Y » —, jamais nu, jamais retardé jusqu'à la fin du travail." \
+   && printf '%s' "$S_LU" | grep -qF "Jamais de \`LU\` nu, jamais de \`LU\` retardé jusqu'à la fin du travail." \
+   && printf '%s' "$S_LU" | grep -qF "Un simple « merci », sans travail à faire, n'appelle aucun accusé : rien à porter, rien d'attendu." \
+   && ! printf '%s' "$S_LU" | grep -qiE "peut être un message à lui|n'est pas exigé"; then
+  ok "12d — aucun accusé seul : le LU part avec le premier fait utile (phrase entière, contraire absent)"
+else
+  ko "12d — la phrase « aucun accusé seul… dès la réception avec le premier fait » (ou ses deux compléments : LU nu, « merci ») n'est plus entière, ou son contraire est écrit : le LU redevient un message à lui"
+fi
+# A3 — un contraire écrit AILLEURS dans la section ne doit pas passer : on lit la section ENTIÈRE,
+# hors la phrase « Aucun accusé seul » elle-même (qui nomme « message à lui » pour l'interdire).
+if ! printf '%s' "$S_LU" | grep -v 'Aucun accusé seul' | grep -qiE "part seul|LU nu|LU seul|accusé seul (est|reste|peut)|message à lui"; then
+  ok "12d — aucun contraire (« LU nu », « part seul », « message à lui ») n'est écrit ailleurs dans la section"
+else
+  ko "12d — un contraire (« un LU nu part seul »…) est écrit dans la section de l'accusé : l'accusé seul redevient permis"
+fi
+if printf '%s' "$S_LU" | grep -qF "le \`LU\` en est la première ligne" \
+   && printf '%s' "$S_LU" | grep -qF "deux agents ont été réellement gelés"; then
+  ok "12d — le LU est la première ligne du message qui porte le fait, et son motif (deux agents gelés) reste"
+else
+  ko "12d — « le LU en est la première ligne » ou son motif (deux agents gelés) a disparu : on a abrogé au lieu de préciser"
+fi
+
+# ── (e) « attend quelque chose » couvre le geste à poser ; dans le doute on écrit la ligne.
+if printf '%s' "$S_DER" | grep -qF "**« Attend quelque chose » couvre aussi un geste à poser**" \
+   && printf '%s' "$S_DER" | grep -qF "**Dans le doute, écris la ligne** : l'oubli est la faute grave, la ligne en trop le moindre mal."; then
+  ok "12e — « attend quelque chose » couvre un geste à poser, et dans le doute on écrit la ligne"
+else
+  ko "12e — l'ambiguïté de l'oubli est rouverte : rien ne dit qu'un geste à poser compte, ni que dans le doute on écrit la ligne"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ⑬ Les SKILLS répètent la règle (ligne-directe, orchestrer-chantier) — D-20260925-0003.
+#    Le métier était gardé, pas les skills : ils ont gardé « rien » et « lui appartient »
+#    jusqu'à une revue. Assertions sur PHRASES ENTIÈRES, ancrées à la section du skill.
+# ═══════════════════════════════════════════════════════════════════════════
+echo "⑬ les skills disent la même règle que le métier"
+section_f() {  # section_f <fichier> <motif-de-titre>
+  awk -v motif="$2" '
+    /^#+ / {
+      n = 0; while (substr($0, n+1, 1) == "#") n++
+      if (dedans && n <= niv_ouvert) { dedans = 0 }
+      if (!dedans && index($0, motif) > 0) { dedans = 1; niv_ouvert = n; next }
+    }
+    dedans { print }
+  ' "$1"
+}
+SK_LD="$RACINE/.claude/skills/ligne-directe/SKILL.md"
+SK_OC="$RACINE/.claude/skills/orchestrer-chantier/SKILL.md"
+S_TON="$(section_f "$SK_LD" 'Le ton')"
+S_TENIR="$(section_f "$SK_OC" 'Tenir le ServiceDesk')"
+S_CLORE="$(section_f "$SK_OC" 'Clore')"
+
+# S1 — le geste à poser compte, dans les deux skills.
+if printf '%s' "$S_TON" | grep -qF "une décision, ou un geste à poser (pane gelé, login, dialogue à trancher)" \
+   && printf '%s' "$S_TENIR" | grep -qF "une décision, ou un geste à poser (jamais un \`rien.\` de remplissage)"; then
+  ok "13a — ligne-directe et orchestrer-chantier : « attend quelque chose » couvre le geste à poser"
+else
+  ko "13a — un skill ne dit plus que le geste à poser (pane gelé, login, dialogue) compte comme « attend quelque chose »"
+fi
+# S3 — toute autre question va au chef d'équipe ou se mesure.
+if printf '%s' "$S_TON" | grep -qF "toute autre question va au chef d'équipe ou se mesure." \
+   && ! printf '%s' "$S_TON" | grep -qiE "va aussi au dirigeant|ni au chef ni mesur"; then
+  ok "13b — ligne-directe : toute autre question va au chef d'équipe ou se mesure"
+else
+  ko "13b — ligne-directe ne dit plus où va une question qui n'est pas une décision"
+fi
+# S5 — l'interdit d'identifiant est ÉNUMÉRÉ, sans exception.
+if printf '%s' "$S_TON" | grep -qF "**Jamais d'identifiant technique sur la ligne** — ni pane, ni canal, ni identifiant de session, ni commit" \
+   && ! printf '%s' "$S_TON" | grep -iE "identifiant" | grep -qiE "sauf|ou le pane|si le focus"; then
+  ok "13c — ligne-directe : l'interdit d'identifiant technique est énuméré (pane, canal, session, commit), sans exception"
+else
+  ko "13c — ligne-directe n'énumère plus l'interdit d'identifiant technique, ou y écrit une exception"
+fi
+# B — la ligne du dirigeant et la ligne cliente ne se confondent pas : aucun code de chantier côté client.
+if printf '%s' "$S_TON" | grep -qF "sur la ligne du dirigeant, le nom de l'agent ou le code lisible" \
+   && printf '%s' "$S_TON" | grep -qF "sur une ligne cliente, aucun code de chantier."; then
+  ok "13c — ligne-directe distingue la ligne du dirigeant (nom ou code lisible) de la ligne cliente (aucun code de chantier)"
+else
+  ko "13c — ligne-directe autorise le code lisible sans distinguer la ligne cliente, où le code du chantier n'entre nulle part"
+fi
+# le LU : première ligne du message porteur, jamais seul, renvoi au métier.
+if printf '%s' "$S_TON" | grep -qF "**Le \`LU\` part dès la réception avec le premier fait (« je commence X », « en cours, je regarde Y »), jamais nu, jamais retardé jusqu'à la fin du travail : il est la première ligne du message qui porte le fait, jamais un message à lui. Un simple « merci » n'appelle aucun accusé ; un LU rattrapé en retard part quand même, seul s'il le faut.**" \
+   && ! printf '%s' "$S_TON" | grep -qF "voir le métier"; then
+  ok "13d — ligne-directe : la règle du LU est dite en autonome (première ligne du message porteur ; le LU rattrapé part quand même), sans renvoi à un métier"
+else
+  ko "13d — ligne-directe ne dit plus le LU en autonome (première ligne du message porteur, LU rattrapé), ou renvoie à un métier que les agents non-orchestrateurs n'ont pas"
+fi
+# le doute + l'exemple, dans les deux skills.
+if printf '%s' "$S_TON" | grep -qF "**Dans le doute, écris la ligne** : l'oubli est la faute grave. *« J'ai tranché X, je continue »* n'attend rien ; *« dis-moi si tu veux le contraire »* attend." \
+   && printf '%s' "$S_TENIR" | grep -qF "**Dans le doute, écris la ligne** : l'oubli est la faute grave. *« J'ai tranché X, je continue »* n'attend rien ; *« dis-moi si tu veux le contraire »* attend."; then
+  ok "13e — les deux skills : dans le doute on écrit la ligne, avec l'exemple qui borne"
+else
+  ko "13e — un skill perd « dans le doute, écris la ligne » ou son exemple"
+fi
+# S11 — le bilan n'exige plus de « rien » ; il attend, ou il n'a pas la ligne.
+if printf '%s' "$S_CLORE" | grep -qF "**seulement si le bilan attend quelque chose de lui** — une décision ou un geste à poser ; sinon il n'a pas cette ligne, et dans le doute on l'écrit : l'oubli est la faute grave." \
+   && ! printf '%s' "$S_CLORE" | grep -qF 'rien.` s'"'"'il ne reste'; then
+  ok "13f — orchestrer-chantier : le bilan n'a la ligne que s'il attend quelque chose, sans « rien » obligatoire"
+else
+  ko "13f — orchestrer-chantier : le bilan exige de nouveau la ligne ou son « rien », ou perd le critère « attend »"
+fi
+# renvoi de la règle du LU vers l'exception de la ronde, dans le métier.
+if printf '%s' "$S_LU" | grep -qF "Exception : le LU rattrapé par la ronde (voir rondes)."; then
+  ok "13g — le métier renvoie l'exception du LU rattrapé depuis la section du LU"
+else
+  ko "13g — la section du LU ne renvoie plus à l'exception de la ronde : « jamais seul » redevient contradictoire"
+fi
+# « lui appartient » : le critère est « attend », partout où le métier borne la ligne.
+if ! grep -qF "qui lui appartienne" "$METIER" && ! grep -qF "si quelque chose lui appartient" "$METIER" && ! grep -qF "s'il reste quelque chose qui lui appartient" "$METIER" \
+   && grep -qF "si le bilan attend quelque chose de lui" "$METIER" && grep -qF "si le topo attend quelque chose de lui" "$METIER"; then
+  ok "13h — le topo et le bilan du métier bornent la ligne sur « attend », plus sur « lui appartient »"
+else
+  ko "13h — le topo ou le bilan du métier borne encore la ligne sur « lui appartient »"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ⑭ GARDES NÉGATIVES DE SECTION — génériques, appariées à la présence de la phrase.
+#    Les gardes par phrase entière ne voient pas une phrase AJOUTÉE À CÔTÉ qui contredit
+#    (« hormis le pane », « un LU seul reste toutefois permis »…). On ne liste pas les
+#    contraires un à un : on interdit, dans la section, la FAMILLE de mots qui les portent.
+#    ⚠️ Limite écrite plus bas : une contradiction en mots neufs échappe encore.
+# ═══════════════════════════════════════════════════════════════════════════
+echo "⑭ gardes négatives de section"
+# (i) « J'ai besoin de toi : rien » n'est écrit nulle part — sauf exemple marqué « à ne pas écrire ».
+RIEN_TROUVE="$(grep -hE "besoin de toi *: *\`?rien" "$METIER" "$SK_LD" "$SK_OC" 2>/dev/null | grep -viE "à ne pas écrire" || true)"
+if [ -z "$RIEN_TROUVE" ] && printf '%s' "$S_DER" | grep -qF "y écrire « rien » est du bruit"; then
+  ok "14i — « J'ai besoin de toi : rien » n'est écrit nulle part (métier + deux skills), et le motif « bruit » est présent"
+else
+  ko "14i — « J'ai besoin de toi : rien » est de nouveau écrit quelque part : $(printf '%s' "$RIEN_TROUVE" | head -1 | cut -c1-100)"
+fi
+# (ii) l'interdit d'identifiant : aucun mot d'exception dans SA section.
+if printf '%s' "$S_DER" | grep -qF "**Jamais d'identifiant technique sur la ligne**" \
+   && ! printf '%s' "$S_DER" | grep -qiE "sauf|hormis|excepté|à moins|si utile|quand tu demandes"; then
+  ok "14ii — la section de l'interdit d'identifiant ne porte aucun mot d'exception (sauf/hormis/excepté/à moins/si utile/quand tu demandes)"
+else
+  ko "14ii — la section de l'interdit d'identifiant porte un mot d'exception, ou l'interdit a disparu"
+fi
+# (iii) les sections du LU : aucune permission de l'accusé seul.
+if printf '%s' "$S_LU" | grep -qF "**Aucun accusé seul**" && printf '%s' "$S_RATT" | grep -qF "un LU rattrapé part quand même" \
+   && ! printf '%s%s%s' "$S_LU" "$S_RATT" "$S_TON" | grep -qiE "toutefois|reste permis|peut être un message"; then
+  ok "14iii — les sections du LU (métier, ronde, skill) ne portent ni « toutefois », ni « reste permis », ni « peut être un message »"
+else
+  ko "14iii — une section du LU porte « toutefois / reste permis / peut être un message » : l'accusé seul est permis par la bande"
+fi
+# (iv) topo et bilan : ANCRÉS à leur section, et jamais « toujours » / « même vide ».
+S_TOPO="$(section 'Le topo du matin')"
+S_CLORE_M="$(section 'Clore')"
+if printf '%s' "$S_TOPO" | grep -qF "si le topo attend quelque chose de lui" \
+   && printf '%s' "$S_CLORE_M" | grep -qF "si le bilan attend quelque chose de lui" \
+   && ! printf '%s%s' "$S_TOPO" "$S_CLORE_M" | grep -qiE "toujours|même vide"; then
+  ok "14iv — topo et bilan bornent la ligne sur « attend » dans LEUR section, sans « toujours » ni « même vide »"
+else
+  ko "14iv — le topo ou le bilan (dans sa section) n'est plus borné sur « attend », ou exige « toujours / même vide »"
+fi
+# (v) l'exception du LU rattrapé : phrase entière, sans négation collée devant.
+if printf '%s' "$S_LU" | grep -qF "Exception : le LU rattrapé par la ronde (voir rondes)." \
+   && ! printf '%s' "$S_LU" | grep -qE "Aucune? [Ee]xception"; then
+  ok "14v — l'exception du LU rattrapé est entière et sans négation collée"
+else
+  ko "14v — l'exception du LU rattrapé n'est plus entière, ou un « Aucune exception » la nie"
+fi
+# (vi) le critère « attend » : ni « toujours » ni « même vide » collé au critère dans la section de la ligne.
+if ! printf '%s' "$S_DER" | grep -qiE "toujours (la|cette) ligne|même vide|peut porter rien|sans dommage|question ouverte peut"; then
+  ok "14vi — la section de la dernière ligne ne l'exige pas « même vide » et ne rouvre pas la question ouverte"
+else
+  ko "14vi — la section de la dernière ligne exige la ligne « même vide », ou rouvre les questions ouvertes"
+fi
+
+# ── Point 2 — ligne-directe : les cas de parole spontanée incluent l'accusé, la réponse, le geste à poser.
+if grep -qF "Tu parles spontanément dans deux cas, plus l'accusé de réception (\`LU\` + premier fait), la réponse à une question du dirigeant et le geste à poser (pane gelé, login, dialogue) :" "$SK_LD" \
+   && grep -qF "Le reste attend le prochain jalon." "$SK_LD" \
+   && ! grep -qF "deux cas, et deux seulement" "$SK_LD"; then
+  ok "15a — ligne-directe : deux cas spontanés PLUS l'accusé, la réponse et le geste à poser ; le reste attend le jalon"
+else
+  ko "15a — ligne-directe exclut de nouveau le LU, la réponse ou le geste à poser (« deux cas, et deux seulement »)"
+fi
+# ── Point 3 — rondes : un tour vide se termine sans message ; une question sans réponse n'est pas re-posée.
+S_ROND1="$(section 'Tes agents et le travail qui tourne')"
+if printf '%s' "$S_ROND1" | grep -qF "un tour vide se termine sans message." \
+   && printf '%s' "$S_ROND1" | grep -qF "n'est pas re-posée à chaque tour : ré-adresse-la au plus une fois par échéance annoncée, ou sur un delta." \
+   && printf '%s' "$S_ROND1" | grep -qF "Un tour qui trouve quelque chose se termine sur l'un des deux" \
+   && printf '%s' "$S_ROND1" | grep -qF "ou un NOUVEAU blocage nommé" \
+   && ! printf '%s' "$S_ROND1" | grep -qF "Chaque tour se termine sur"; then
+  ok "15b — rondes : un tour vide se termine sans message, et une question sans réponse n'est pas re-posée à chaque tour"
+else
+  ko "15b — rondes : « chaque tour se termine sur un delta ou un arbitrage » contredit de nouveau « si tu ne trouves rien, tu te tais »"
+fi
+
+# ── 6e revue : geste à poser sans échéance, LU rattrapé sans merci, forme, compte de torts.
+if printf '%s' "$S_ROND1" | grep -qF "Un geste à poser sans échéance (pane gelé, login) se repose UNE FOIS, puis seulement sur un delta de nature (l'écran ou l'état a changé — pas un compteur qui varie) ou, s'il bloque toujours, au plus UNE FOIS PAR HEURE et par message, tous les gestes en attente groupés — jamais à chaque tour ; « l'heure de la prochaine relance » tient lieu d'échéance." \
+   && printf '%s' "$S_ROND1" | grep -qiF "une fois par heure" \
+   && printf '%s' "$S_ROND1" | grep -qF "et par message, tous les gestes en attente groupés" \
+   && ! printf '%s' "$S_ROND1" | grep -qiE "à chaque rappel de la ronde|repose-le à chaque tour|Jamais : un geste|par geste"; then
+  ok "16a — rondes : un geste à poser sans échéance se repose UNE FOIS, puis sur un delta ou au plus une fois par heure, jamais à chaque tour"
+else
+  ko "16a — rondes : la borne du geste sans échéance (une fois, puis delta ou une fois par heure) a disparu (« par message, groupés » compris), ou « à chaque rappel / à chaque tour / par geste » est revenu"
+fi
+if printf '%s' "$S_RATT" | grep -qF "appelle son \`LU\` MAINTENANT** (sauf un simple merci, ou un message auquel tu as déjà répondu)" \
+   && printf '%s' "$S_LU" | grep -qF "Il exclut un simple merci et un message auquel tu as déjà répondu (la réponse prouve la réception)."; then
+  ok "16b — rondes : le LU rattrapé exclut le simple merci et le message déjà répondu"
+else
+  ko "16b — rondes : « tout message non accusé appelle son LU MAINTENANT » redevient sans exception (contredit rendre-compte)"
+fi
+# Défaut de forme lu à chaque naissance : un « ** » fermant collé à la phrase suivante (majuscule) après une
+# lettre, un chiffre, « ) » ou « » » — ni « . » ni « ; » ni « : », qui sont la ponctuation légitime.
+# Seul le motif précis de « **Répond de** RA-… » est neutralisé, jamais la ligne entière ; on couvre aussi
+# les skills et le briefing RONDE.md du gabarit.
+FORME=""
+for f in "$METIER" "$SK_LD" "$SK_OC" "$GABARIT/RONDE.md"; do
+  [ -f "$f" ] || continue
+  r="$(sed 's/Répond de\*\* //' "$f" | grep -nE "[a-zàâçéèêëîïôûùü0-9)»]\*\* [A-ZÉÈÀ]" | head -1 | cut -c1-100)"
+  [ -n "$r" ] && FORME="$(basename "$f"): $r" && break
+done
+if [ -z "$FORME" ] && grep -qF "jusqu'à ce que quelqu'un passe.** " "$METIER"; then
+  ok "16c — aucun « ** » fermant collé à une majuscule sans ponctuation (métier, deux skills, RONDE.md)"
+else
+  ko "16c — deux phrases collées (« ** » sans ponctuation avant une majuscule) : $FORME"
+fi
+# 16f — le briefing RONDE.md (prompt de la /loop) n'impose plus un LU sur le simple merci.
+if [ -f "$GABARIT/RONDE.md" ] \
+   && grep -qF "accuser réception, en tête, de chaque message reçu qui appelle une réponse (pas un simple merci)." "$GABARIT/RONDE.md" \
+   && ! grep -qF "accuser réception de chaque message reçu" "$GABARIT/RONDE.md" \
+   && grep -qF "\`LU\` en tête de chaque message reçu qui appelle une réponse, jamais d'un simple merci" "$METIER" \
+   && ! grep -qF "LU\` à chaque message reçu" "$METIER"; then
+  ok "16f — RONDE.md (gabarit) et reflexes : le LU vaut pour le message qui appelle une réponse, jamais un simple merci"
+else
+  ko "16f — RONDE.md ou reflexes impose de nouveau un LU sur CHAQUE message reçu, merci compris"
+fi
+S_VOIS="$(section 'Coordonner les chantiers voisins')"
+if printf '%s' "$S_VOIS" | grep -qF "Un compte de torts tenu d'un seul côté — les siens sans ceux de l'autre, ou l'inverse — était **faux**." \
+   && ! printf '%s' "$S_VOIS" | grep -qiE "pour se placer moralement|tenu en s'attribuant"; then
+  ok "16d — le compte de torts d'un pair : tenu d'un seul côté (les siens sans ceux de l'autre, ou l'inverse), sans mobile non attesté"
+else
+  ko "16d — le compte de torts n'est plus « tenu d'un seul côté — les siens sans ceux de l'autre, ou l'inverse », ou un mobile non attesté est revenu"
+fi
+
+# ── 9e revue : la règle de la ronde redite dans le socle, et le signalement du réveil, portent la même borne.
+# Le socle rendu de la ronde vit en tête du chapitre, avant « # R5 » : on l'ancre sur cette tête.
+S_R5="$(awk '/^# R5/{exit} {print}' "$GABARIT/metier/chapitres/rondes.md")"
+if printf '%s' "$S_R5" | grep -qF "Un tour de ronde qui trouve quelque chose rend un avancement visible ou un NOUVEAU blocage nommé, décision demandée ; un tour vide ne rend rien" \
+   && ! printf '%s' "$S_R5" | grep -qF "Chaque tour de ronde rend" \
+   && ! printf '%s' "$S_R5" | grep -qiE "ou un arbitrage nommé au CTO"; then
+  ok "17a — rondes (socle) : un tour qui trouve quelque chose rend un avancement ou un NOUVEAU blocage, un tour vide ne rend rien"
+else
+  ko "17a — rondes (socle) : « chaque tour de ronde rend… un arbitrage nommé » est revenu, ou « NOUVEAU blocage » / « un tour vide ne rend rien » a disparu"
+fi
+S_REVEIL="$(section 'La ronde — ce qui te réveille')"
+if printf '%s' "$S_REVEIL" | grep -qF "tu signales qu'il manque (une fois, puis sur un delta de nature ou au plus une fois par heure et par message)"; then
+  ok "17b — reflexes : le signalement du réveil manquant est borné (une fois, puis delta de nature ou une fois par heure et par message)"
+else
+  ko "17b — reflexes : le signalement du réveil manquant n'a plus de borne : il se répète à chaque tour"
 fi
 
 echo
