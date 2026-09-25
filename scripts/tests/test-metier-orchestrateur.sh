@@ -1512,7 +1512,7 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #      conduite sans le texte.
 #   ② LE DÉFAUT ÉVITÉ, MESURÉ — `T-20260923-0012` et `T-20260923-0013` sont gelés sur
 #      `STD-045` §2.7.2 : encoder une session communique son contenu hors Québec.
-#   ③ LA PART COUPÉE — AUCUNE, et c'est le coordonnateur qui l'assume : couper 86 caractères de
+#   ③ LA PART COUPÉE — AUCUNE, et c'est le coordonnateur qui l'assume : couper 56 caractères de
 #      prose que rien ne vérifie pour tenir une contrainte comptable raboterait du texte utile,
 #      le motif exact du précédent du 2026-08-27 (D-20260826-0010).
 #   ④ LE LIEU — la source `metier/orchestrateur/chapitres/outils.md`, parce que c'est le
