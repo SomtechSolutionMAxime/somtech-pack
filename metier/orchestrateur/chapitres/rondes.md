@@ -56,7 +56,7 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 
 > ⚠️ **Tu signales, tu ne fermes pas.** Fermer un ticket parce qu'une fusion est passée, c'est confondre *« la PR est mergée »* et *« le défaut est réglé »* — le raccourci exact qui a fait rouvrir un ticket déjà clos. **La ronde rend une liste d'écarts ; qui tranche, c'est toi ou le CTO, jamais elle.**
 >
-> ⚠️ **Et si tu ne trouves rien, tu te tais : un tour vide se termine sans message.** Une question déjà posée et sans réponse n'est pas re-posée à chaque tour : ré-adresse-la au plus une fois par échéance annoncée, ou sur un delta. Un geste à poser sans échéance (pane gelé, login) se repose sur un delta (l'état a changé) ou, s'il bloque, à chaque rappel de la ronde — jamais en boucle serrée. Une ronde qui trouve toujours quelque chose cesse d'être lue aussi vite qu'une qui ne trouve jamais rien. **Le silence est un résultat.**
+> ⚠️ **Et si tu ne trouves rien, tu te tais : un tour vide se termine sans message.** Une question déjà posée et sans réponse n'est pas re-posée à chaque tour : ré-adresse-la au plus une fois par échéance annoncée, ou sur un delta. Un geste à poser sans échéance (pane gelé, login) se repose UNE FOIS, puis seulement sur un delta (l'écran ou l'état a changé) ou, s'il bloque toujours, au plus UNE FOIS PAR HEURE — jamais à chaque tour ; « l'heure de la prochaine relance » tient lieu d'échéance. Une ronde qui trouve toujours quelque chose cesse d'être lue aussi vite qu'une qui ne trouve jamais rien. **Le silence est un résultat.**
 
 **Ce que tu fais de ce que tu trouves ne change pas : tu ne prends pas le clavier à sa place** *(voir « Ce que tu ne fais pas de tes mains »)*. Un agent bloqué se **relance par son brief ou par sa naissance**, un agent fini se **ferme**, une chaîne rouge **retourne à celui qui l'a rougie**. La ronde te dit quoi arbitrer ; elle ne te transforme pas en exécutant.
 
@@ -129,7 +129,7 @@ epics get <ton-epic>
 
 **Et pas le témoin par compte de tours** — *« deux tours sans entrée »* exige de savoir combien de tours ont passé, **une information qui meurt avec la session** ; l'âge, lui, survit à tout.
 
-**L'occurrence et son coût** *(`E-20260818-0007`, 2026-09-19)* : réceptacle **au bon endroit**, **32 jours sans une entrée**, et la ronde n'a repris que parce que le CTO l'a réclamée — **le déclencheur que la dernière ligne de ce même epic interdisait**. Le même jour, **trois écarts rouges sur huit, tous des contrôles périodiques** : 48 espaces de travail orphelins, aucune date de passe de veille. **Un manquement à une tâche périodique n'émet aucun signal — c'est le seul type de défaut dont l'absence de plainte est garantie.**
+**L'occurrence et son coût** *(`E-20260818-0007`, 2026-09-19)* : réceptacle **au bon endroit**, **32 jours sans une entrée**, et la ronde n'a repris que parce que le CTO l'a réclamée — **le déclencheur que la dernière ligne de ce même epic interdisait**. **Un manquement à une tâche périodique n'émet aucun signal — c'est le seul type de défaut dont l'absence de plainte est garantie.**
 
 ## 6 — Le topo du matin, 7 h 00, **sur ta ligne**
 
@@ -145,7 +145,7 @@ Un topo qui ne dit que du bien n'est pas lu longtemps. **Une nuit sans progrès 
 
 **Les lignes ouvertes sans personne au bout.** ⚠️ **Attention au critère, il a déjà été faux une fois** : vérifier que le dossier d'une ligne existe **ne prouve rien** — sur 25 lignes ouvertes, les 25 passent ce test.
 
-⚠️ **Et le défaut à chercher est deux lignes de deux CHANTIERS DIFFÉRENTS sur le même terminal — jamais deux lignes qui répondent au même destinataire.** Le second critère a été écrit d'abord, et la première exécution réelle l'a trouvé **faux trois fois sur quatre** : un représentant de client porte **normalement** deux lignes — celle de son client et celle du CTO —, c'est sa définition de poste. Le vrai conflit est **deux chantiers étrangers l'un à l'autre au même bout du fil** : c'est celui-là qui a failli envoyer un message chez le mauvais client.
+⚠️ **Et le défaut à chercher est deux lignes de deux CHANTIERS DIFFÉRENTS sur le même terminal — jamais deux lignes qui répondent au même destinataire.** Le second critère a été écrit d'abord, et la première exécution réelle l'a trouvé **faux trois fois sur quatre** : un représentant de client porte **normalement** deux lignes — celle de son client et celle du CTO —, c'est sa définition de poste. Le vrai conflit est **deux chantiers étrangers l'un à l'autre au même bout du fil**.
 
 **C'est le cas d'école de la règle des deux chiffres** (voir la veille de déblocage) : ce critère attrapait quelque chose de réel, et il refusait à tort trois fois sur quatre. Personne ne l'a vu en le relisant — **c'est de l'avoir exécuté qui l'a montré**.
 

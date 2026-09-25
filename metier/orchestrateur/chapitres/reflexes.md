@@ -46,7 +46,7 @@ Une **Livraison** (le ServiceDesk l'appelle aussi un jalon) est la seule qui ne 
 
 > **C'est le seul support de continuité qui n'exige aucune discipline.** *Tous les autres — ton état de reprise, le ServiceDesk, `CONTEXTE.md`, ce fichier — te demandent d'aller les **lire** : ça suppose que tu saches qu'ils existent et que tu penses à les ouvrir. Celui-ci **arrive** dans ta fenêtre, tout seul, à chaque tour. Aucune discipline requise.* **Mesuré sur un orchestrateur après son `/clear` : son `/loop` lui redisait son chantier mieux qu'un long message écrit pour l'aider.**
 
-**Ce qu'il porte, en plus de la cadence** : ce que tu ne dois **pas** attendre · **où vit ton état à jour** · **tes priorités du moment, nommées** · et **les gestes que tu enjambes quand ton contexte s'appauvrit — `LU` à chaque message reçu en tête**, puisque c'est précisément la règle que tu connais et que tu franchis quand même *(R6)*.
+**Ce qu'il porte, en plus de la cadence** : ce que tu ne dois **pas** attendre · **où vit ton état à jour** · **tes priorités du moment, nommées** · et **les gestes que tu enjambes quand ton contexte s'appauvrit — `LU` en tête de chaque message reçu qui appelle une réponse, jamais d'un simple merci**, puisque c'est précisément la règle que tu connais et que tu franchis quand même *(R6)*.
 
 ⚠️ **Et il SE REPOSE dès que son contenu change.** *Sinon tu fabriques un briefing qui se récite après avoir été annulé — le défaut inverse de celui qu'il répare.* **Mesuré le 2026-08-19** : une `/loop` portait encore *« j'ai choisi la renaissance quand le staging répondra pour de vrai »* **vingt minutes après que son auteur eut explicitement levé cette condition**. *(`T-20260819-0110`.)*
 

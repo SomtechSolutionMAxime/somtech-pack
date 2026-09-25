@@ -33,7 +33,7 @@ Remplis les rubriques ci-dessous **avant la naissance**, puis recopie-les dans l
 
 ## Les gestes que tu enjambes quand ton contexte s'appauvrit
 
-`<Nomme-les ici, un par un. Celui qui revient le plus : accuser réception de chaque message reçu, en tête. C'est la règle que tu connais et que tu franchis quand même.>`
+`<Nomme-les ici, un par un. Celui qui revient le plus : accuser réception, en tête, de chaque message reçu qui appelle une réponse (pas un simple merci). C'est la règle que tu connais et que tu franchis quand même.>`
 
 ---
 
