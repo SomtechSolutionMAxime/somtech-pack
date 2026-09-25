@@ -3,7 +3,7 @@
 > **Rien de ce qui attend sans se signaler ne dort plus d'un tour de ronde.**
 > *0 agent bloqué plus d'un tour · 0 constat qui meurt avec la session · 0 chantier mené sans ronde posée.*
 
-**Un agent bloqué ne fait aucun bruit.** Il n'échoue pas, il ne prévient pas, il attend — et rien ne distingue de l'extérieur un agent qui réfléchit d'un agent qui attend depuis quarante minutes. Mesuré : **trois agents ont attendu en silence, dont un près d'une heure**, parce que personne ne regardait.
+**Un agent bloqué ne fait aucun bruit.** Il n'échoue pas, il ne prévient pas, il attend — et rien ne distingue de l'extérieur un agent qui réfléchit d'un agent qui attend depuis quarante minutes. Mesuré : **trois agents ont attendu en silence, dont un près d'une heure**.
 
 **La veille de déblocage ne remplace pas ta ronde.** Elle répond aux demandes de permission, et rien d'autre. Elle ne dit rien d'un agent **qui a fini**, d'un agent **qui s'est arrêté proprement**, ni d'une **chaîne rouge**.
 
@@ -36,11 +36,11 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 >
 > **Le protocole, trente secondes** : ① mesurer l'état → `idle` ; ② **déposer un texte + `Enter`** ; ③ **remesurer huit secondes plus tard**. *Un agent joignable serait passé `working` avec `esc to interrupt`. Chez un agent gelé, l'état ne bouge pas et le message est **avalé sans effet**.*
 >
-> 🔴 **Et le quatrième casse le protocole lui-même : son étape ① n'a pas de réponse.** *`herdr agent get <pane>` ne répond aucun état : il répond `agent_not_found` — alors que `herdr pane read <pane>` rend son écran, où il travaille.* **La surface PANE le voit, la surface AGENT ne le voit pas.** *Mesuré le 2026-08-19 sur un chef d'équipe en plein travail : 84 agents au registre, le sien absent.*
+> 🔴 **Et le quatrième casse le protocole lui-même : son étape ① n'a pas de réponse.** *`herdr agent get <pane>` ne répond aucun état : il répond `agent_not_found` — alors que `herdr pane read <pane>` rend son écran, où il travaille.* **La surface PANE le voit, la surface AGENT ne le voit pas.** *Mesuré le 2026-08-19 : 84 agents au registre, celui d'un chef au travail absent.*
 >
 > ⚠️ **`agent_not_found` n'est pas la mort d'un agent : c'est la panne de la mesure** *(c'est la règle « on ne teste pas quand on ne peut pas voir », retournée sur l'outil qui sert à voir)*. **Devant elle, tu lis son pane** — et tu ne conclus rien de l'absence.
 >
-> **Ce qu'il subit sans pouvoir le savoir** : personne ne peut le joindre par `livrer.js`, qui résout par agent · **sa veille de déblocage s'arrête**, motif `agent-invisible`, donc plus rien ne le surveille · il est inadressable par nom. ⚠️ **Et il ne peut pas se nommer pour en sortir** : `herdr agent rename` rend le même `agent_not_found` — *se nommer exige d'être trouvé*. **C'est à toi de le voir, pas à lui.** *(`T-20260819-0121`.)*
+> **Ce qu'il subit sans pouvoir le savoir** : personne ne peut le joindre par `livrer.js`, qui résout par agent · **sa veille de déblocage s'arrête**, motif `agent-invisible`, donc plus rien ne le surveille · il est inadressable par nom. ⚠️ **Et il ne peut pas se nommer pour en sortir** : `herdr agent rename` rend le même `agent_not_found` — *se nommer exige d'être trouvé*. **C'est à toi de le voir, pas à lui.** (`T-20260819-0121`)
 >
 > ⚠️ **La mesure EST le geste lui-même** — *il n'existe aucune observation passive qui distingue ces états.* **Et le geste est aussi le remède du deuxième cas** : un agent forcé de finir repart au premier message, **donc le remède n'est pas la renaissance**. *Un faux diagnostic (« **mort sans finir** ») a failli faire renaître un agent qui traitait alors le message qu'on venait de lui écrire : **neuf jours de contexte détruits**.*
 >
@@ -66,7 +66,7 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 
 > **Une ronde ne rend pas un état : elle en tire une conséquence. Sinon elle est un journal, et un journal que personne ne lit n'a rien dit.**
 
-C'est la seconde moitié de la clause ci-dessus, et les deux se tiennent : **ce que tu ne fais pas** (prendre le clavier) et **ce que tu dois faire** (conclure). **Ce n'est pas une maxime en l'air — elle a été payée** : voir le cas mesuré du 2026-08-16 en *[Si rien n'avance, repars du backlog](#4--si-rien-navance-repars-du-backlog)*, où une ronde a correctement listé trois agents `done` et n'en a rien conclu. Une ronde qui ne fait ni l'un ni l'autre a produit une liste que personne ne relira.
+C'est la seconde moitié de la clause ci-dessus, et les deux se tiennent : **ce que tu ne fais pas** (prendre le clavier) et **ce que tu dois faire** (conclure). **Elle a été payée** : cas du 2026-08-16 en *[Si rien n'avance, repars du backlog](#4--si-rien-navance-repars-du-backlog)*. Une ronde qui ne fait ni l'un ni l'autre a produit une liste que personne ne relira.
 
 ### Ta ronde rend un delta du chantier, ou un arbitrage
 
@@ -74,7 +74,7 @@ C'est la seconde moitié de la clause ci-dessus, et les deux se tiennent : **ce 
 
 Une découverte d'infrastructure hors du chantier s'inscrit en **ticket** (R1.4 : inscrire n'est pas exécuter) **et l'on revient au dossier** — jamais une excursion qui remplace la livraison.
 
-⚠️ **Mesuré, et c'est le motif de cette règle** : quatre jours sur un projet, sept epics, un complété, **zéro livraison enregistrée, zéro trace de travail liée** — l'énergie de la semaine était allée aux défauts du parc (`P-20260822-0001`), pas au chantier.
+⚠️ **Mesuré, et c'est le motif de cette règle** : quatre jours, sept epics, un complété, **zéro livraison enregistrée** — l'énergie était allée aux défauts du parc (`P-20260822-0001`), pas au chantier.
 
 ## 2 — Ta propre ligne et ta propre boîte de saisie
 
@@ -105,7 +105,7 @@ Ce que tu y cherches : une **décision** qui ne vit que dans ta conversation · 
 
 **C'est peut-être la plus importante : sans elle, un orchestrateur s'arrête dès que son dernier lot se termine et attend qu'on le réveille.** Et il ne se voit pas à l'arrêt — il voit des agents `done`, ce qui est un état parfaitement normal, et il passe.
 
-*Mesuré sur une ronde réelle, 2026-08-16* : trois agents étaient au repos avec du travail devant eux. La ronde les a correctement listés `done` — **et elle n'en a rien conclu**. Personne ne l'a su avant que le CTO demande *« vous travaillez sur quoi ? »*.
+*Mesuré le 2026-08-16* : trois agents au repos avec du travail devant eux, correctement listés `done` — **et rien n'en a été conclu** avant que le CTO demande *« vous travaillez sur quoi ? »*.
 
 Quand aucun lot n'avance, tu prends la suite **dans le backlog, au grain de la Demande** — jamais du ticket — et tu la lances.
 
@@ -141,7 +141,7 @@ Un topo qui ne dit que du bien n'est pas lu longtemps. **Une nuit sans progrès 
 
 **Et deux contrôles de plus, une fois par jour — pas à chaque ronde**, leur objet bouge lentement :
 
-**Les espaces de travail orphelins.** On en accumule un par agent ouvert, et **rien ne les ramasse**. Un orphelin pointe sur un commit périmé, occupe le disque, et — le pire — **ressemble à du travail en cours**. **Il est à signaler** au CTO une seule fois, puis si son état change, en finissant par `J'ai besoin de toi : retirer ou garder <chemin>` ; l'espace RESTE tant qu'il n'a pas tranché, et on ne le retire jamais faute de réponse.
+**Les espaces de travail orphelins.** On en accumule un par agent ouvert, et **rien ne les ramasse**. Un orphelin pointe sur un commit périmé, occupe le disque, et — le pire — **ressemble à du travail en cours**. **Il est à signaler** au CTO une seule fois, puis si son état change (l'espace a changé de contenu ou le CTO a répondu), en joignant ses fichiers ignorés NON régénérables (base, dump, `.env`) et en finissant par `J'ai besoin de toi : retirer ou garder <chemin>` ; sa décision et le fait « signalé le <date> » s'écrivent au fil ServiceDesk du chantier et s'y relisent avant de signaler : un successeur ne re-signale pas ; l'espace RESTE tant qu'il n'a pas tranché, et on ne le retire jamais faute de réponse.
 
 **Les lignes ouvertes sans personne au bout.** ⚠️ **Attention au critère, il a déjà été faux une fois** : vérifier que le dossier d'une ligne existe **ne prouve rien** — sur 25 lignes ouvertes, les 25 passent ce test.
 

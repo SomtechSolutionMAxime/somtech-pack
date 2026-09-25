@@ -1098,7 +1098,7 @@ garde_ferme "# 3. DEMANDER au chef ce qui n'existe que dans son espace — rien 
 garde_ferme "escalade au CTO par ta ligne avec ce qui est en jeu — jamais de fermeture faute de réponse." \
   "sans réponse du chef : escalade au CTO par « ta ligne », jamais de fermeture faute de réponse" \
   "le cas du chef qui ne répond pas n'est plus écrit — un silence se lirait « rien à perdre »"
-garde_ferme "Un chef \`blocked\` refuse le message : annule son dialogue (voir « Devant un dialogue de choix ouvert par ton chef »), puis demande ; n'escalade que si ça échoue." \
+garde_ferme "Un chef \`blocked\` refuse le message : annule son dialogue de choix reconnu (voir « Devant un dialogue de choix ouvert par ton chef »), redemande-lui sa question, puis demande ; permission ou écran inconnu : ne presse rien, pane devant le CTO ; n'escalade que si ça échoue." \
   "un chef blocked : on annule son dialogue, puis on demande" \
   "le chef blocked n'est plus traité : annuler le dialogue avant de demander a disparu"
 garde_ferme "par le pane si le nom est introuvable" \
@@ -1153,7 +1153,7 @@ garde_skill "Status propre + log vide ne veut pas dire rien à perdre." \
 garde_skill "git -C ~/worktrees/<repo>/<timestamp> status --porcelain --ignored" \
   "skill étape f : le status montre l'ignoré (--ignored)" \
   "skill étape f : le status ne porte plus --ignored"
-garde_skill "annule son dialogue de choix (\`herdr pane send-keys <pane> Escape\`, sans répondre ni \`Enter\`), puis demande ; n'escalade que si ça échoue." \
+garde_skill "annule son dialogue de choix, mais seulement s'il est reconnu comme tel à l'écran (\`herdr pane read\` d'abord) : \`herdr pane send-keys <pane> Escape\`, sans répondre ni \`Enter\` (Escape sur une demande de PERMISSION la REFUSE : sur elle, ou sur un écran inconnu, tu ne presses rien et tu mets le pane devant le CTO) ; puis redemande-lui la question qu'il t'avait posée, puis demande ; n'escalade que si ça échoue." \
   "skill étape f : un chef blocked — on annule son dialogue, puis on demande" \
   "skill étape f : le chef blocked n'est plus traité"
 garde_skill "par le pane si le nom est introuvable" \
@@ -1169,7 +1169,9 @@ L_ORPH_RONDES="$(grep -F -- "**Les espaces de travail orphelins.**" "$METIER" | 
 orphelin() { # $1 libellé, $2 ligne
   if printf '%s' "$2" | grep -qF -- "à signaler" \
      && printf '%s' "$2" | grep -qF -- "l'espace RESTE tant qu'il n'a pas tranché, et on ne le retire jamais faute de réponse." \
-     && printf '%s' "$2" | grep -qF -- "une seule fois, puis si son état change" \
+     && printf '%s' "$2" | grep -qF -- "une seule fois, puis si son état change (l'espace a changé de contenu ou le CTO a répondu)" \
+     && printf '%s' "$2" | grep -qF -- "fichiers ignorés NON régénérables (base, dump, \`.env\`)" \
+     && printf '%s' "$2" | grep -qF -- "au fil ServiceDesk du chantier" \
      && printf '%s' "$2" | grep -qF -- "J'ai besoin de toi : retirer ou garder <chemin>" \
      && ! printf '%s' "$2" | grep -qiE "à retirer après|se retire|retire-le|au chef s'il répond|est nettoyé|nettoyé par|retiré par la ronde|après [[:alnum:]]+ jours|plus de [[:alnum:]]+ jours"; then
     ok "$1 : l'orphelin est À SIGNALER au CTO, l'espace RESTE — et rien n'enseigne à le retirer"
@@ -1238,12 +1240,29 @@ exceptions_absentes "skill étape f" "$S_SKILL_F"
 
 # ── (4e revue) le geste d'annulation, le motif honnête, ce qui n'existe VRAIMENT que là
 S_DIALOGUE="$(section 'Devant un dialogue de choix ouvert par ton chef')"
-if printf '%s' "$S_DIALOGUE" | grep -qF -- "**Le geste : \`herdr pane send-keys <pane> Escape\`**, sans répondre ni \`Enter\`." \
-   && ! printf '%s' "$S_DIALOGUE" | grep -qF -- "send-keys <pane> Enter"; then
-  ok "« Devant un dialogue de choix » donne le geste : Escape, sans répondre ni Enter"
+if printf '%s' "$S_DIALOGUE" | grep -qF -- "**Le geste, sur un dialogue de CHOIX reconnu à l'écran (\`herdr pane read\` d'abord) seulement : \`herdr pane send-keys <pane> Escape\`**, sans répondre ni \`Enter\` ; puis redemande au chef la question qu'il t'avait posée." \
+   && printf '%s' "$S_DIALOGUE" | grep -qF -- "**Escape REFUSE une demande de PERMISSION** : sur elle, ou sur un écran inconnu, ne presse rien, mets le pane devant le CTO (focus)." \
+   && ! printf '%s' "$S_DIALOGUE" | grep -qF -- "send-keys <pane> Enter" \
+   && ! printf '%s' "$S_DIALOGUE" | grep -F -- "send-keys <pane> Escape" | grep -qv "reconnu"; then
+  ok "« Devant un dialogue de choix » : Escape seulement sur un dialogue de CHOIX reconnu, jamais sur une permission, puis on redemande la question"
 else
-  ko "« Devant un dialogue de choix » ne donne plus le geste (Escape, sans Enter), ou prescrit Enter"
+  ko "« Devant un dialogue de choix » : Escape sans condition de dialogue de choix reconnu, permission non exclue, ou question non redemandée"
 fi
+# Skill entier : Escape sur un dialogue de chef porte sa condition ; jamais Enter comme réponse.
+SKILL_SANS_ENTER="$(sed 's/sans répondre ni `Enter`//g' "$SKILL")"
+if printf '%s' "$SKILL_SANS_ENTER" | grep -qE 'send-keys <pane> Enter|Enter le répond|`Enter` répond' ; then
+  ko "skill entier : « send-keys <pane> Enter » est prescrit comme réponse à un dialogue de chef"
+else
+  ok "skill entier : aucun « send-keys <pane> Enter » ne répond à un dialogue de chef"
+fi
+if printf '%s' "$S_SKILL_F" | grep -F -- "send-keys <pane> Escape" | grep -qv "reconnu comme tel"; then
+  ko "skill étape f : Escape sans condition de dialogue de choix reconnu"
+else
+  ok "skill étape f : Escape porte sa condition (dialogue de choix reconnu à l'écran)"
+fi
+garde_skill "Pouvoir lire l'espace d'un chef ne dispense pas de LUI DEMANDER : \`git log origin/<branche-cible>..HEAD\` ne voit que ce qui est commité, et \`status\` n'en montre que les noms — un fichier ignoré (base, dump, \`.env\`), des commits jamais poussés de la branche-socle, ce que le chef sait sans l'avoir écrit." \
+  "skill étape f : le motif nomme l'ignoré (base, dump, .env), les commits non poussés de la branche-socle, ce que le chef sait" \
+  "skill étape f : le motif ne nomme plus le fichier ignoré (base, dump, .env) — la règle deviendrait une formalité"
 garde_ferme "\`worktree remove\` sans \`--force\` retire sans protester un espace qui contient des fichiers IGNORÉS : le refus n'est pas la protection, la question l'est ; \`--ignored\` liste aussi \`node_modules\`, \`.next\`, \`dist\` (régénérables : écarte-les, le reste va au chef)." \
   "« Fermer proprement » : un retrait sans --force ne protège pas de l'ignoré, la question oui ; node_modules/.next/dist s'écartent" \
   "« Fermer proprement » ne dit plus que le refus de worktree remove n'est pas la protection"

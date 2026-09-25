@@ -49,7 +49,7 @@ herdr pane current                                  # ton pane (result.pane.pane
 herdr agent rename <ton-pane> <ta-rivière>          # matapedia, bonaventure… — jamais un code de mandat
 ```
 
-⚠️ **Le nom d'agent n'est pas le titre de ton onglet.** Poser un titre de terminal ne te nomme pas : `herdr agent list` continue de te rendre anonyme, et **un agent anonyme est inadressable**. Vérifie par le fait — `herdr agent get <ton-pane>` doit rendre `name`. *(Mesuré : un agent s'est cru nommé vingt minutes, son coordonnateur ne le voyait pas — `E-20260819-0001`.)*
+⚠️ **Le nom d'agent n'est pas le titre de ton onglet.** Poser un titre de terminal ne te nomme pas : `herdr agent list` continue de te rendre anonyme, et **un agent anonyme est inadressable**. Vérifie par le fait — `herdr agent get <ton-pane>` doit rendre `name`. *(Un agent s'est cru nommé vingt minutes — `E-20260819-0001`.)*
 
 ## Déclarer le modèle — toujours, au lancement
 
@@ -187,13 +187,13 @@ gestionnaire-etat-boite "$P"
 
 🔴 **Si ton texte est resté dans sa boîte, le geste qui le soumet (`herdr pane send-keys <pane> Enter`) a TROIS conditions, jamais une** : ① **le texte est le TIEN**, tu l'as vu se déposer — soumettre celui d'autrui, c'est le faire parler à sa place ; ② **tu VIENS de relire la boîte**, juste avant le geste, pas il y a quinze minutes ; ③ **tu as mesuré son ÉTAT**, pas lu son écran — un `suggestion` n'a rien à soumettre, et la touche part alors dans le vide en te faisant croire le contraire.
 
-**Sans ②, tu agis sur un état supposé.** Mesuré : geste conseillé sur une description de quinze minutes — **le but était pris depuis quatre, la boîte était vide** (`T-20260818-0143`). *« Un texte vu il y a quinze minutes n'est pas un texte présent maintenant — et sur une boîte, un geste inutile n'est jamais sans effet. »* **Ça n'autorise jamais à écrire dans la boîte d'autrui** : ça reste `livrer.js`, seul à délivrer sans écraser.
+**Sans ②, tu agis sur un état supposé.** Mesuré : geste conseillé sur une description de quinze minutes — **le but était pris depuis quatre, la boîte était vide** (`T-20260818-0143`). **Ça n'autorise jamais à écrire dans la boîte d'autrui** : ça reste `livrer.js`, seul à délivrer sans écraser.
 
 🔴 **UN ARBITRAGE QUI CONTREDIT UN `/goal` DÉJÀ POSÉ CORRIGE LE `/goal` DANS LE MÊME GESTE.**
 
 Un `/goal` posé **ne s'efface pas** quand tu arbitres autrement en conversation : **il continue de rappeler sa condition, indéfiniment, à un agent qui n'a aucun moyen de savoir lequel des deux est le plus récent.**
 
-*Mesuré le 2026-08-19* : un `/goal` posé à la naissance — *« le dépôt à jour sur `origin/main` »* —, l'inverse arbitré deux heures plus tard, **le premier jamais corrigé**. Le hook de but a rappelé la condition d'origine, l'agent l'a relayée comme *« le CTO vient de poser comme condition »*, et **dix minutes ont été passées à chercher un message qui n'existait pas**.
+*Mesuré le 2026-08-19* : un `/goal` posé à la naissance, l'inverse arbitré deux heures plus tard, **le premier jamais corrigé** : le hook l'a rappelé, l'agent l'a relayé comme *« le CTO vient de poser comme condition »*, et **dix minutes ont été perdues à chercher un message inexistant**.
 
 > **Il a fait exactement ce qu'il fallait : il a refusé de trancher entre deux ordres opposés du même donneur d'ordre.** *L'incohérence était celle de qui avait posé les deux.*
 
@@ -201,11 +201,10 @@ Un `/goal` posé **ne s'efface pas** quand tu arbitres autrement en conversation
 
 ## Devant un dialogue de choix ouvert par ton chef — tu ANNULES
 
-**Tu ne réponds pas, même en choisissant l'option « par défaut » que tu as toi-même rédigée** : répondre tranche **à la place de celui à qui la question appartient**. *Annuler libère sans décider.* **Le geste : `herdr pane send-keys <pane> Escape`**, sans répondre ni `Enter`.
+**Tu ne réponds pas, même en choisissant l'option « par défaut » que tu as toi-même rédigée** : répondre tranche **à la place de celui à qui la question appartient**. *Annuler libère sans décider (2026-09-20).* **Le geste, sur un dialogue de CHOIX reconnu à l'écran (`herdr pane read` d'abord) seulement : `herdr pane send-keys <pane> Escape`**, sans répondre ni `Enter` ; puis redemande au chef la question qu'il t'avait posée. **Escape REFUSE une demande de PERMISSION** : sur elle, ou sur un écran inconnu, ne presse rien, mets le pane devant le CTO (focus).
 
 ⚠️ **Et `livrer.js` REFUSE d'écrire à un agent `blocked`** : un dialogue ouvert rend une session **injoignable même pour son coordonnateur** — tu ne peux ni la débloquer par le texte, ni lui dire pourquoi.
 
-*Occurrence : 2026-09-20 — répondre aurait tranché à la place du dirigeant deux questions qu'on venait de lui poser.*
 
 ## Poser la veille de déblocage
 
@@ -294,7 +293,7 @@ git -C <repo> worktree prune
 >
 > **La référence.** Une branche `wt/<timestamp>` **n'a pas d'upstream** : `git log @{u}..` échoue *toujours*, et un `2>/dev/null` change cet échec en sortie vide, lu « tout est poussé » : tu détruis les commits. `origin/<branche-cible>..HEAD` **échoue bruyamment** si elle est fausse.
 >
-> **La question (étape 3).** Pouvoir lire l'espace d'un chef ne t'exempte pas de LUI DEMANDER avant de fermer son pane ou de retirer son espace. Ce log ne voit que ce qui est **commité**, et `status` n'en montre que les noms : ni l'un ni l'autre ne dit ce qui n'existe que là — un fichier ignoré par `.gitignore` (base de données, dump, `.env`), des commits jamais poussés de la branche-socle, ce que le chef sait sans l'avoir écrit. **Status propre + log vide ne veut pas dire rien à perdre.** `worktree remove` sans `--force` retire sans protester un espace qui contient des fichiers IGNORÉS : le refus n'est pas la protection, la question l'est ; `--ignored` liste aussi `node_modules`, `.next`, `dist` (régénérables : écarte-les, le reste va au chef). **Sans réponse** (chef gelé, `agent_not_found`), l'espace RESTE : relance par `livrer.js` (`livrer.js <pane|nom> --texte "…"` avec son chemin complet, par le pane si le nom est introuvable), puis, sans réponse à la ronde suivante, escalade au CTO par ta ligne avec ce qui est en jeu — jamais de fermeture faute de réponse. Un chef `blocked` refuse le message : annule son dialogue (voir « Devant un dialogue de choix ouvert par ton chef »), puis demande ; n'escalade que si ça échoue. Jamais `worktree remove --force` ni `-f` : un espace qui refuse de se retirer est un signal.
+> **La question (étape 3).** Pouvoir lire l'espace d'un chef ne t'exempte pas de LUI DEMANDER avant de fermer son pane ou de retirer son espace. Ce log ne voit que ce qui est **commité**, et `status` n'en montre que les noms : ni l'un ni l'autre ne dit ce qui n'existe que là — un fichier ignoré par `.gitignore` (base de données, dump, `.env`), des commits jamais poussés de la branche-socle, ce que le chef sait sans l'avoir écrit. **Status propre + log vide ne veut pas dire rien à perdre.** `worktree remove` sans `--force` retire sans protester un espace qui contient des fichiers IGNORÉS : le refus n'est pas la protection, la question l'est ; `--ignored` liste aussi `node_modules`, `.next`, `dist` (régénérables : écarte-les, le reste va au chef). **Sans réponse** (chef gelé, `agent_not_found`), l'espace RESTE : relance par `livrer.js` (`livrer.js <pane|nom> --texte "…"` avec son chemin complet, par le pane si le nom est introuvable), puis, sans réponse à la ronde suivante, escalade au CTO par ta ligne avec ce qui est en jeu — jamais de fermeture faute de réponse. Un chef `blocked` refuse le message : annule son dialogue de choix reconnu (voir « Devant un dialogue de choix ouvert par ton chef »), redemande-lui sa question, puis demande ; permission ou écran inconnu : ne presse rien, pane devant le CTO ; n'escalade que si ça échoue. Jamais `worktree remove --force` ni `-f` : un espace qui refuse de se retirer est un signal.
 
 ⚠️ **Ferme le pane, jamais le tab** : il héberge souvent plusieurs agents, **dont toi**, et `herdr tab close` les emporte tous sans confirmation (`herdr agent list` donne le `tab_id`).
 

@@ -58,7 +58,7 @@ Une **Livraison** (le ServiceDesk l'appelle aussi un jalon) est la seule qui ne 
 
 **Ce qu'il porte, en plus de la cadence** : ce que tu ne dois **pas** attendre · **où vit ton état à jour** · **tes priorités du moment, nommées** · et **les gestes que tu enjambes quand ton contexte s'appauvrit — `LU` à chaque message reçu en tête**, puisque c'est précisément la règle que tu connais et que tu franchis quand même *(R6)*.
 
-⚠️ **Et il SE REPOSE dès que son contenu change.** *Sinon tu fabriques un briefing qui se récite après avoir été annulé — le défaut inverse de celui qu'il répare.* **Mesuré le 2026-08-19** : une `/loop` portait encore *« j'ai choisi la renaissance quand le staging répondra pour de vrai »* **vingt minutes après que son auteur eut explicitement levé cette condition**. *(`T-20260819-0110`.)*
+⚠️ **Et il SE REPOSE dès que son contenu change.** *Sinon tu fabriques un briefing qui se récite après avoir été annulé — le défaut inverse de celui qu'il répare.* **Mesuré le 2026-08-19** : une `/loop` portait encore *« j'ai choisi la renaissance quand le staging répondra pour de vrai »* **vingt minutes après que son auteur eut levé cette condition** (`T-20260819-0110`).
 
 **Ce que chaque tour parcourt** — le détail de chaque ligne est en R5 et R7 :
 

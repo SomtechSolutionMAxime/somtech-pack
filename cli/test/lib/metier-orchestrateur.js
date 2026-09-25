@@ -1400,8 +1400,8 @@ export const CONTROLES = [
         [/Status propre \+ log vide ne veut pas dire rien à perdre/, 'status propre + log vide ne veut pas dire rien à perdre'],
         [/status --porcelain --ignored/, 'le status montre aussi l’ignoré (--ignored)'],
         [/par le pane si le nom est introuvable/, 'la relance se fait par le pane si le nom est introuvable'],
-        [/Un chef `blocked` refuse le message : annule son dialogue \(voir « Devant un dialogue de choix ouvert par ton chef »\), puis demande ; n['’]escalade que si ça échoue/,
-          'un chef blocked : on annule son dialogue, puis on demande'],
+        [/Un chef `blocked` refuse le message : annule son dialogue de choix reconnu \(voir « Devant un dialogue de choix ouvert par ton chef »\), redemande-lui sa question, puis demande ; permission ou écran inconnu : ne presse rien, pane devant le CTO ; n['’]escalade que si ça échoue/,
+          'un chef blocked : dialogue de choix reconnu annulé, question redemandée ; permission ou écran inconnu : rien, pane devant le CTO'],
         [/Jamais `worktree remove --force` ni `-f`/, 'le chapitre interdit --force et -f en toutes lettres'],
         [/`worktree remove` sans `--force` retire sans protester un espace qui contient des fichiers IGNORÉS : le refus n['’]est pas la protection, la question l['’]est ; `--ignored` liste aussi `node_modules`, `\.next`, `dist` \(régénérables : écarte-les, le reste va au chef\)/,
           'un retrait sans --force ne protège pas de l’ignoré ; la question, oui ; node_modules/.next/dist s’écartent'],
@@ -1461,7 +1461,8 @@ export const CONTROLES = [
       for (const [motif, dit] of [
         [/Status propre \+ log vide ne veut pas dire rien à perdre/, 'status propre + log vide ne veut pas dire rien à perdre'],
         [/status --porcelain --ignored/, 'le status montre l’ignoré (--ignored)'],
-        [/annule son dialogue de choix \(`herdr pane send-keys <pane> Escape`, sans répondre ni `Enter`\), puis demande ; n['’]escalade que si ça échoue/, 'un chef blocked : annuler son dialogue (Escape), puis demander'],
+        [/annule son dialogue de choix, mais seulement s['’]il est reconnu comme tel à l['’]écran \(`herdr pane read` d['’]abord\) : `herdr pane send-keys <pane> Escape`, sans répondre ni `Enter` \(Escape sur une demande de PERMISSION la REFUSE : sur elle, ou sur un écran inconnu, tu ne presses rien et tu mets le pane devant le CTO\) ; puis redemande-lui la question qu['’]il t['’]avait posée, puis demande ; n['’]escalade que si ça échoue/, 'un chef blocked : Escape seulement sur un dialogue de choix reconnu, jamais sur une permission, puis question redemandée'],
+        [/Pouvoir lire l['’]espace d['’]un chef ne dispense pas de LUI DEMANDER : `git log origin\/<branche-cible>\.\.HEAD` ne voit que ce qui est commité, et `status` n['’]en montre que les noms — un fichier ignoré \(base, dump, `\.env`\), des commits jamais poussés de la branche-socle, ce que le chef sait sans l['’]avoir écrit\./, 'le motif du skill nomme l’ignoré (base, dump, .env), les commits non poussés de la branche-socle, ce que le chef sait'],
         [/`worktree remove` sans `--force` retire sans protester un espace qui contient des fichiers IGNORÉS : le refus n['’]est pas la protection, la question l['’]est/, 'un retrait sans --force ne protège pas de l’ignoré ; la question, oui'],
         [/par le pane si le nom est introuvable/, 'la relance par le pane si le nom est introuvable'],
         [/escalade au CTO par ta ligne avec ce qui est en jeu — jamais de fermeture faute de réponse/, 'l’escalade par « ta ligne », jamais faute de réponse'],
@@ -1473,6 +1474,9 @@ export const CONTROLES = [
         lignes.filter((l) => /^git .*worktree remove/.test(l) && /(?:^|\s)(?:--force|-f)(?:\s|$)/.test(l)), [],
         'étape f du skill : un `worktree remove` force (--force / -f)',
       );
+      assert.deepEqual(f.split('\n').filter((l) => l.includes('send-keys <pane> Escape') && !l.includes('reconnu comme tel')), [], 'étape f du skill : Escape est prescrit sans condition de dialogue de choix reconnu');
+      const skillSansEnter = competence.replace(/sans répondre ni `Enter`/g, '');
+      assert.ok(!/send-keys <pane> Enter|Enter le répond|`Enter` répond/.test(skillSansEnter), 'le skill : « send-keys <pane> Enter » est prescrit comme réponse à un dialogue de chef');
       const exc = f.match(/sauf si|hormis|excepté|à moins|sans rien demander|sans demander|se ferm(?:e|ent) directement|se ferme sans|ferme directement|sans poser la question|un stash|une autre branche/i);
       assert.ok(!exc, `étape f du skill : une exception à la question est écrite (« ${exc && exc[0]} »)`);
     },
@@ -1496,7 +1500,9 @@ export const CONTROLES = [
       ]) {
         assert.ok(l.includes('à signaler'), `${nom} : l’orphelin n’est plus « à signaler » au CTO`);
         assert.ok(l.includes("l'espace RESTE tant qu'il n'a pas tranché, et on ne le retire jamais faute de réponse."), `${nom} : l’espace ne reste plus tant que le CTO n’a pas tranché`);
-        assert.ok(l.includes('une seule fois, puis si son état change'), `${nom} : le signalement n’est plus « une seule fois, puis si son état change »`);
+        assert.ok(l.includes("une seule fois, puis si son état change (l'espace a changé de contenu ou le CTO a répondu)"), `${nom} : le signalement n’est plus « une seule fois, puis si son état change (contenu changé ou réponse du CTO) »`);
+        assert.ok(l.includes('fichiers ignorés NON régénérables (base, dump, `.env`)'), `${nom} : le signalement ne joint plus les fichiers ignorés NON régénérables`);
+        assert.ok(l.includes('au fil ServiceDesk du chantier'), `${nom} : la décision et le signalement ne sont plus consignés au fil ServiceDesk du chantier`);
         assert.ok(l.includes("J'ai besoin de toi : retirer ou garder <chemin>"), `${nom} : le signalement ne finit plus par « J'ai besoin de toi : retirer ou garder <chemin> »`);
         assert.ok(!CONTRAIRE_RETRAIT.test(l), `${nom} : un retrait de l’orphelin est enseigné (« ${l.match(CONTRAIRE_RETRAIT)?.[0]} »)`);
       }
@@ -1504,7 +1510,9 @@ export const CONTROLES = [
       assert.deepEqual(utilisations.filter((l) => /^git\b/.test(l.trim())), [], 'le skill entier : une ligne exécutable emploie @{u}');
       assert.deepEqual(utilisations.filter((l) => !l.includes('N\'utilise jamais')), [], 'le skill entier : @{u} est mentionné hors de la phrase qui l’interdit');
       const dlg = sectionDe(metier, /^Devant un dialogue de choix ouvert par ton chef/, 'sur le dialogue de choix d’un chef').corps;
-      assert.ok(dlg.includes('**Le geste : `herdr pane send-keys <pane> Escape`**, sans répondre ni `Enter`.'), 'le dialogue de choix : le geste (Escape, sans répondre ni Enter) a disparu');
+      assert.ok(dlg.includes("**Le geste, sur un dialogue de CHOIX reconnu à l'écran (`herdr pane read` d'abord) seulement : `herdr pane send-keys <pane> Escape`**, sans répondre ni `Enter` ; puis redemande au chef la question qu'il t'avait posée."), 'le dialogue de choix : Escape seulement sur un dialogue de CHOIX reconnu, puis la question redemandée, a disparu');
+      assert.ok(dlg.includes("**Escape REFUSE une demande de PERMISSION** : sur elle, ou sur un écran inconnu, ne presse rien, mets le pane devant le CTO (focus)."), 'le dialogue de choix : Escape refuse une permission — la mise en garde a disparu');
+      assert.deepEqual(dlg.split('\n').filter((l) => l.includes('send-keys <pane> Escape') && !l.includes('reconnu')), [], 'le dialogue de choix : Escape est prescrit sans condition de dialogue reconnu');
       assert.ok(!dlg.includes('send-keys <pane> Enter'), 'le dialogue de choix : `send-keys <pane> Enter` est prescrit — c’est répondre');
       const msgBilan = ligne(metier, 'Le bilan est un message comme les autres');
       assert.ok(!/(?:se termine|finit|termine) par `rien\.`/.test(msgBilan), 'le bilan : « finit par rien. » est écrit');
@@ -5192,14 +5200,14 @@ export const MUTATIONS = [
     quoi: 'métier : le chef blocked n’est plus débloqué par l’annulation',
     cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
     fichier: 'metier',
-    muter: (t) => t.replace('annule son dialogue (voir', 'écris-lui un mot (voir'),
+    muter: (t) => t.replace('annule son dialogue de choix reconnu (voir', 'écris-lui un mot (voir'),
   },
   {
     id: 'blocked-sans-annuler-skill',
     quoi: 'skill : le chef blocked n’est plus débloqué par l’annulation',
     cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
     fichier: 'competence',
-    muter: (t) => t.replace('annule son dialogue de choix (`herdr', 'écris-lui un mot de choix (`herdr'),
+    muter: (t) => t.replace('annule son dialogue de choix, mais seulement', 'écris-lui un mot de choix, mais seulement'),
   },
   {
     id: 'status-sans-ignored-metier',
@@ -5269,7 +5277,35 @@ export const MUTATIONS = [
     quoi: 'métier : le geste d’annulation (Escape) disparaît de la section du dialogue de choix',
     cible: 'orphelin-fin-de-chantier-et-canal-sans-contraire',
     fichier: 'metier',
-    muter: (t) => t.replace('**Le geste : `herdr pane send-keys <pane> Escape`**, sans répondre ni `Enter`.', 'Annule.'),
+    muter: (t) => t.replace("**Le geste, sur un dialogue de CHOIX reconnu à l'écran (`herdr pane read` d'abord) seulement : `herdr pane send-keys <pane> Escape`**, sans répondre ni `Enter` ; puis", 'Annule ; puis'),
+  },
+  {
+    id: 'skill-motif-sans-fichier-ignore',
+    quoi: 'skill : « un fichier ignoré (base, dump, `.env`), » retiré du motif',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace('un fichier ignoré (base, dump, `.env`), ', ''),
+  },
+  {
+    id: 'skill-enter-repond-au-dialogue',
+    quoi: 'skill : « send-keys <pane> Enter » répond au dialogue du chef',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace("n'escalade que si ça échoue. N'utilise jamais", "n'escalade que si ça échoue ; `herdr pane send-keys <pane> Enter` le répond. N'utilise jamais"),
+  },
+  {
+    id: 'escape-sans-condition-metier',
+    quoi: 'métier : Escape prescrit SANS condition de dialogue de choix reconnu',
+    cible: 'orphelin-fin-de-chantier-et-canal-sans-contraire',
+    fichier: 'metier',
+    muter: (t) => t.replace("**Le geste, sur un dialogue de CHOIX reconnu à l'écran (`herdr pane read` d'abord) seulement : `herdr pane send-keys <pane> Escape`**", '**Le geste : `herdr pane send-keys <pane> Escape`**'),
+  },
+  {
+    id: 'escape-sans-condition-skill',
+    quoi: 'skill : Escape prescrit sans condition de dialogue reconnu',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace("annule son dialogue de choix, mais seulement s'il est reconnu comme tel à l'écran (`herdr pane read` d'abord) : `herdr pane send-keys <pane> Escape`", 'annule son dialogue : `herdr pane send-keys <pane> Escape`'),
   },
   {
     id: 'un-chemin-de-machine-entre-dans-le-gabarit',
