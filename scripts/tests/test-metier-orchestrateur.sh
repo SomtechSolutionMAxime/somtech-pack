@@ -1514,6 +1514,86 @@ else
   ko "$TAILLE caractères — au-dessus du plafond de $PLAFOND (écart net $((TAILLE - BASELINE)), marge $MARGE) : chaque ajout doit REMPLACER ou PRÉCISER"
 fi
 
+# ═══════════════════════════════════════════════════════════════════════════
+# ⑫ Volubilité — D-20260925-0003. Quatre causes du MÊME chapitre (rendre-compte),
+#    qui se contredisent si on les sépare. Chaque assertion est ANCRÉE À SA
+#    SECTION, et chaque négative est APPARIÉE à une positive sur le même objet
+#    (sinon supprimer la section les rendrait vertes).
+# ═══════════════════════════════════════════════════════════════════════════
+echo "⑫ volubilité — la dernière ligne, la question, l'identifiant, l'accusé"
+
+# ── (a) La dernière ligne est exigée sur le message QUI ATTEND, plus sur tout message.
+S_DER="$(section 'La dernière ligne')"
+if printf '%s' "$S_DER" | grep -qF "J'ai besoin de toi :" \
+   && printf '%s' "$S_DER" | grep -qi 'attend quelque chose'; then
+  ok "12a — la dernière ligne littérale est exigée sur le message qui attend quelque chose du dirigeant"
+else
+  ko "12a — la section « La dernière ligne » n'exige pas la formule littérale sur le message qui attend quelque chose"
+fi
+if printf '%s' "$S_DER" | grep -qi 'purement informatif' \
+   && printf '%s' "$S_DER" | grep -qi "n'a pas cette ligne"; then
+  ok "12a — un message purement informatif n'a pas cette ligne"
+else
+  ko "12a — rien ne dit qu'un message purement informatif se passe de la ligne : le « rien » redevient obligatoire"
+fi
+# Négatif apparié aux deux positives ci-dessus : l'ancienne exigence a disparu de TOUT le métier.
+if [ -n "$S_DER" ] \
+   && ! grep -qi 'Tout message se termine par' "$METIER" \
+   && ! grep -qF 'rien.` compris' "$METIER" \
+   && ! grep -qF 'tout message**, et le `rien`' "$METIER" \
+   && ! grep -qi 'Le `rien` s.écrit' "$METIER" \
+   && ! grep -qF 'de **chaque** message, `rien.`' "$METIER"; then
+  ok "12a — plus aucun chapitre n'exige « J'ai besoin de toi : rien. » sur tout message"
+else
+  ko "12a — un chapitre exige encore la ligne (ou son « rien ») sur tout message : contradiction avec la règle"
+fi
+
+# ── (b) Une question au dirigeant est une DÉCISION ; le reste va au chef ou se mesure.
+S_MONTE="$(section 'Ce que tu fais monter')"
+if printf '%s' "$S_MONTE" | grep -qi 'deux options' \
+   && printf '%s' "$S_MONTE" | grep -qi 'recommandation' \
+   && printf '%s' "$S_MONTE" | grep -qi 'question au dirigeant est une décision'; then
+  ok "12b — une question au dirigeant est une décision : deux options au plus, une recommandation"
+else
+  ko "12b — la section n'établit pas qu'une question au dirigeant est une décision à deux options et une recommandation"
+fi
+if printf '%s' "$S_MONTE" | grep -qi 'toute autre question' \
+   && printf '%s' "$S_MONTE" | grep -qi 'va au chef' \
+   && printf '%s' "$S_MONTE" | grep -qi 'se mesure' \
+   && printf '%s' "$S_MONTE" | grep -qi 'guichet'; then
+  ok "12b — toute autre question va au chef ou se mesure : la garde contre le guichet est écrite"
+else
+  ko "12b — rien ne dit où va une question qui n'est pas une décision : l'orchestrateur reste un guichet"
+fi
+
+# ── (c) Aucun identifiant technique sur la ligne.
+if printf '%s' "$S_DER" | grep -qi "jamais d'identifiant technique" \
+   && printf '%s' "$S_DER" | grep -qi 'pane' \
+   && printf '%s' "$S_DER" | grep -qi 'canal' \
+   && printf '%s' "$S_DER" | grep -qi 'commit'; then
+  ok "12c — jamais d'identifiant technique sur la ligne (pane, canal, session, commit) : le nom de l'agent ou le code lisible"
+else
+  ko "12c — la section ne proscrit pas l'identifiant technique (pane, canal, commit) sur la ligne"
+fi
+if ! printf '%s' "$S_DER" | grep -qi "avant l'identifiant de pane" && [ -n "$S_DER" ]; then
+  ok "12c — la section ne recommande plus de donner un identifiant de pane"
+else
+  ko "12c — la section recommande encore de donner l'identifiant de pane au dirigeant"
+fi
+
+# ── (d) Le LU est la PREMIÈRE LIGNE du message qui porte le fait, jamais un message à lui.
+if printf '%s' "$S_LU" | grep -qi 'aucun accusé seul' \
+   && printf '%s' "$S_LU" | grep -qi 'première ligne'; then
+  ok "12d — le LU est la première ligne du message qui porte le fait : aucun accusé seul"
+else
+  ko "12d — « aucun accusé seul » n'est pas écrit : le LU envoyé comme message à part reste permis"
+fi
+if printf '%s' "$S_LU" | grep -qi 'deux agents' && printf '%s' "$S_LU" | grep -qi 'obligatoire\|obligation'; then
+  ok "12d — le LU reste obligatoire, et son motif (deux agents gelés) reste"
+else
+  ko "12d — le LU n'est plus obligatoire ou son motif a disparu : on a abrogé au lieu de préciser"
+fi
+
 echo
 if [ "$echecs" -eq 0 ]; then
   echo "✅ $total/$total — le métier prescrit des gestes qui tiennent"
