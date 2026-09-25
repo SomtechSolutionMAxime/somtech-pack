@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, chmodSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, chmodSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -26,6 +26,9 @@ function payload() {
   const g = join(root, '.claude', 'templates', 'orchestrateur');
   mkdirSync(g, { recursive: true });
   writeFileSync(join(g, 'CLAUDE.md'), V2);
+  const gr = join(root, '.claude', 'templates', 'gestionnaire-client');
+  mkdirSync(gr, { recursive: true });
+  writeFileSync(join(gr, 'CLAUDE.md'), V2);
   alignerLePosteSur(root);
   return root;
 }
@@ -66,6 +69,9 @@ test('G1 — le nom de rivière met à jour le lieu qui le porte, et la commande
   assert.equal(lu(repo, 'j-20260814-0002'), V1, 'l’autre lieu n’a PAS bougé');
   assert.match(texte, /bonaventure/);
   assert.match(texte, /j-20260814-0001/, 'la commande dit quel lieu elle a retenu');
+  // ⚠️ L'en-tête « Orchestrateur « bonaventure » → …/j-20260814-0001 » contient DÉJÀ le code : le
+  // relevé de revue (retirer la phrase de traduction laissait ce test vert) exige donc la phrase.
+  assert.match(texte, /« bonaventure » est le nom inscrit dans le lieu « j-20260814-0001 »/, 'la traduction est DITE, pas seulement visible dans un chemin');
   assert.deepEqual(readdirSync(join(repo, '.orchestrateur')).sort(), ['j-20260814-0001', 'j-20260814-0002'], 'aucun lieu créé à côté');
 });
 
@@ -116,4 +122,21 @@ test('un nom qui traverse un répertoire reste refusé par la garde anti-évasio
   const { code, texte } = await lancer(['orchestrateur-update', '--nom', '../evil', '--source', payload(), '--target', repo]);
   assert.notEqual(code, 0);
   assert.match(texte, /segment de chemin/);
+});
+
+test('un lieu qui est un LIEN SYMBOLIQUE, désigné par son code, n’est pas refusé « ni code ni nom » (comme avant ce lot)', async () => {
+  const repo = tmp('smtk-riviere-lien-');
+  const reel = tmp('smtk-riviere-reel-');
+  mkdirSync(join(repo, '.orchestrateur'), { recursive: true });
+  symlinkSync(reel, join(repo, '.orchestrateur', 'j-20260814-0001'));
+  const { texte } = await lancer(['orchestrateur-update', '--nom', 'j-20260814-0001', '--source', payload(), '--target', repo]);
+  assert.doesNotMatch(texte, /inscrit dans aucun lieu/, 'le refus « ni code ni nom » serait faux : c’est le code d’un lieu');
+});
+
+test('un REPRÉSENTANT garde son refus d’avant — « jamais posé » — et n’est pas prié de donner « le code du mandat »', async () => {
+  const repo = tmp('smtk-riviere-rep-');
+  const { code, texte } = await lancer(['representant-update', '--client', 'acme', '--source', payload(), '--target', repo]);
+  assert.notEqual(code, 0);
+  assert.match(texte, /jamais été « posé »/);
+  assert.doesNotMatch(texte, /code du mandat|nom-agent/);
 });

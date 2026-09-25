@@ -56,7 +56,7 @@
 // et c'est à garder — un import vers `roles.js` casserait le miroir côté CLI.
 // ─────────────────────────────────────────────────────────────────────────────────────────
 
-import { readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -272,6 +272,13 @@ function lieuxPortantLeNom(depot, dossier, saisie, lireNomInscrit) {
 export function resoudreLieuParCodeOuNom(depot, dossier, saisie, lireNomInscrit, designe = 'nom') {
   const parCode = resoudreLieu(depot, dossier, saisie, designe);
   if (parCode.existe || parCode.ambigu) return { ...parCode, source: 'code', illisibles: [] };
+
+  // ⚠️ UN LIEU QUI EST UN LIEN SYMBOLIQUE EST UN LIEU. `resoudreLieu` ne retient que les
+  // répertoires (`isDirectory()` ne suit pas les liens — voir plus haut), donc `existe` reste
+  // faux pour lui ; l'appelant tranche sur son propre `existsSync`, qui les suit. Ici, sans
+  // ce garde, le code d'un tel lieu tomberait au balayage des noms, ne trouverait aucun porteur
+  // et serait refusé « ni code ni nom » — un refus FAUX, un code qui ne serait plus prioritaire.
+  if (existsSync(parCode.racine)) return { ...parCode, source: 'code', illisibles: [] };
 
   const { parent, porteurs, illisibles } = lieuxPortantLeNom(depot, dossier, saisie, lireNomInscrit);
   if (porteurs.length === 1) {

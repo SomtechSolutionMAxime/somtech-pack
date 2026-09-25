@@ -68,6 +68,22 @@ test('le nom d’un lieu existant est TRADUIT en son code : la commande le dit, 
   const r = naitre(e, 'bonaventure');
   assert.match(r.stdout, /« bonaventure » est le nom inscrit dans le lieu « j-20260814-0001 »/);
   assert.deepEqual(lieux(e), ['j-20260814-0001'], 'aucun lieu « bonaventure » ne doit naître : la traduction précède toute pose');
+  // ⚠️ CE QUI PROUVE QUE TOUT LE RESTE REÇOIT LE CODE (relevé en revue de fond : supprimer la
+  // ré-affectation de `nom` laissait ce test vert). Le refus de versement qui suit — le lieu n'est
+  // pas commité — nomme le lieu par son CHEMIN : c'est le premier consommateur en aval de `nom`.
+  assert.match(r.stderr, /\.orchestrateur\/j-20260814-0001/, 'l’aval doit viser le lieu par son CODE');
+  assert.doesNotMatch(r.stderr, /\.orchestrateur\/bonaventure/, 'l’aval ne doit jamais voir le nom de rivière comme un lieu');
+});
+
+test('un REPRÉSENTANT n’a pas de nom à retrouver : « rimouski » (une rivière ET un slug possible) garde le refus qui désigne /gestionnaire-client', () => {
+  const e = essai({});
+  const r = spawnSync(process.execPath, [BIN, 'rimouski', '--workspace', 'w9', '--role', 'representant', '--depot', e.depot], {
+    env: { ...process.env, PATH: `${e.bin}:${process.env.PATH}`, HERDR_SOCKET_PATH: '', NAISSANCE_ESSAIS: '1', NAISSANCE_DELAI_MS: '5' },
+  });
+  const err = String(r.stderr ?? '');
+  assert.equal(r.status, 1, err);
+  assert.match(err, /\/gestionnaire-client/, 'le geste qui lève le blocage doit rester désigné');
+  assert.doesNotMatch(err, /inscrit dans aucun lieu/, 'un client n’a pas de « .nom-agent » : ce refus-là ne le concerne pas');
 });
 
 test('le code du mandat, lui, ne dit rien de plus qu’avant', () => {

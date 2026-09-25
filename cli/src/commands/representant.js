@@ -30,7 +30,7 @@ import { resolvePayloadRoot } from '../modules.js';
 import { collectFiles, applyFiles } from '../engine.js';
 import {
   nomDeLieuValide, messageNomInvalide, messageLieuAmbigu, messageNomAmbigu, messageNomIntrouvable,
-  resoudreLieuParCodeOuNom,
+  resoudreLieu, resoudreLieuParCodeOuNom,
 } from '../lieu-nom.js';
 import { nomInscritDansLeLieu } from '../nom-inscrit.js';
 import { verifierFraicheur } from '../fraicheur-gabarit.js';
@@ -62,8 +62,8 @@ import { verifierFraicheur } from '../fraicheur-gabarit.js';
  * absent de l'autre rougit. Ajouter un rôle au registre sans l'ajouter ici n'est plus silencieux.
  */
 export const ROLES = {
-  representant: { gabarit: 'gestionnaire-client', dossier: '.gestionnaire', libelle: 'Représentant' },
-  orchestrateur: { gabarit: 'orchestrateur', dossier: '.orchestrateur', libelle: 'Orchestrateur' },
+  representant: { gabarit: 'gestionnaire-client', dossier: '.gestionnaire', libelle: 'Représentant', bapteme: 'code' },
+  orchestrateur: { gabarit: 'orchestrateur', dossier: '.orchestrateur', libelle: 'Orchestrateur', bapteme: 'riviere' },
 };
 
 /** Le lieu d'où le pack distribue les gabarits du représentant (module `core`). */
@@ -233,7 +233,13 @@ export async function cmdLieuUpdate(flags, roleNom) {
   // LE CODE D'ABORD, LE NOM ENSUITE (D-20260925-0002). Celui qui tape pense à l'agent
   // (`bonaventure`), le lieu porte le code du mandat : la commande lit le `.nom-agent` de chaque
   // lieu et fait la traduction. Un code qui désigne déjà un lieu se résout comme avant.
-  const lieu = resoudreLieuParCodeOuNom(depot, role.dossier, nom, nomInscritDansLeLieu, designe);
+  //
+  // ⚠️ SEUL UN RÔLE BAPTISÉ « RIVIÈRE » A UN NOM À RETROUVER (miroir de `bapteme` au registre,
+  // gardé par `registre-des-roles-miroir.test.js`). Un représentant garde son message d'avant :
+  // « n'a jamais été posé » — un client n'a ni mandat ni `.nom-agent`.
+  const lieu = role.bapteme === 'riviere'
+    ? resoudreLieuParCodeOuNom(depot, role.dossier, nom, nomInscritDansLeLieu, designe)
+    : { ...resoudreLieu(depot, role.dossier, nom, designe), source: 'code', illisibles: [] };
   if (lieu.ambigu) {
     throw new Error(lieu.source === 'nom'
       ? messageNomAmbigu(nom, resolve(lieu.parent), lieu.homonymes)

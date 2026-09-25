@@ -12,7 +12,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, chmodSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -193,4 +193,31 @@ test('naissance — un code neuf n’est PAS refusé parce qu’un AUTRE lieu es
   let r;
   try { r = saisir(racine, 'j-20260925-0007'); } finally { chmodSync(f, 0o600); }
   assert.equal(r.ok, true, 'un lieu illisible ne bloque pas la naissance d’un code qui n’a rien à voir avec lui');
+});
+
+test('naissance — un code est rendu avec SA casse, jamais normalisé (le lieu est posé en majuscules, tapé en majuscules)', () => {
+  const racine = depot({ 'J-20260814-0001': 'bonaventure' });
+  const r = saisir(racine, 'J-20260814-0001');
+  assert.equal(r.nom, 'J-20260814-0001');
+  const autre = saisir(racine, 'j-20260814-0001');
+  assert.equal(autre.nom, 'j-20260814-0001', 'tel que tapé, même quand le lieu porte une autre casse');
+});
+
+test('un lieu qui est un LIEN SYMBOLIQUE reste retrouvé par son code — le code est prioritaire pour lui aussi', () => {
+  const racine = depot({});
+  const reel = mkdtempSync(join(tmpdir(), 'nom-riviere-reel-'));
+  mkdirSync(join(racine, DOSSIER), { recursive: true });
+  symlinkSync(reel, join(racine, DOSSIER, 'j-20260814-0001'));
+  const r = resoudre(racine, 'j-20260814-0001');
+  assert.equal(r.source, 'code', 'refusé « ni code ni nom » serait FAUX : c’est le code d’un lieu');
+  assert.equal(r.racine, join(racine, DOSSIER, 'j-20260814-0001'));
+  assert.equal(saisir(racine, 'j-20260814-0001').ok, true);
+});
+
+test('un rôle que le registre ne baptise pas « rivière » ne traduit RIEN — le code est rendu tel que tapé, rivière ou non', () => {
+  const racine = mkdtempSync(join(tmpdir(), 'nom-riviere-rep-'));
+  const r = saisir(racine, 'rimouski', 'representant');
+  assert.equal(r.ok, true);
+  assert.equal(r.source, 'code');
+  assert.equal(r.nom, 'rimouski');
 });

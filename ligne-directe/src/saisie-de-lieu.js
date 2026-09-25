@@ -6,7 +6,7 @@
 // enseigne (`cli/test/lib/competences-de-pose.js` en relève le CODE, ligne à ligne) ; y mettre
 // des motifs de naissance ferait décrire à la compétence de pose des refus qu'elle ne rend jamais.
 
-import { role as roleDe } from './roles.js';
+import { role as roleDe, baptemeDuRole } from './roles.js';
 import {
   messageLieuAmbigu, messageNomAmbigu, messageNomIntrouvable, resoudreLieuParCodeOuNom,
 } from './lieu-nom.js';
@@ -34,6 +34,11 @@ import { nomInscritDansLeLieu, estUneRiviere } from './nom-de-riviere.js';
  *          | {ok: false, motif: 'ambigu'|'nom_introuvable', message: string, homonymes?: string[]}}
  */
 export function resoudreLaSaisieDeLieu({ depot, role, saisie }) {
+  // ⚠️ SEUL UN RÔLE QUE LE REGISTRE BAPTISE PAR UNE RIVIÈRE A UN NOM À RETROUVER. Un représentant
+  // porte le prénom de son client, pas un `.nom-agent` : lui appliquer la traduction ferait refuser
+  // « rimouski » (une rivière de la liste, et un slug de client possible) et perdrait le geste
+  // que son refus de pose désigne. Pour lui, la saisie reste ce qu'elle était : un code, tel que tapé.
+  if (baptemeDuRole(role) !== 'riviere') return { ok: true, nom: saisie, source: 'code', saisie };
   const r = roleDe(role);
   const lieu = resoudreLieuParCodeOuNom(depot, r.dossier, saisie, nomInscritDansLeLieu);
   if (lieu.ambigu) {
