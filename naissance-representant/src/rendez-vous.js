@@ -280,6 +280,62 @@ export function poserPlafond({ ms, quoi, ecrire, sortir, minuteur = setTimeout }
   return t;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// UNE SEULE SOURCE RÉVEILLE LES ORCHESTRATEURS (décision du dirigeant, 16 sept. 2026)
+//
+// Le registre des rondes du portail (`ca.somtech.rondes-portail`) pousse les rondes À UN NOM,
+// par affectation, et trace chaque poussée. Nos deux rendez-vous, eux, balaient TOUS les
+// orchestrateurs sans affectation ni trace. Posés à côté du registre, ils doublent ses rondes
+// par un texte que personne ne peut distinguer d'une poussée légitime.
+//
+// VÉCU (T-20260925-0068) : décharges le 16 sept., ils ont été réinstallés le 20 par une
+// session qui suivait la compétence `orchestrateur` à la lettre. Le texte est corrigé ; cette
+// garde protège aussi ceux qui lisent une copie plus vieille.
+//
+// ⚠️ LA COMMANDE N'EST PAS RETIRÉE : sur un poste SANS registre, elle reste le seul réveil
+// possible — c'est le défaut du 15 août, un orchestrateur sans un seul réveil pendant des
+// jours. Le refus est donc conditionnel, et un registre qu'on n'a pas pu mesurer REFUSE :
+// « je n'ai pas pu poser la question » n'est pas « il n'est pas là ».
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+/** L'étiquette `launchd` du registre des rondes du portail. */
+export const ETIQUETTE_REGISTRE = 'ca.somtech.rondes-portail';
+
+/**
+ * Lit la réponse de `launchctl print gui/<uid>/ca.somtech.rondes-portail`.
+ *
+ * Mesuré le 2026-09-25 : chargé → code 0 ; absent → code 113 et « Could not find service ».
+ * Seule cette phrase établit une absence. Tout autre échec est une panne de la mesure.
+ */
+export function etatDuRegistre(reponse) {
+  if (reponse?.ok) return { mesure: true, charge: true };
+  if (!reponse?.outilIntrouvable && /Could not find service/.test(reponse?.sortie || '')) {
+    return { mesure: true, charge: false };
+  }
+  return { mesure: false, charge: null, motif: reponse?.sortie || 'aucune réponse de launchctl' };
+}
+
+/** Peut-on poser nos deux rendez-vous, vu l'état du registre ? */
+export function verdictDInstallation(etat) {
+  if (etat?.mesure && etat.charge === false) return { autorise: true };
+  if (etat?.mesure && etat.charge) {
+    return {
+      autorise: false,
+      motif:
+        `le registre des rondes du portail (${ETIQUETTE_REGISTRE}) tourne sur ce poste : c'est lui qui ` +
+        `réveille les orchestrateurs, par affectation et avec trace. Poser ces rendez-vous doublerait ` +
+        `ses rondes sans trace. Un orchestrateur sans réveil s'AFFECTE au registre — il ne s'installe pas.`,
+    };
+  }
+  return {
+    autorise: false,
+    motif:
+      `je n'ai pas pu mesurer si le registre des rondes du portail (${ETIQUETTE_REGISTRE}) tourne ` +
+      `(${etat?.motif || 'motif inconnu'}). Dans le doute, rien n'est posé : ` +
+      `un doublon de réveils ne se voit pas plus qu'une absence.`,
+  };
+}
+
 /** Le chemin du descripteur d'un rendez-vous, dans les agents de session du poste. */
 export function cheminPlist(nom) {
   return join(homedir(), 'Library', 'LaunchAgents', `${rendezVous(nom).etiquette}.plist`);

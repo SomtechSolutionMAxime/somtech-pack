@@ -5,6 +5,22 @@ Toutes les modifications notables de ce projet sont documentées dans ce fichier
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Le pack suit le versioning [SemVer](https://semver.org/lang/fr/) — la version est exposée dans `pack.json` et figée par un tag git `v<MAJOR>.<MINOR>.<PATCH>` à chaque livraison.
 
+## [Non-versionne] - 2026-09-25
+
+*Livraison `J-20260814-0002`, coordonnateur `batiscan` — mandat `T-20260925-0081` (lot 1 : `T-20260925-0068`). Cette entrée couvre aussi `#380` et `#381`, fusionnées le même jour sans entrée.*
+
+### Corrige
+
+- **La compétence `orchestrateur` ne prescrit plus d'installer les deux lanceurs `launchd` du pack (`ca.somtech.orchestrateur-ronde` / `-topo`), et `rendez-vous.js service installer` REFUSE quand le registre des rondes du portail (`ca.somtech.rondes-portail`) est chargé** (`T-20260925-0068`). Le 16 sept., le dirigeant a décidé qu'une seule source réveille les orchestrateurs — le registre, par affectation et avec trace. Le 20 sept., une session qui suivait la compétence à la lettre a réinstallé les deux lanceurs, qui ont poussé des textes de rondes aux treize orchestrateurs sans affectation ni trace (deux faux réveils mesurés, dont un topo déjà fait). La section de la compétence prescrit désormais de **vérifier l'affectation** du nouvel orchestrateur au registre, et de le signaler au dirigeant s'il n'en a aucune — retirer l'instruction sans la remplacer aurait rejoué le défaut du 15 août (un orchestrateur sans un seul réveil ; deux sur treize n'avaient aucune affectation le 25 sept.). La commande reste disponible sur un poste **sans** registre ; un registre qu'on n'a pas pu mesurer refuse (« je n'ai pas pu poser la question » n'est pas « il n'est pas là »). Témoin dans les deux sens (`naissance-representant/tests/rendez-vous-sous-registre.test.js`) : registre chargé → refus au nom du registre ; absent → la garde laisse passer ; non mesuré ou double non déclaré → refus ; et aucun texte lu par un agent (compétences, gabarits, commandes, métier) ne prescrit plus l'invocation.
+
+### Ajoute
+
+- **`#380` — le nom de rivière résout le lieu là où le code du mandat était exigé** (`D-20260925-0002` · `T-20260925-0048`). `orchestrateur-update` et `naitre` acceptent le nom inscrit dans `.nom-agent` ; le code du mandat reste prioritaire, la pose n'est pas touchée. Deux lieux du même nom ou aucun : refus qui nomme ; un `.nom-agent` illisible ne conclut rien.
+
+### Documente
+
+- **`#381` — `/episodique` marqué « écriture gelée » dans le tableau des outils du métier de l'orchestrateur** (`T-20260923-0012`, lot 3). L'écriture est gelée sur `STD-045` §2.7.2 (encoder une session communique son contenu hors Québec) ; ni le rappel ni le gate de promotion ne sont touchés. Banc du métier re-baseliné 182 520 → 182 576, marge zéro.
+
 ## [Non-versionne] - 2026-09-22
 
 *Ticket `T-20260922-0135` (`D-20260921-0016` Q2b, coordonnateur `batiscan`, `J-20260814-0002`).*

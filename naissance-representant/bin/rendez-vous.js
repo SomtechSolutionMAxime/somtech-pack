@@ -34,6 +34,9 @@ import {
   construirePlist,
   poserPlafond,
   RENDEZ_VOUS,
+  ETIQUETTE_REGISTRE,
+  etatDuRegistre,
+  verdictDInstallation,
 } from '../src/rendez-vous.js';
 // ⚠️ LE LECTEUR D'ÉTAT DE MANDAT EXISTE DÉJÀ, ET LE RECENSEMENT S'EN SERT (T-20260819-0056).
 // On l'importe ; on n'en écrit pas un second. L'accord des deux verdicts a été mesuré sur les
@@ -223,6 +226,27 @@ async function launchctl(args) {
 }
 
 /**
+ * L'état du registre des rondes du portail sur ce poste.
+ *
+ * ⚠️ SOUS LE LANCEUR DE TESTS, LE REGISTRE NE SE LIT QUE DANS `RENDEZ_VOUS_REGISTRE_ESSAIS`
+ * (`charge` | `absent` | autre = panne de mesure), jamais dans le vrai `launchctl` : un essai
+ * dépendrait du poste qui le joue — vert chez l'auteur, rouge en CI, qui n'a pas `launchd`.
+ * Et le double n'est pas plus indulgent que le réel : ABSENT de l'environnement, il rend
+ * « non mesuré », donc un refus.
+ */
+async function mesurerLeRegistre() {
+  if (enEssais()) {
+    const double = process.env.RENDEZ_VOUS_REGISTRE_ESSAIS;
+    if (double === 'charge') return etatDuRegistre({ ok: true, outilIntrouvable: false, sortie: '' });
+    if (double === 'absent') {
+      return etatDuRegistre({ ok: false, outilIntrouvable: false, sortie: `Could not find service "${ETIQUETTE_REGISTRE}"` });
+    }
+    return etatDuRegistre({ ok: false, outilIntrouvable: false, sortie: `double d'essais : ${double ?? 'non déclaré'}` });
+  }
+  return etatDuRegistre(await launchctl(['print', `gui/${process.getuid()}/${ETIQUETTE_REGISTRE}`]));
+}
+
+/**
  * Pose les deux agents de session.
  *
  * MÊME CLOISON QUE `ligne-directe/src/service.js`, et pour un motif plus direct encore : un
@@ -232,6 +256,11 @@ async function launchctl(args) {
  * cette porte que deux veilleurs orphelins sont nés.
  */
 async function installerService() {
+  // LA GARDE DU REGISTRE PASSE AVANT LA CLOISON (T-20260925-0068) : c'est elle que les essais
+  // éprouvent dans les deux sens, et un refus de cloison la masquerait.
+  const registre = await mesurerLeRegistre();
+  const verdict = verdictDInstallation(registre);
+  if (!verdict.autorise) return { ok: false, refusRegistre: true, erreur: verdict.motif };
   if (enEssais()) {
     refuser(
       "l'installation des rendez-vous de l'orchestrateur",
