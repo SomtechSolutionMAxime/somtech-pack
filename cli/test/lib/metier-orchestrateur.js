@@ -4097,6 +4097,54 @@ export const CONTROLES = [
     },
   },
 
+  // ═══ D-20260925-0003 — deux règles de la volubilité, chacune ANCRÉE À SA SECTION et sur la
+  // PHRASE ENTIÈRE : des mots isolés seraient satisfaits par autre chose (« guichet » figure aussi
+  // au chapitre du sous-traitant). Chaque phrase est extraite, puis éprouvée sur ses DEUX moitiés.
+  {
+    id: 'une-question-au-dirigeant-est-une-decision',
+    quoi: 'une question au dirigeant est une décision — deux options au plus, une recommandation — et toute autre question va au chef d’équipe ou se mesure',
+    verifier({ metier }) {
+      const s = sectionDe(metier, /Ce que tu fais monter, et ce que tu tranches/i, 'sur ce qui monte au dirigeant');
+      const q = s.corps.split('\n').filter((l) => /Une question au dirigeant est une décision/i.test(l));
+      assert.equal(q.length, 1, `« une question au dirigeant est une décision » doit être énoncée une fois exactement (${q.length})`);
+      exigeContrainte(q[0], 'une question au dirigeant est une décision');
+      assert.match(q[0], /deux options au plus/i, 'la décision perd sa borne : deux options au plus');
+      assert.match(q[0], /ta recommandation/i, 'la décision perd sa recommandation : une question nue fait de toi un guichet');
+      assert.match(q[0], /échéance/i, 'la décision perd son échéance : une remontée sans date est une permission de se taire');
+      const r = s.corps.split('\n').filter((l) => /Toute autre question/i.test(l));
+      assert.equal(r.length, 1, `« toute autre question » doit être énoncée une fois exactement (${r.length})`);
+      assert.match(r[0], /va au chef d'équipe, ou se mesure/i, 'le reste ne va plus au chef d’équipe ni ne se mesure : où va-t-il ?');
+      assert.match(r[0], /jamais au dirigeant/i, 'la phrase ne dit plus que le reste ne monte JAMAIS au dirigeant');
+      exigePolarite(
+        s.corps, /Toute autre question va au chef d'équipe, ou se mesure/i,
+        'toute autre question va au chef d’équipe ou se mesure, jamais au dirigeant',
+        { inverse: /va aussi au dirigeant|ni au chef ni mesur|peut aller au dirigeant/i },
+      );
+    },
+  },
+
+  {
+    id: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    quoi: 'le LU est obligatoire et n’est JAMAIS un message à lui : il part avec le premier fait utile, en première ligne',
+    verifier({ metier }) {
+      const s = sectionDe(metier, /Accuser LU/i, 'sur l’accusé de réception');
+      const a = s.corps.split('\n').filter((l) => /Aucun accusé seul/i.test(l));
+      assert.equal(a.length, 1, `« aucun accusé seul » doit être énoncé une fois exactement (${a.length})`);
+      exigeContrainte(a[0], 'aucun accusé seul');
+      assert.match(a[0], /n'est jamais un message à lui/i, 'la phrase ne dit plus que le LU n’est jamais un message à lui');
+      assert.match(a[0], /PREMIER fait utile/i, 'la phrase ne dit plus AVEC QUOI part le LU : le premier fait utile');
+      assert.match(a[0], /jamais seul, jamais après vingt minutes/i, 'la phrase perd ses deux bornes : ni seul, ni tardif');
+      const p = s.corps.split('\n').filter((l) => /en est la première ligne/i.test(l));
+      assert.equal(p.length, 1, `« le LU en est la première ligne » doit être énoncé une fois exactement (${p.length})`);
+      assert.match(p[0], /jamais la dernière/i, 'la première ligne ne dit plus « jamais la dernière »');
+      exigePolarite(
+        s.corps, /Aucun accusé seul/i,
+        'aucun accusé seul : le LU est la première ligne du message qui porte le fait',
+        { inverse: /peut être un message à lui|n'est pas exigé|accusé seul est permis/i },
+      );
+    },
+  },
+
   {
     id: 'une-regle-vaut-pour-sa-fonction',
     quoi: 'le métier dit comment il se lit — une règle vaut pour la fonction qu’elle sert, pas pour le geste où elle est écrite — ET l’extension est bornée',
@@ -6282,6 +6330,72 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       " **C'est donc une surface de sa parole comme la ligne** — des faits, et `J'ai besoin de toi : …` en dernière ligne quand le compte rendu attend quelque chose de lui.",
       '',
+    ),
+  },
+
+  {
+    id: 'la-question-devient-libre',
+    quoi: 'la question au dirigeant perd sa forme de décision — plus de borne, plus de recommandation : l’orchestrateur redevient un guichet',
+    cible: 'une-question-au-dirigeant-est-une-decision',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**Une question au dirigeant est une décision** : les faits qui décident, **deux options au plus**, ta recommandation, une échéance.',
+      '**Une question au dirigeant est une décision** : les faits qui décident, autant d’options que tu veux, une échéance.',
+    ),
+  },
+
+  {
+    id: 'le-reste-monte-aussi-au-dirigeant',
+    quoi: 'mutation du réviseur — « toute autre question va aussi au dirigeant, ni au chef ni mesurée » : la garde contre le guichet est retournée',
+    cible: 'une-question-au-dirigeant-est-une-decision',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Toute autre question va au chef d'équipe, ou se mesure** — jamais au dirigeant.",
+      '**Toute autre question va aussi au dirigeant, ni au chef ni mesurée.**',
+    ),
+  },
+
+  {
+    id: 'le-reste-perd-sa-destination',
+    quoi: 'la phrase « toute autre question » est vidée de sa destination : elle reste, et ne dit plus où va le reste',
+    cible: 'une-question-au-dirigeant-est-une-decision',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Toute autre question va au chef d'équipe, ou se mesure** — jamais au dirigeant.",
+      '**Toute autre question est ton affaire.**',
+    ),
+  },
+
+  {
+    id: 'le-lu-peut-etre-un-message-a-lui',
+    quoi: 'mutation du réviseur — « Aucun accusé seul n’est exigé : le LU peut être un message à lui » : l’accusé seul redevient permis',
+    cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Aucun accusé seul** : le `LU` n'est jamais un message à lui. Il part avec le PREMIER fait utile — « LU — je commence X », « LU — état : … » —, jamais seul, jamais après vingt minutes.",
+      "**Aucun accusé seul n'est exigé** : le `LU` peut être un message à lui.",
+    ),
+  },
+
+  {
+    id: 'le-lu-perd-son-premier-fait',
+    quoi: 'l’accusé garde son « jamais seul » et perd AVEC QUOI il part — le silence de vingt minutes redevient possible',
+    cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      " Il part avec le PREMIER fait utile — « LU — je commence X », « LU — état : … » —, jamais seul, jamais après vingt minutes.",
+      '',
+    ),
+  },
+
+  {
+    id: 'le-lu-passe-en-derniere-ligne',
+    quoi: 'le LU devient la dernière ligne du message qui porte le fait — il n’accuse plus rien à la lecture',
+    cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      '**le `LU` en est la première ligne**, jamais la dernière.',
+      '**le `LU` en est la dernière ligne**.',
     ),
   },
 

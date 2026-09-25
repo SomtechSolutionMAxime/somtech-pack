@@ -98,8 +98,8 @@
   {
     "id": "entre-accuse-sec-et-fait",
     "quoi": "précision de vocabulaire (arrive vingt minutes plus tard → n'arrive que vingt minutes plus tard) qui garde le sens entier",
-    "avant": "**Entre un accusé sec et un `FAIT` qui arrive vingt minutes plus tard, il y a un silence** — et ce silence ressemble trait pour trait à un agent mort.",
-    "apres": "**Entre un accusé sec et un `FAIT` qui n'arrive que vingt minutes plus tard, il y a un silence** — et ce silence ressemble trait pour trait à un agent mort."
+    "avant": "**Entre ton message reçu et un `FAIT` qui arrive vingt minutes plus tard, il y a un silence** — et ce silence ressemble trait pour trait à un agent mort.",
+    "apres": "**Entre ton message reçu et un `FAIT` qui n'arrive que vingt minutes plus tard, il y a un silence** — et ce silence ressemble trait pour trait à un agent mort."
   },
   {
     "id": "calcul-pas-intuitif",

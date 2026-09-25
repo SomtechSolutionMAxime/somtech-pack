@@ -1542,28 +1542,35 @@ if [ -n "$S_DER" ] \
    && ! grep -qF 'rien.` compris' "$METIER" \
    && ! grep -qF 'tout message**, et le `rien`' "$METIER" \
    && ! grep -qi 'Le `rien` s.écrit' "$METIER" \
-   && ! grep -qF 'de **chaque** message, `rien.`' "$METIER"; then
+   && ! grep -qF 'de **chaque** message, `rien.`' "$METIER" \
+   && ! grep -qF '0 message sans sa dernière ligne' "$METIER" \
+   && ! grep -qF 'sa dernière ligne, comme tout message' "$METIER" \
+   && ! grep -qF '`rien` s'"'"'écrit' "$METIER" \
+   && ! grep -qF 'la dernière ligne obligatoire' "$RACINE/metier/orchestrateur/classement.json"; then
   ok "12a — plus aucun chapitre n'exige « J'ai besoin de toi : rien. » sur tout message"
 else
   ko "12a — un chapitre exige encore la ligne (ou son « rien ») sur tout message : contradiction avec la règle"
 fi
 
 # ── (b) Une question au dirigeant est une DÉCISION ; le reste va au chef ou se mesure.
+# ⚠️ Assertion sur la PHRASE ENTIÈRE, ancrée à sa section : des mots isolés (« guichet »
+# figure aussi ailleurs, au chapitre du sous-traitant) seraient satisfaits par autre chose.
 S_MONTE="$(section 'Ce que tu fais monter')"
-if printf '%s' "$S_MONTE" | grep -qi 'deux options' \
-   && printf '%s' "$S_MONTE" | grep -qi 'recommandation' \
-   && printf '%s' "$S_MONTE" | grep -qi 'question au dirigeant est une décision'; then
-  ok "12b — une question au dirigeant est une décision : deux options au plus, une recommandation"
+if printf '%s' "$S_MONTE" | grep -qF "**Une question au dirigeant est une décision** : les faits qui décident, **deux options au plus**, ta recommandation, une échéance."; then
+  ok "12b — une question au dirigeant est une décision : faits, deux options au plus, recommandation, échéance (phrase entière)"
 else
-  ko "12b — la section n'établit pas qu'une question au dirigeant est une décision à deux options et une recommandation"
+  ko "12b — la phrase « une question au dirigeant est une décision… deux options au plus, ta recommandation » n'est plus entière dans sa section"
 fi
-if printf '%s' "$S_MONTE" | grep -qi 'toute autre question' \
-   && printf '%s' "$S_MONTE" | grep -qi 'va au chef' \
-   && printf '%s' "$S_MONTE" | grep -qi 'se mesure' \
-   && printf '%s' "$S_MONTE" | grep -qi 'guichet'; then
-  ok "12b — toute autre question va au chef ou se mesure : la garde contre le guichet est écrite"
+if printf '%s' "$S_MONTE" | grep -qF "**Toute autre question va au chef d'équipe, ou se mesure** — jamais au dirigeant." \
+   && ! printf '%s' "$S_MONTE" | grep -qiE "va aussi au dirigeant|ni au chef ni mesur"; then
+  ok "12b — toute autre question va au chef d'équipe ou se mesure, jamais au dirigeant (phrase entière, contraire absent)"
 else
-  ko "12b — rien ne dit où va une question qui n'est pas une décision : l'orchestrateur reste un guichet"
+  ko "12b — la phrase « toute autre question va au chef d'équipe, ou se mesure — jamais au dirigeant » n'est plus entière, ou son contraire est écrit : l'orchestrateur redevient un guichet"
+fi
+if printf '%s' "$S_MONTE" | grep -qF "une question rendue nue fait de toi un guichet"; then
+  ok "12b — la garde contre le guichet reste écrite dans cette section"
+else
+  ko "12b — le motif « une question rendue nue fait de toi un guichet » a quitté sa section"
 fi
 
 # ── (c) Aucun identifiant technique sur la ligne.
@@ -1581,17 +1588,27 @@ else
   ko "12c — la section recommande encore de donner l'identifiant de pane au dirigeant"
 fi
 
-# ── (d) Le LU est la PREMIÈRE LIGNE du message qui porte le fait, jamais un message à lui.
-if printf '%s' "$S_LU" | grep -qi 'aucun accusé seul' \
-   && printf '%s' "$S_LU" | grep -qi 'première ligne'; then
-  ok "12d — le LU est la première ligne du message qui porte le fait : aucun accusé seul"
+# ── (d) Le LU part avec le PREMIER fait utile : jamais seul, jamais un message à lui.
+S_LU="$(section 'Accuser LU')"
+if printf '%s' "$S_LU" | grep -qF "**Aucun accusé seul** : le \`LU\` n'est jamais un message à lui. Il part avec le PREMIER fait utile — « LU — je commence X », « LU — état : … » —, jamais seul, jamais après vingt minutes." \
+   && ! printf '%s' "$S_LU" | grep -qiE "peut être un message à lui|n'est pas exigé"; then
+  ok "12d — aucun accusé seul : le LU part avec le premier fait utile (phrase entière, contraire absent)"
 else
-  ko "12d — « aucun accusé seul » n'est pas écrit : le LU envoyé comme message à part reste permis"
+  ko "12d — la phrase « aucun accusé seul… premier fait utile » n'est plus entière, ou son contraire est écrit : le LU redevient un message à lui"
 fi
-if printf '%s' "$S_LU" | grep -qi 'deux agents' && printf '%s' "$S_LU" | grep -qi 'obligatoire\|obligation'; then
-  ok "12d — le LU reste obligatoire, et son motif (deux agents gelés) reste"
+if printf '%s' "$S_LU" | grep -qF "le \`LU\` en est la première ligne" \
+   && printf '%s' "$S_LU" | grep -qF "deux agents ont été réellement gelés"; then
+  ok "12d — le LU est la première ligne du message qui porte le fait, et son motif (deux agents gelés) reste"
 else
-  ko "12d — le LU n'est plus obligatoire ou son motif a disparu : on a abrogé au lieu de préciser"
+  ko "12d — « le LU en est la première ligne » ou son motif (deux agents gelés) a disparu : on a abrogé au lieu de préciser"
+fi
+
+# ── (e) « attend quelque chose » couvre le geste à poser ; dans le doute on écrit la ligne.
+if printf '%s' "$S_DER" | grep -qF "**« Attend quelque chose » couvre aussi un geste à poser**" \
+   && printf '%s' "$S_DER" | grep -qF "**Dans le doute, écris la ligne** : l'oubli est la faute grave, la ligne en trop le moindre mal."; then
+  ok "12e — « attend quelque chose » couvre un geste à poser, et dans le doute on écrit la ligne"
+else
+  ko "12e — l'ambiguïté de l'oubli est rouverte : rien ne dit qu'un geste à poser compte, ni que dans le doute on écrit la ligne"
 fi
 
 echo
