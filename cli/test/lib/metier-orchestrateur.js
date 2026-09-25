@@ -4268,7 +4268,7 @@ export const CONTROLES = [
       // avancement » interdit de se déclarer bloqué, « toujours un arbitrage » dispense
       // d'avancer.
       exigePolarite(
-        s.corps, /un avancement visible de la livraison[\s\S]{0,120}ou un blocage nommé/i,
+        s.corps, /un avancement visible de la livraison[\s\S]{0,120}ou un NOUVEAU blocage nommé/i,
         'les deux sorties d’un tour — l’avancement visible, ou le blocage nommé avec sa décision',
       );
       // La conduite devant une découverte hors chantier, avec sa borne : inscrire N'EST PAS

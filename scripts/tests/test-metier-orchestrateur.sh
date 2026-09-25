@@ -1807,6 +1807,7 @@ S_ROND1="$(section 'Tes agents et le travail qui tourne')"
 if printf '%s' "$S_ROND1" | grep -qF "un tour vide se termine sans message." \
    && printf '%s' "$S_ROND1" | grep -qF "n'est pas re-posée à chaque tour : ré-adresse-la au plus une fois par échéance annoncée, ou sur un delta." \
    && printf '%s' "$S_ROND1" | grep -qF "Un tour qui trouve quelque chose se termine sur l'un des deux" \
+   && printf '%s' "$S_ROND1" | grep -qF "ou un NOUVEAU blocage nommé" \
    && ! printf '%s' "$S_ROND1" | grep -qF "Chaque tour se termine sur"; then
   ok "15b — rondes : un tour vide se termine sans message, et une question sans réponse n'est pas re-posée à chaque tour"
 else
@@ -1814,12 +1815,13 @@ else
 fi
 
 # ── 6e revue : geste à poser sans échéance, LU rattrapé sans merci, forme, compte de torts.
-if printf '%s' "$S_ROND1" | grep -qF "Un geste à poser sans échéance (pane gelé, login) se repose UNE FOIS, puis seulement sur un delta (l'écran ou l'état a changé) ou, s'il bloque toujours, au plus UNE FOIS PAR HEURE — jamais à chaque tour ; « l'heure de la prochaine relance » tient lieu d'échéance." \
+if printf '%s' "$S_ROND1" | grep -qF "Un geste à poser sans échéance (pane gelé, login) se repose UNE FOIS, puis seulement sur un delta de nature (l'écran ou l'état a changé — pas un compteur qui varie) ou, s'il bloque toujours, au plus UNE FOIS PAR HEURE et par message, tous les gestes en attente groupés — jamais à chaque tour ; « l'heure de la prochaine relance » tient lieu d'échéance." \
    && printf '%s' "$S_ROND1" | grep -qiF "une fois par heure" \
-   && ! printf '%s' "$S_ROND1" | grep -qiE "à chaque rappel de la ronde|repose-le à chaque tour|Jamais : un geste"; then
+   && printf '%s' "$S_ROND1" | grep -qF "et par message, tous les gestes en attente groupés" \
+   && ! printf '%s' "$S_ROND1" | grep -qiE "à chaque rappel de la ronde|repose-le à chaque tour|Jamais : un geste|par geste"; then
   ok "16a — rondes : un geste à poser sans échéance se repose UNE FOIS, puis sur un delta ou au plus une fois par heure, jamais à chaque tour"
 else
-  ko "16a — rondes : la borne du geste sans échéance (une fois, puis delta ou une fois par heure) a disparu, ou « à chaque rappel / à chaque tour » est revenu"
+  ko "16a — rondes : la borne du geste sans échéance (une fois, puis delta ou une fois par heure) a disparu (« par message, groupés » compris), ou « à chaque rappel / à chaque tour / par geste » est revenu"
 fi
 if printf '%s' "$S_RATT" | grep -qF "appelle son \`LU\` MAINTENANT** (sauf un simple merci, ou un message auquel tu as déjà répondu)" \
    && printf '%s' "$S_LU" | grep -qF "Il exclut un simple merci et un message auquel tu as déjà répondu (la réponse prouve la réception)."; then
