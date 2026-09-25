@@ -132,7 +132,8 @@ Commandes :
   agent    Fait naître un agent, du néant jusqu'à ce qu'il parle sur sa ligne :
            agent naitre <code> --depot <chemin> [--role …] [--modele …] [--amorce …]
            Un ORCHESTRATEUR reçoit un nom de RIVIÈRE, attribué à la naissance sans
-           que personne n'ait à le demander ; son LIEU garde le code du mandat. Un
+           que personne n'ait à le demander ; son LIEU garde le code du mandat — et
+           <code> accepte aussi ce nom de rivière, pour un lieu déjà posé. Un
            chef d'équipe, lui, porte le code de son mandat. --nom-agent <nom> passe
            outre l'attribution, et un nom hors convention est refusé sans rien créer.
            Elle pose le lieu s'il manque, le VERSE au dépôt, ouvre l'espace au besoin,
@@ -150,6 +151,9 @@ Commandes :
            JAMAIS touché. Sa portée écrite est ce qui empêche deux orchestrateurs d'un
            même dépôt de se marcher dessus.
            --nom <nom>  (obligatoire) — ${REGLE_NOM_DE_LIEU}
+           Accepte aussi le NOM DE RIVIÈRE de l'agent (celui que porte le « .nom-agent »
+           du lieu) : la commande retrouve le lieu et DIT lequel. Le code du mandat
+           reste prioritaire ; deux lieux au même nom, ou aucun, sont refusés en le disant.
 
 Modèle vivant (STD-031 §2.7 — récolte du manifeste architecture.yaml, gate CI) :
   harvest-supabase --discover <racine> --app <slug>  Grain tables + FK + descriptions (SQL du dépôt)

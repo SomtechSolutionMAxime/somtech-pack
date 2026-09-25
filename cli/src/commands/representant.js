@@ -28,7 +28,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { resolvePayloadRoot } from '../modules.js';
 import { collectFiles, applyFiles } from '../engine.js';
-import { nomDeLieuValide, messageNomInvalide, messageLieuAmbigu, resoudreLieu } from '../lieu-nom.js';
+import {
+  nomDeLieuValide, messageNomInvalide, messageLieuAmbigu, messageNomAmbigu, messageNomIntrouvable,
+  resoudreLieuParCodeOuNom,
+} from '../lieu-nom.js';
+import { nomInscritDansLeLieu } from '../nom-inscrit.js';
 import { verifierFraicheur } from '../fraicheur-gabarit.js';
 
 /**
@@ -225,8 +229,25 @@ export async function cmdLieuUpdate(flags, roleNom) {
   // en silence, ailleurs la commande aurait échoué (ou, pire, posé sa cible à côté du vrai).
   // C'est la MÊME résolution que la pose applique, au même texte : `src/lieu-nom.js`.
   const depot = flags.target || process.cwd();
-  const lieu = resoudreLieu(depot, role.dossier, nom, designe);
-  if (lieu.ambigu) throw new Error(messageLieuAmbigu(nom, resolve(lieu.parent), lieu.homonymes));
+  //
+  // LE CODE D'ABORD, LE NOM ENSUITE (D-20260925-0002). Celui qui tape pense à l'agent
+  // (`bonaventure`), le lieu porte le code du mandat : la commande lit le `.nom-agent` de chaque
+  // lieu et fait la traduction. Un code qui désigne déjà un lieu se résout comme avant.
+  const lieu = resoudreLieuParCodeOuNom(depot, role.dossier, nom, nomInscritDansLeLieu, designe);
+  if (lieu.ambigu) {
+    throw new Error(lieu.source === 'nom'
+      ? messageNomAmbigu(nom, resolve(lieu.parent), lieu.homonymes)
+      : messageLieuAmbigu(nom, resolve(lieu.parent), lieu.homonymes));
+  }
+  if (!lieu.existe && lieu.source === 'nom') {
+    // ⚠️ « n'existe pas » serait FAUX ici : `nom` n'a peut-être jamais été un code. On dit ce
+    // qu'on a mesuré — ni code, ni nom inscrit — et, si des lieux étaient illisibles, qu'on n'en
+    // conclut rien.
+    throw new Error(
+      `${messageNomIntrouvable(nom, resolve(lieu.parent), lieu.illisibles)} `
+        + `Cette commande met à jour un lieu existant, elle n'en pose aucun.`
+    );
+  }
 
   const target = resolve(lieu.racine);
   if (!existsSync(target)) {
@@ -321,7 +342,8 @@ export async function cmdLieuUpdate(flags, roleNom) {
   // Le lieu réel ne porte pas la casse demandée : on le DIT. Le taire, c'est laisser croire
   // qu'on a visé « francois » alors qu'on a écrit dans « Francois » — la confusion exacte que
   // macOS entretenait en silence.
-  if (!lieu.exact) console.log(`  ↳ lieu trouvé sous le nom « ${lieu.nom} » (la casse diffère de « ${nom} »)`);
+  if (lieu.source === 'nom') console.log(`  ↳ « ${nom} » est le nom inscrit dans le lieu « ${lieu.nom} » — c'est lui qui est mis à jour`);
+  else if (!lieu.exact) console.log(`  ↳ lieu trouvé sous le nom « ${lieu.nom} » (la casse diffère de « ${nom} »)`);
   if (report.created.length) console.log(`  créés : ${report.created.join(', ')}`);
   if (report.updated.length) console.log(`  ${converged} : ${report.updated.join(', ')}`);
   if (report.unchanged.length) console.log(`  inchangés : ${report.unchanged.length}`);

@@ -305,6 +305,13 @@ test('un lieu ABSENT reste un lieu absent — la fraîcheur ne coiffe pas ce ref
     console.error = avant;
   }
 
-  assert.match(erreurs.join('\n'), /n’a jamais été|n'a jamais été/, 'le refus rendu n’est pas celui du lieu absent');
+  // D-20260925-0002 : la désignation peut être un NOM de rivière, donc « ce lieu n'a jamais été
+  // posé » serait un diagnostic FAUX (le lieu existe peut-être sous son code). Le refus dit ce
+  // qui est mesuré — ni code, ni nom inscrit — et garde la phrase qui compte ici : la commande
+  // ne pose aucun lieu. Ce n'est toujours pas un refus de fraîcheur.
+  const refus = erreurs.join('\n');
+  assert.match(refus, /inscrit dans aucun lieu/, 'le refus rendu n’est pas celui du lieu absent');
+  assert.match(refus, /n['’]en pose aucun/, 'la commande doit dire qu’elle ne pose aucun lieu');
+  assert.doesNotMatch(refus, /périmé|fraîcheur|pack du poste/i, 'ce refus-là n’est pas celui de la fraîcheur');
   assert.equal(existsSync(join(repo, REGISTRE[TEMOIN].dossier, 'acme')), false, 'un lieu a été créé par une commande qui n’en pose aucun');
 });
