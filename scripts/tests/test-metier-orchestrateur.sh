@@ -1654,6 +1654,83 @@ else
   ko "12e — l'ambiguïté de l'oubli est rouverte : rien ne dit qu'un geste à poser compte, ni que dans le doute on écrit la ligne"
 fi
 
+# ═══════════════════════════════════════════════════════════════════════════
+# ⑬ Les SKILLS répètent la règle (ligne-directe, orchestrer-chantier) — D-20260925-0003.
+#    Le métier était gardé, pas les skills : ils ont gardé « rien » et « lui appartient »
+#    jusqu'à une revue. Assertions sur PHRASES ENTIÈRES, ancrées à la section du skill.
+# ═══════════════════════════════════════════════════════════════════════════
+echo "⑬ les skills disent la même règle que le métier"
+section_f() {  # section_f <fichier> <motif-de-titre>
+  awk -v motif="$2" '
+    /^#+ / {
+      n = 0; while (substr($0, n+1, 1) == "#") n++
+      if (dedans && n <= niv_ouvert) { dedans = 0 }
+      if (!dedans && index($0, motif) > 0) { dedans = 1; niv_ouvert = n; next }
+    }
+    dedans { print }
+  ' "$1"
+}
+SK_LD="$RACINE/.claude/skills/ligne-directe/SKILL.md"
+SK_OC="$RACINE/.claude/skills/orchestrer-chantier/SKILL.md"
+S_TON="$(section_f "$SK_LD" 'Le ton')"
+S_TENIR="$(section_f "$SK_OC" 'Tenir le ServiceDesk')"
+S_CLORE="$(section_f "$SK_OC" 'Clore')"
+
+# S1 — le geste à poser compte, dans les deux skills.
+if printf '%s' "$S_TON" | grep -qF "une décision, ou un geste à poser (pane gelé, login, dialogue à trancher)" \
+   && printf '%s' "$S_TENIR" | grep -qF "une décision, ou un geste à poser (jamais un \`rien.\` de remplissage)"; then
+  ok "13a — ligne-directe et orchestrer-chantier : « attend quelque chose » couvre le geste à poser"
+else
+  ko "13a — un skill ne dit plus que le geste à poser (pane gelé, login, dialogue) compte comme « attend quelque chose »"
+fi
+# S3 — toute autre question va au chef d'équipe ou se mesure.
+if printf '%s' "$S_TON" | grep -qF "toute autre question va au chef d'équipe ou se mesure." \
+   && ! printf '%s' "$S_TON" | grep -qiE "va aussi au dirigeant|ni au chef ni mesur"; then
+  ok "13b — ligne-directe : toute autre question va au chef d'équipe ou se mesure"
+else
+  ko "13b — ligne-directe ne dit plus où va une question qui n'est pas une décision"
+fi
+# S5 — l'interdit d'identifiant est ÉNUMÉRÉ, sans exception.
+if printf '%s' "$S_TON" | grep -qF "**Jamais d'identifiant technique sur la ligne** — ni pane, ni canal, ni identifiant de session, ni commit" \
+   && ! printf '%s' "$S_TON" | grep -iE "identifiant" | grep -qiE "sauf|ou le pane|si le focus"; then
+  ok "13c — ligne-directe : l'interdit d'identifiant technique est énuméré (pane, canal, session, commit), sans exception"
+else
+  ko "13c — ligne-directe n'énumère plus l'interdit d'identifiant technique, ou y écrit une exception"
+fi
+# le LU : première ligne du message porteur, jamais seul, renvoi au métier.
+if printf '%s' "$S_TON" | grep -qF "**Le \`LU\` est la première ligne du message qui porte le fait, jamais un message à lui** (voir le métier, « Accuser LU »)."; then
+  ok "13d — ligne-directe : le LU est la première ligne du message porteur, jamais seul, avec renvoi au métier"
+else
+  ko "13d — ligne-directe ne dit plus que le LU est la première ligne du message porteur"
+fi
+# le doute + l'exemple, dans les deux skills.
+if printf '%s' "$S_TON" | grep -qF "**Dans le doute, écris la ligne** : l'oubli est la faute grave. *« J'ai tranché X, je continue »* n'attend rien ; *« dis-moi si tu veux le contraire »* attend." \
+   && printf '%s' "$S_TENIR" | grep -qF "**Dans le doute, écris la ligne** : l'oubli est la faute grave. *« J'ai tranché X, je continue »* n'attend rien ; *« dis-moi si tu veux le contraire »* attend."; then
+  ok "13e — les deux skills : dans le doute on écrit la ligne, avec l'exemple qui borne"
+else
+  ko "13e — un skill perd « dans le doute, écris la ligne » ou son exemple"
+fi
+# S11 — le bilan n'exige plus de « rien » ; il attend, ou il n'a pas la ligne.
+if printf '%s' "$S_CLORE" | grep -qF "**seulement si le bilan attend quelque chose de lui** — une décision ou un geste à poser ; sinon il n'a pas cette ligne, et dans le doute on l'écrit : l'oubli est la faute grave." \
+   && ! printf '%s' "$S_CLORE" | grep -qF 'rien.` s'"'"'il ne reste'; then
+  ok "13f — orchestrer-chantier : le bilan n'a la ligne que s'il attend quelque chose, sans « rien » obligatoire"
+else
+  ko "13f — orchestrer-chantier : le bilan exige de nouveau la ligne ou son « rien », ou perd le critère « attend »"
+fi
+# renvoi de la règle du LU vers l'exception de la ronde, dans le métier.
+if printf '%s' "$S_LU" | grep -qF "Exception : le LU rattrapé par la ronde (voir rondes)."; then
+  ok "13g — le métier renvoie l'exception du LU rattrapé depuis la section du LU"
+else
+  ko "13g — la section du LU ne renvoie plus à l'exception de la ronde : « jamais seul » redevient contradictoire"
+fi
+# « lui appartient » : le critère est « attend », partout où le métier borne la ligne.
+if ! grep -qF "qui lui appartienne" "$METIER" && ! grep -qF "si quelque chose lui appartient" "$METIER" && ! grep -qF "s'il reste quelque chose qui lui appartient" "$METIER" \
+   && grep -qF "si le bilan attend quelque chose de lui" "$METIER" && grep -qF "si le topo attend quelque chose de lui" "$METIER"; then
+  ok "13h — le topo et le bilan du métier bornent la ligne sur « attend », plus sur « lui appartient »"
+else
+  ko "13h — le topo ou le bilan du métier borne encore la ligne sur « lui appartient »"
+fi
+
 echo
 if [ "$echecs" -eq 0 ]; then
   echo "✅ $total/$total — le métier prescrit des gestes qui tiennent"

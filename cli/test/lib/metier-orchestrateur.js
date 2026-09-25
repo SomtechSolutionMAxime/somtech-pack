@@ -6286,7 +6286,7 @@ export const MUTATIONS = [
     // toi : …` en dernière ligne ». La mutation le vide de sa dernière ligne sans retirer une
     // seule règle — c'est le geste exact que la cible doit voir.
     muter: (t) => t.replace(
-      "**Le topo est un message comme les autres** : des faits ; `J'ai besoin de toi : …` en dernière ligne **seulement** si quelque chose lui appartient — un topo qui n'attend rien n'a pas cette ligne.",
+      "**Le topo est un message comme les autres** : des faits ; `J'ai besoin de toi : …` en dernière ligne **seulement** si le topo attend quelque chose de lui — un topo qui n'attend rien n'a pas cette ligne.",
       '**Le topo est un message comme les autres** : des faits.',
     ),
   },
@@ -6297,7 +6297,7 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "**Le bilan est un message comme les autres** : des faits ; `J'ai besoin de toi : …` en dernière ligne **seulement** s'il reste quelque chose qui lui appartienne.\n\n",
+      "**Le bilan est un message comme les autres** : des faits ; `J'ai besoin de toi : …` en dernière ligne **seulement** si le bilan attend quelque chose de lui.\n\n",
       '',
     ),
   },
@@ -6392,7 +6392,7 @@ export const MUTATIONS = [
     cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "**Aucun accusé seul** : le `LU` n'est jamais un message à lui. Il part avec le PREMIER fait utile — « LU — je commence X », « LU — état : … » —, jamais seul, jamais après vingt minutes.",
+      "**Aucun accusé seul** : le `LU` n'est jamais un message à lui. Il part avec le PREMIER fait utile — « LU — je commence X », « LU — état : … » —, jamais seul, jamais après vingt minutes. Exception : le LU rattrapé par la ronde (voir rondes).",
       "**Aucun accusé seul n'est exigé** : le `LU` peut être un message à lui.",
     ),
   },
