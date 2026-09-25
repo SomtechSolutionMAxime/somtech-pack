@@ -58,7 +58,27 @@ async function lireStdin() {
   return Buffer.concat(morceaux).toString('utf8');
 }
 
-/** Le dernier message `assistant` du transcript JSONL — chaque ligne est un événement. */
+/**
+ * Le dernier message `assistant` QUI PORTE DU TEXTE, dans le transcript JSONL —
+ * chaque ligne est un événement.
+ *
+ * ⚠️ CE CHEMIN N'ÉTAIT EXERCÉ PAR AUCUN TÉMOIN (revue de fond, T-20260925-0080,
+ * Z2) : tous fournissaient `last_assistant_message` directement, qui PRIME sur
+ * ce parcours. C'est pourtant le chemin du POSTE dès qu'une version de l'hôte
+ * ne porte pas ce champ dans l'entrée du hook.
+ *
+ * MESURÉ sur un vrai transcript de ce poste (169 messages assistant, lecture
+ * seule) : **71/169 sont du `tool_use` PUR, zéro bloc texte** — un « dernier
+ * message assistant » brut est très souvent un appel d'outil silencieux, pas
+ * les mots de l'agent. 40/169 portent EXACTEMENT un bloc texte ; AUCUN n'en
+ * porte plus d'un dans cet échantillon (le `.join('\n')` ci-dessous reste
+ * défensif pour le jour où un message en porterait plusieurs).
+ *
+ * ✅ DÉCISION, tranchée sur cette mesure : on lit le texte du DERNIER message
+ * assistant QUI EN A — jamais le silence d'un `tool_use` final, jamais le
+ * premier trouvé. On remonte donc la liste depuis la fin, et on saute tout
+ * message sans bloc `text`.
+ */
 function dernierMessageAssistant(cheminTranscript) {
   if (!cheminTranscript || !existsSync(cheminTranscript)) return null;
   let brut;
@@ -99,16 +119,28 @@ function cheminEtat(cwd) {
  * jamais une exception : un état périmé ne doit jamais faire pendre le hook.
  */
 function lireEtat(chemin) {
-  if (!existsSync(chemin)) return { horodatages: [], journal: null };
+  if (!existsSync(chemin)) return { horodatages: [], journal: null, corrompu: false };
+  let j;
   try {
-    const j = JSON.parse(readFileSync(chemin, 'utf8'));
-    const horodatages = Array.isArray(j?.horodatages) ? j.horodatages.filter((n) => typeof n === 'number') : [];
-    const journalBrut = j?.journal;
-    const journal = (journalBrut && typeof journalBrut.empreinte === 'string' && Array.isArray(journalBrut.etapes))
-      ? { empreinte: journalBrut.empreinte, etapes: journalBrut.etapes.filter((e) => typeof e === 'string') }
-      : null;
-    return { horodatages, journal };
-  } catch { return { horodatages: [], journal: null }; }
+    j = JSON.parse(readFileSync(chemin, 'utf8'));
+  } catch {
+    // 🔴 JSON ILLISIBLE (texte tronqué, corrompu, ou pas du JSON du tout) —
+    // revue de fond, T-20260925-0080, Z3. À DISTINGUER d'une FORME inattendue
+    // (JSON valide, champs manquants ou mal typés) : CELLE-LÀ reste tolérée
+    // plus bas, silencieusement — c'est le cas légitime d'un ancien format de
+    // ce même fichier (témoin dédié). Ici, le fichier ne se laisse même pas
+    // PARSER : on ne sait RIEN de ce qui a réellement été écrit. Reconstruire
+    // un état VIDE effacerait le journal — et un rejeu du même bloc, croyant
+    // n'avoir rien fait, RECRÉERAIT ce qui existe déjà (exactement le défaut
+    // D3). `corrompu:true` fait REFUSER `deciderStop` plutôt que deviner.
+    return { horodatages: [], journal: null, corrompu: true };
+  }
+  const horodatages = Array.isArray(j?.horodatages) ? j.horodatages.filter((n) => typeof n === 'number') : [];
+  const journalBrut = j?.journal;
+  const journal = (journalBrut && typeof journalBrut.empreinte === 'string' && Array.isArray(journalBrut.etapes))
+    ? { empreinte: journalBrut.empreinte, etapes: journalBrut.etapes.filter((e) => typeof e === 'string') }
+    : null;
+  return { horodatages, journal, corrompu: false };
 }
 
 function ecrireEtat(chemin, etat) {
@@ -190,7 +222,7 @@ async function main() {
   const N = Number(process.env.SOMTECH_SCRIBE_RELANCES_PAR_HEURE);
   const chemin = cheminEtat(cwd);
   const maintenant = Date.now();
-  const { horodatages, journal } = lireEtat(chemin);
+  const { horodatages, journal, corrompu } = lireEtat(chemin);
 
   let resultat;
   try {
@@ -200,6 +232,7 @@ async function main() {
       plafondParHeure: Number.isFinite(N) ? N : undefined,
       maintenant,
       journalPrecedent: journal,
+      etatCorrompu: corrompu,
       // ⚠️ FERME LE TROU DU DÉLAI INTERNE (T-20260925-0080, revue de fond, passe 3) :
       // si le minuteur ci-dessus tue le process AU MILIEU du plan d'écritures, cette
       // fonction `deciderStop` ne rend JAMAIS son `journalAEnregistrer` — le process
@@ -220,7 +253,18 @@ async function main() {
   // le journal (D2/D3) retient les étapes du plan RÉELLEMENT réussies, à jour
   // même sur un chemin de refus (échec partiel). L'un peut bouger sans l'autre
   // (un `attend: dirigeant` écrit sans jamais émettre de block).
-  if (resultat.blocEmis || resultat.journalAEnregistrer) {
+  //
+  // 🔴 SAUF SI L'ÉTAT ÉTAIT CORROMPU (Z3) — alors on n'écrit RIEN ici. Le
+  // refus de `deciderStop` (`etatCorrompu`) ne porte jamais `journalAEnregistrer`
+  // (il refuse avant d'y toucher) : sans cette garde, l'écriture ci-dessous
+  // ÉCRASERAIT le fichier corrompu par un état neuf (`journal:null`) — la
+  // preuve de corruption disparaîtrait, et LE PROCHAIN tour redémarrerait
+  // silencieusement à vide, exactement le doublon que ce refus existe pour
+  // empêcher. Le fichier corrompu reste tel quel : un humain le répare ou le
+  // supprime — ce n'est pas au hook de deviner à sa place.
+  if (corrompu) {
+    // rien à écrire : le fichier reste dans l'état où un humain doit le trouver.
+  } else if (resultat.blocEmis || resultat.journalAEnregistrer) {
     ecrireEtat(chemin, {
       horodatages: resultat.blocEmis ? [...module.purgerHorodatages(horodatages, maintenant), maintenant] : horodatages,
       journal: resultat.journalAEnregistrer ?? journal,

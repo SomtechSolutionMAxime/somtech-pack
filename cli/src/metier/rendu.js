@@ -147,7 +147,14 @@ function commandeDeHookStop(garde, chemin, plafondParHeure) {
   // déclare pas, la commande rendue n'exporte rien, et la garde elle-même refuse
   // alors toute relance (`SOMTECH_SCRIBE_RELANCES_PAR_HEURE` absente côté décision,
   // T-20260925-0080 arbitrage B, ADR-022 `proposed`, cité comme horizon).
-  const prefixeEnv = Number.isFinite(plafondParHeure) ? `SOMTECH_SCRIBE_RELANCES_PAR_HEURE=${plafondParHeure} ` : '';
+  // ⚠️ `> 0`, PAS SEULEMENT `isFinite` — trouvé en revue de fond (T-20260925-0080,
+  // Z1) : `-1` est fini, mais un plafond négatif ou nul n'a aucun sens (voir la
+  // même borne côté décision, `jugerPlafond`). La validation en amont (`rendre`)
+  // refuse déjà le classement pour ces valeurs ; cette garde-ci reste la
+  // DERNIÈRE ligne de défense de la commande elle-même — un artefact qui
+  // fuiterait malgré tout ne doit jamais porter une variable illisible.
+  const prefixeEnv = (Number.isFinite(plafondParHeure) && plafondParHeure > 0)
+    ? `SOMTECH_SCRIBE_RELANCES_PAR_HEURE=${plafondParHeure} ` : '';
   const absenteBlock = enJson({
     decision: 'block',
     reason: `la garde « ${garde} » est introuvable sur ce poste — installe-la avec ` +
@@ -255,6 +262,21 @@ export function rendre(classement) {
   for (const h of hooks) {
     if (h?.chemin && !CHEMIN_SUR.test(h.chemin)) {
       erreurs.push(`le chemin de garde « ${h.chemin} » porte un caractère que le shell interprète — refusé.`);
+    }
+    // 🔴 `plafond_par_heure` N'A AUCUN DÉFAUT (T-20260925-0080, arbitrage B) —
+    // un classement qui le déclare MAL FORMÉ (`NaN`, négatif, zéro, une chaîne)
+    // ne doit JAMAIS produire une variable d'environnement illisible pour la
+    // garde (`SOMTECH_SCRIBE_RELANCES_PAR_HEURE=NaN`). Le rendu REFUSE plutôt
+    // que de distribuer un classement qui ment sur le plafond qu'il déclare —
+    // même polarité que les budgets L0/L1 : un artefact produit doit être une
+    // GARANTIE, jamais une intention approximative. L'ABSENCE du champ reste
+    // légitime : aucune variable émise, la garde ① refuse alors toute relance
+    // et le dit (« N absente ou invalide »).
+    if (h?.plafond_par_heure !== undefined && !(Number.isFinite(h.plafond_par_heure) && h.plafond_par_heure > 0)) {
+      erreurs.push(
+        `le hook « ${h.evenement}/${h.garde ?? h.commande ?? '?'} » déclare un plafond_par_heure invalide `
+        + `(« ${JSON.stringify(h.plafond_par_heure)} ») — un nombre fini strictement positif est attendu, ou l'absence du champ.`,
+      );
     }
   }
   const refus = new Set(Array.isArray(classement?.refus) ? classement.refus : []);

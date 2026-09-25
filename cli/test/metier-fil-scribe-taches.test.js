@@ -388,3 +388,126 @@ test('double injecté dont `appeler` n\'est PAS une fonction → refus nommé (c
   assert.match(sortie.reason, /clé absente/,
     `un \`appeler\` non-fonction doit être traité comme une absence d'accès, en amont de tout appel : ${JSON.stringify(sortie)}`);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Z2 — LE CHEMIN TRANSCRIPT (sans `last_assistant_message`), JAMAIS EXERCÉ
+// (revue de fond, T-20260925-0080). Tous les témoins précédents fournissaient
+// `last_assistant_message`, qui PRIME sur `dernierMessageAssistant` — une
+// mutation qui lirait le PREMIER message assistant au lieu du dernier
+// survivait, invisible. Transcript RÉALISTE : plusieurs tours, un message
+// assistant tool_use PUR (zéro texte) après le dernier texte utile (mesuré sur
+// un vrai transcript du poste : 71/169 messages assistant sont ainsi), une
+// ligne JSON illisible, et une ligne non-assistant.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Construit un transcript JSONL réaliste : plusieurs tours, blocs `thinking`/`tool_use`/`text` mêlés. */
+function transcriptRealiste({ texteA, texteB }) {
+  const lignes = [
+    JSON.stringify({ type: 'user', message: { content: [{ type: 'text', text: 'premier message' }] } }),
+    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: 'je réfléchis' }] } }),
+    // 1er message assistant AVEC TEXTE — ne doit JAMAIS gouverner (c'est le PREMIER, pas le dernier).
+    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: texteA }] } }),
+    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: {} }] } }),
+    'CECI N\'EST PAS DU JSON VALIDE {{{',
+    JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', content: 'ok' }] } }),
+    // Dernier message assistant AVEC TEXTE — celui qui doit gouverner.
+    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: texteB }] } }),
+    // Après B : un tool_use PUR, zéro texte — la forme mesurée sur le vrai
+    // transcript (71/169). Le VRAI dernier message assistant n'a AUCUN texte.
+    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', input: {} }] } }),
+  ];
+  return lignes.join('\n') + '\n';
+}
+
+/** Comme `ecrireDoubleQuiJournalise`, mais répond CORRECTEMENT au pré-vol — pour atteindre réellement l'écriture. */
+function ecrireDoubleQuiJournaliseEtReussit(tmp) {
+  const journal = join(tmp, 'appels-double-reussit.log');
+  const chemin = join(tmp, 'double-journalise-reussit.mjs');
+  writeFileSync(chemin, `
+import { appendFileSync } from 'node:fs';
+const JOURNAL = ${JSON.stringify(journal)};
+export async function appeler(nom, args) {
+  appendFileSync(JOURNAL, JSON.stringify({ nom, args }) + '\\n');
+  if (nom === 'demands' && args.action === 'get') {
+    return { demand: { id: 'uuid-demande', created_at: '2026-09-25T00:00:00Z', direct_ticket_count: 0 } };
+  }
+  return { success: true, ticket: { id: 'uuid-nouveau' } };
+}
+`);
+  return { chemin, journal };
+}
+
+test('Z2 — SANS `last_assistant_message` : le fil lit le DERNIER message assistant qui a du texte, jamais le premier, jamais un tool_use muet', () => {
+  const t = join(TMP, 'transcript.jsonl');
+  const blocA = ['```taches', 'ouvrir: PREMIER MESSAGE — ne doit jamais être écrit', 'attend: dirigeant', '```'].join('\n');
+  const blocB = ['```taches', 'ouvrir: DERNIER MESSAGE — celui-ci doit être écrit', 'attend: dirigeant', '```'].join('\n');
+  writeFileSync(t, transcriptRealiste({ texteA: blocA, texteB: blocB }));
+  writeFileSync(join(TMP, '.demande'), 'D-20260925-0003\n');
+
+  // Entrée du hook SANS `last_assistant_message` — c'est tout le point : forcer
+  // le chemin `dernierMessageAssistant(transcript_path)`.
+  const entree = JSON.stringify({ cwd: TMP, transcript_path: t });
+  const sortieBrute = execFileSync(process.execPath, [GARDE], {
+    input: entree, encoding: 'utf8',
+    env: {
+      ...process.env, SOMTECH_SCRIBE_ETAT: join(TMP, 'etat'), SOMTECH_SCRIBE_RELANCES_PAR_HEURE: '30',
+      SOMTECH_DESK_API_KEY: '', SERVICEDESK_MCP_TOKEN: '',
+    },
+  });
+  const sortie = JSON.parse(sortieBrute);
+
+  // Sans clé ServiceDesk, le refus est « clé absente » — mais SEULEMENT s'il a
+  // vu un bloc VALIDE. S'il avait lu le PREMIER message (mutation), le refus
+  // porterait sur le bloc A (même contrat de sortie : refus « clé absente » —
+  // donc le distinguo tient sur l'appel du double, pas sur la forme du refus).
+  assert.equal(sortie.decision, 'block');
+  assert.match(sortie.reason, /clé absente/);
+
+  // Preuve DIRECTE, par un double qui journalise ses appels ET répond
+  // correctement au pré-vol (pour atteindre réellement l'écriture) : `ouvrir`
+  // doit porter le titre du bloc B, jamais celui du bloc A.
+  const { chemin: double, journal } = ecrireDoubleQuiJournaliseEtReussit(TMP);
+  const etat2 = join(TMP, 'etat2');
+  const entreeArgs = { cwd: TMP, transcript_path: t };
+  execFileSync(process.execPath, [GARDE], {
+    input: JSON.stringify(entreeArgs), encoding: 'utf8',
+    env: {
+      ...process.env, SOMTECH_SCRIBE_ETAT: etat2, SOMTECH_SCRIBE_RELANCES_PAR_HEURE: '30',
+      SOMTECH_SCRIBE_APPELER_TEST: double,
+    },
+  });
+  assert.ok(existsSync(journal), 'le double aurait dû être appelé (bloc B valide, NODE_TEST_CONTEXT hérité)');
+  const appels = readFileSync(journal, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const creation = appels.find((a) => a.args.action === 'create');
+  assert.ok(creation, `aucun tickets.create journalisé : ${JSON.stringify(appels)}`);
+  assert.match(creation.args.title, /DERNIER MESSAGE/);
+  assert.ok(!creation.args.title.includes('PREMIER MESSAGE'), `le titre porte le PREMIER message, pas le dernier : ${creation.args.title}`);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Z3, BOUT EN BOUT — le VRAI fil mince devant un fichier d'état CORROMPU.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test('Z3 bout en bout — fichier d\'état corrompu → le hook NE PLANTE PAS, refus nommé, et le fichier corrompu N\'EST PAS écrasé', () => {
+  const t = join(TMP, 'transcript.jsonl');
+  writeFileSync(t, transcriptAvec(['```taches', 'attend: dirigeant', '```'].join('\n')));
+  writeFileSync(join(TMP, '.demande'), 'D-20260925-0003\n');
+  const etat = join(TMP, 'etat');
+  mkdirSync(etat, { recursive: true });
+  const sha1 = createHash('sha1').update(TMP).digest('hex');
+  const fichierEtat = join(etat, `${sha1}.json`);
+  const contenuCorrompu = '{ "horodatages": [1,2,3], "journal": { "empreinte": "abc", "etapes": [ INVALIDE ICI';
+  writeFileSync(fichierEtat, contenuCorrompu);
+
+  const env = { SOMTECH_SCRIBE_ETAT: etat, SOMTECH_SCRIBE_RELANCES_PAR_HEURE: '30' };
+  const sortie = JSON.parse(executerGarde({ cwd: TMP, transcriptPath: t, env }));
+
+  assert.equal(sortie.decision, 'block', `le hook doit refuser nommément, pas planter : ${JSON.stringify(sortie)}`);
+  assert.match(sortie.reason, /corrompu/);
+
+  // Le fichier corrompu reste EXACTEMENT tel quel — un humain doit pouvoir le
+  // lire pour comprendre ce qui a cassé, et une réécriture silencieuse
+  // effacerait la seule preuve de ce qui a réellement été journalisé avant.
+  assert.equal(readFileSync(fichierEtat, 'utf8'), contenuCorrompu,
+    'le fichier d\'état corrompu ne doit JAMAIS être réécrit par ce hook');
+});

@@ -492,6 +492,10 @@ export async function trouverProchaineTache({ demandeId, demandeCreatedAt, direc
  *   `journalAEnregistrer` rendu à la FIN de cette fonction n'est jamais atteint si le
  *   process meurt avant. Optionnel — ce module reste pur (aucune I/O propre), c'est
  *   l'appelant qui décide ce que ce rappel fait.
+ * @param {boolean|undefined} entree.etatCorrompu  le fil mince n'a pas pu PARSER le
+ *   fichier d'état du lieu (JSON illisible — à distinguer d'une forme inattendue,
+ *   tolérée). Fait refuser IMMÉDIATEMENT, avant toute autre validation : repartir
+ *   d'un journal vide risquerait de rejouer une écriture déjà faite (Z3).
  * @returns {Promise<{
  *   silence:boolean,
  *   sortie:{decision?:'block', reason?:string, systemMessage?:string},
@@ -500,7 +504,7 @@ export async function trouverProchaineTache({ demandeId, demandeCreatedAt, direc
  * }>}
  */
 export async function deciderStop(entree) {
-  const { texteAssistant, contenuDemande, appeler, horodatagesRelances, plafondParHeure, maintenant, journalPrecedent, onEtapeReussie } = entree;
+  const { texteAssistant, contenuDemande, appeler, horodatagesRelances, plafondParHeure, maintenant, journalPrecedent, onEtapeReussie, etatCorrompu } = entree;
 
   // ── Pas de bloc (ou un bloc cité, pas terminal) : silence total, zéro appel —
   // la SEULE sortie muette.
@@ -512,6 +516,21 @@ export async function deciderStop(entree) {
   // n'aurait jamais bloqué).
   const gate = (raison) => gaterEtEmettre({ raison, horodatagesRelances, plafondParHeure, maintenant });
   const arret = (systemMessage) => ({ silence: false, sortie: systemMessage ? { systemMessage } : {}, blocEmis: false });
+
+  // ── Z3 — ÉTAT DU LIEU CORROMPU (revue de fond, T-20260925-0080). PRIORITAIRE
+  // sur toute autre validation : un bloc présent (valide ou non) pourrait
+  // porter des écritures, et sans un état lisible on ne sait pas ce qui a
+  // DÉJÀ été fait. Repartir d'un journal vide RISQUERAIT UN DOUBLON — exactement
+  // le défaut D3 par une autre porte. On refuse plutôt que de deviner ; le
+  // fichier corrompu n'est pas réécrit (voir le fil mince) — un humain le
+  // répare ou le supprime.
+  if (etatCorrompu) {
+    return gate(
+      "l'état du lieu est corrompu (fichier illisible) — refus par prudence : repartir d'un état vide "
+      + "pourrait cacher un journal déjà écrit et faire rejouer une écriture déjà faite. Répare ou "
+      + 'supprime le fichier d\'état, puis relance.',
+    );
+  }
 
   if (!extrait.ok) return gate(extrait.erreur);
 

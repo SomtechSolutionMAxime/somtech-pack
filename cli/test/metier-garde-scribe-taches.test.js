@@ -778,3 +778,38 @@ test('D3 — échec au milieu du plan PUIS rejeu du même bloc → UN SEUL creat
   assert.equal(second.sortie.decision, 'block');
   assert.match(second.sortie.reason, /prochaine tâche/);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Z3 — ÉTAT DU LIEU CORROMPU (revue de fond, T-20260925-0080). Repartir d'un
+// journal vide sur un état illisible risquerait de rejouer une écriture déjà
+// faite (D3 par une autre porte) — le choix retenu est le refus nommé,
+// PRIORITAIRE sur toute autre validation (bloc malformé compris).
+// ═══════════════════════════════════════════════════════════════════════════
+
+test('Z3 — état corrompu (etatCorrompu:true) → refus nommé, PRIORITAIRE même sur un bloc malformé, zéro appel', async () => {
+  const r = await deciderStop({
+    texteAssistant: ['```taches', 'verbe-inconnu: x', '```'].join('\n'), // malformé — ne doit PAS gouverner
+    contenuDemande: 'D-20260925-0003',
+    appeler: appelerQuiCrieSiAppele,
+    horodatagesRelances: [], plafondParHeure: 30, maintenant: 1000,
+    etatCorrompu: true,
+  });
+  assert.equal(r.sortie.decision, 'block');
+  assert.match(r.sortie.reason, /corrompu/);
+  assert.doesNotMatch(r.sortie.reason, /verbe inconnu/, 'le refus doit porter sur la corruption, pas sur le bloc');
+  assert.equal(r.journalAEnregistrer, undefined, 'aucun journal ne doit être rendu — rien n\'a été tenté');
+});
+
+test('Z3 — état corrompu, plafond atteint → arrêt permis quand même, ET DIT', async () => {
+  const maintenant = 1_000_000;
+  const horodatagesRelances = Array.from({ length: 30 }, (_, i) => maintenant - i * 1000);
+  const r = await deciderStop({
+    texteAssistant: ['```taches', 'attend: dirigeant', '```'].join('\n'),
+    contenuDemande: 'D-20260925-0003',
+    appeler: appelerQuiCrieSiAppele,
+    horodatagesRelances, plafondParHeure: 30, maintenant,
+    etatCorrompu: true,
+  });
+  assert.equal(r.sortie.decision, undefined);
+  assert.match(r.sortie.systemMessage, /plafond/);
+});

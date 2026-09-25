@@ -131,6 +131,50 @@ test('sans `plafond_par_heure` déclaré, aucune variable n\'est exportée par l
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Z1 — `plafond_par_heure` MAL FORMÉ DANS LE CLASSEMENT (revue de fond,
+// T-20260925-0080) : le rendu doit REFUSER le classement plutôt que de
+// distribuer une variable illisible (`SOMTECH_SCRIBE_RELANCES_PAR_HEURE=NaN`)
+// — même polarité que les budgets L0/L1 (STD-047) : un artefact produit est
+// une GARANTIE, jamais une intention approximative. L'ABSENCE du champ reste
+// légitime (test précédent) — seule une valeur PRÉSENTE et invalide refuse.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function classementAvecPlafond(plafondParHeure) {
+  return {
+    role: 'r', version_abc: '1',
+    hooks: [{ evenement: 'Stop', garde: 'ma-garde-test', chemin: join(TMP, 'x.js'), plafond_par_heure: plafondParHeure }],
+    items: [{ id: 'GF-R-001', nature: 'garde-fou', couche: 'hook', enonce: 'x', enonce_socle: 'c' }],
+    chapitres: [],
+  };
+}
+
+test('Z1 — `plafond_par_heure` NaN/négatif/zéro/non-numérique dans le classement → le RENDU REFUSE (erreur nommée)', () => {
+  for (const mauvais of [NaN, -1, 0, '30', null, {}, [], Infinity, -Infinity]) {
+    const r = rendre(classementAvecPlafond(mauvais));
+    assert.equal(r.ok, false, `plafond_par_heure=${JSON.stringify(mauvais)} devrait refuser le rendu`);
+    assert.ok(r.erreurs.some((e) => e.includes('plafond_par_heure')),
+      `le refus doit NOMMER plafond_par_heure : ${JSON.stringify(r.erreurs)}`);
+    // ⚠️ DÉFENSE EN PROFONDEUR — `rendre()` bâtit quand même ses artefacts avant
+    // de refuser (I5/L0/L1 marchent pareil) : la commande elle-même ne doit
+    // JAMAIS porter une variable illisible, même dans un artefact REFUSÉ que
+    // personne ne devrait écrire. C'est CETTE assertion qui tue la mutation
+    // `Number.isFinite(plafondParHeure)` → `plafondParHeure !== undefined`
+    // (rendu.js ~l.150) : cette mutation ne change RIEN à `r.ok`/`r.erreurs`
+    // (validation amont, indépendante) — seule la commande émise le révèle.
+    const cmd = r.artefacts['.claude/settings.json']
+      ? JSON.parse(r.artefacts['.claude/settings.json']).hooks.Stop[0].hooks[0].command
+      : '';
+    assert.ok(!cmd.includes('SOMTECH_SCRIBE_RELANCES_PAR_HEURE='),
+      `la commande ne doit jamais porter la variable pour une valeur invalide : ${cmd}`);
+  }
+});
+
+test('Z1 — `plafond_par_heure` valide (entier positif) → le rendu accepte, comme avant', () => {
+  const r = rendre(classementAvecPlafond(30));
+  assert.equal(r.ok, true, JSON.stringify(r.erreurs));
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // LE FICHIER `.demande` — arbitrage A : le rendu ne le produit JAMAIS.
 // ═══════════════════════════════════════════════════════════════════════════
 
