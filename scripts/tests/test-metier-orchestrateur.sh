@@ -1813,6 +1813,32 @@ else
   ko "15b — rondes : « chaque tour se termine sur un delta ou un arbitrage » contredit de nouveau « si tu ne trouves rien, tu te tais »"
 fi
 
+# ── 6e revue : geste à poser sans échéance, LU rattrapé sans merci, forme, compte de torts.
+if printf '%s' "$S_ROND1" | grep -qF "Un geste à poser sans échéance (pane gelé, login) se repose sur un delta (l'état a changé) ou, s'il bloque, à chaque rappel de la ronde — jamais en boucle serrée."; then
+  ok "16a — rondes : un geste à poser sans échéance se repose sur un delta ou au rappel de la ronde, jamais en boucle serrée"
+else
+  ko "16a — rondes : la règle du geste à poser sans échéance a disparu : il sera reposé à chaque tour"
+fi
+if printf '%s' "$S_RATT" | grep -qF "appelle son \`LU\` MAINTENANT** (sauf un simple merci, ou un message auquel tu as déjà répondu)"; then
+  ok "16b — rondes : le LU rattrapé exclut le simple merci et le message déjà répondu"
+else
+  ko "16b — rondes : « tout message non accusé appelle son LU MAINTENANT » redevient sans exception (contredit rendre-compte)"
+fi
+# Défaut de forme lu à chaque naissance : un « ** » fermant collé à une majuscule sans ponctuation.
+FORME="$(grep -vE 'Répond de' "$METIER" | grep -nE "[a-zàâçéèêëîïôûùü0-9]\*\* [A-ZÉÈÀ]" | head -1 | cut -c1-100)"
+if [ -z "$FORME" ] && grep -qF "jusqu'à ce que quelqu'un passe.** " "$METIER"; then
+  ok "16c — aucun « ** » fermant collé à une majuscule sans ponctuation (deux phrases collées) dans le métier"
+else
+  ko "16c — deux phrases collées (« ** » sans ponctuation avant une majuscule) : $FORME"
+fi
+S_VOIS="$(section 'Coordonner les chantiers voisins')"
+if printf '%s' "$S_VOIS" | grep -qF "Un compte de torts tenu en s'attribuant des torts et aucun à l'autre, pour se placer moralement, était **faux**." \
+   && ! printf '%s' "$S_VOIS" | grep -qF "tenu d'un seul côté"; then
+  ok "16d — le compte de torts d'un pair dit le cas réel : s'attribuer des torts et aucun à l'autre, pour se placer moralement"
+else
+  ko "16d — le compte de torts se lit de nouveau à l'envers du cas réel (« tenu d'un seul côté »)"
+fi
+
 echo
 if [ "$echecs" -eq 0 ]; then
   echo "✅ $total/$total — le métier prescrit des gestes qui tiennent"
