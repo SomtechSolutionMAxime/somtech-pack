@@ -1500,7 +1500,33 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 # les quatre hooks réels restent un chantier ouvert (ticket séparé, ouvert par
 # `batiscan`) — quand ils existeront, la couche de chaque item redeviendra
 # `hook` et ce lot se re-baselinera dans l'autre sens.
-BASELINE=182520
+#
+# ── RE-BASELINE DU 2026-09-25 — T-20260923-0012 (`/episodique` marqué écriture gelée) ──
+#
+#   182 520 → 182 576. MARGE ZÉRO, comme les précédentes. +56. Mesuré sur le rendu FINAL, après
+#   le dernier commit du lot, pas estimé ; `origin/main` mesuré à 182 520 exactement (la « marge
+#   d'environ 30 » du brief n'existait pas : la marge était déjà nulle).
+#
+#   ① LE GESTE PRESCRIT — un orchestrateur qui lit le tableau des outils voit `/episodique`
+#      offert comme disponible alors que son ÉCRITURE est gelée ; il ne peut pas tenir cette
+#      conduite sans le texte.
+#   ② LE DÉFAUT ÉVITÉ, MESURÉ — `T-20260923-0012` et `T-20260923-0013` sont gelés sur
+#      `STD-045` §2.7.2 : encoder une session communique son contenu hors Québec.
+#   ③ LA PART COUPÉE — AUCUNE, et c'est le coordonnateur qui l'assume : couper 86 caractères de
+#      prose que rien ne vérifie pour tenir une contrainte comptable raboterait du texte utile,
+#      le motif exact du précédent du 2026-08-27 (D-20260826-0010).
+#   ④ LE LIEU — la source `metier/orchestrateur/chapitres/outils.md`, parce que c'est le
+#      tableau des outils qui prescrit le geste.
+#
+#   L'ARBITRAGE, avec son canal. `batiscan`, coordonnateur du jalon, relayé au chef d'équipe
+#   `t-20260925-0048` le 2026-09-25 : « le plafond n'est PAS un budget de taille à respecter,
+#   c'est une LIGNE DE BASE qui se re-pose à chaque lot, sur la taille FINALE et EXACTE du rendu,
+#   AUCUNE MARGE. […] TU RELÈVES LA LIGNE DE BASE, à la taille EXACTE de ton rendu final, marge
+#   zéro. » Consigné mot pour mot au ServiceDesk sur `T-20260925-0048`, par `batiscan`.
+#   Il supersède le constat de `T-20260925-0045` (un plafond qui « dicterait » le contenu).
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
+BASELINE=182576
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"
