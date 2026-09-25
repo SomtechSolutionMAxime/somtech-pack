@@ -107,6 +107,90 @@ function commandeDeHook(garde, chemin) {
     `else cat >/dev/null 2>&1; printf '%s\\n' '${absente}'; fi`;
 }
 
+/**
+ * La commande d'un hook `Stop` — même famille que `commandeDeHook`, contrat DIFFÉRENT.
+ *
+ * ⚠️ LA FORME `Stop` N'EST PAS CELLE DE `PreToolUse`. Un hook `Stop` rend
+ * `{"decision":"block","reason":…}` pour EMPÊCHER l'arrêt (relance l'agent), ou
+ * `{"systemMessage":…}` / RIEN DU TOUT pour le laisser s'arrêter. Ce n'est pas un
+ * détail de vocabulaire : un `allow`/`deny` sous `hookSpecificOutput` n'existe pas
+ * ici, et une commande qui rendrait cette forme-là passerait pour cassée aux yeux
+ * de Claude Code sans qu'aucune de nos deux gardes ne l'ait vu.
+ *
+ * ⚠️ « CASSÉE » NE SE DÉTECTE PLUS À LA SORTIE VIDE, ET C'EST LE POINT QUI DIFFÈRE
+ * LE PLUS DE `commandeDeHook`. Un hook `Stop` SAIN peut légitimement ne RIEN
+ * écrire — c'est le cas « pas de bloc `taches` → silence total » de la garde
+ * `scribe-taches`. Sortie vide = succès silencieux, PAS un refus. Ce qui distingue
+ * une panne, c'est le CODE DE SORTIE du process : un `node <fichier absent>` ou un
+ * module qui casse au chargement sort en non-zéro ; la garde elle-même ne sort
+ * JAMAIS en non-zéro par construction (patron `sous-agent.js` : toute exception
+ * est captée et répond avant `process.exit(0)`). Une sortie NON VIDE qui ne
+ * parse pas dans la forme attendue est traitée comme cassée aussi — même
+ * troisième mode que `commandeDeHook` (du bruit avant le JSON).
+ *
+ * ⚠️ POLARITÉ DE LA COMMANDE DE REPLI (garde absente OU cassée) : ELLE LE DIT
+ * (`decision:block`, raison nommée) — SAUF si `stop_hook_active` vaut `true` dans
+ * l'entrée du hook, auquel cas elle laisse s'arrêter avec un `systemMessage` qui
+ * le nomme. Sans cette exception, une garde absente ou cassée BLOQUERAIT L'ARRÊT
+ * À L'INFINI : Claude Code relance, la commande de repli refuse encore, ad
+ * vitam. `stop_hook_active` est la façon dont l'hôte dit « j'ai déjà relancé à
+ * cause d'un hook `Stop` pendant ce même tour » — c'est le signal qui permet de
+ * rompre la boucle sans jamais faire semblant que la garde a rendu un verdict.
+ *
+ * ⚠️ L'ENTRÉE DU HOOK N'EST LUE QU'UNE FOIS (`E="$(cat)"`), puis relue depuis la
+ * variable shell autant de fois que nécessaire — un `stdin` de pipe ne se relit
+ * pas une seconde fois par un second processus.
+ */
+function commandeDeHookStop(garde, chemin, plafondParHeure) {
+  const enJson = (o) => JSON.stringify(o).replace(/'/g, "'\\''");
+  // 🔴 `plafondParHeure` n'a AUCUN DÉFAUT ICI NON PLUS — si le classement ne le
+  // déclare pas, la commande rendue n'exporte rien, et la garde elle-même refuse
+  // alors toute relance (`SOMTECH_SCRIBE_RELANCES_PAR_HEURE` absente côté décision,
+  // T-20260925-0080 arbitrage B, ADR-022 `proposed`, cité comme horizon).
+  const prefixeEnv = Number.isFinite(plafondParHeure) ? `SOMTECH_SCRIBE_RELANCES_PAR_HEURE=${plafondParHeure} ` : '';
+  const absenteBlock = enJson({
+    decision: 'block',
+    reason: `la garde « ${garde} » est introuvable sur ce poste — installe-la avec ` +
+      '`npx @somtech-solutions/pack setup`. Refus par defaut : un garde absent ne vaut jamais un garde permissif.',
+  });
+  const absenteArret = enJson({
+    systemMessage: `la garde « ${garde} » est introuvable sur ce poste, et l hote signale stop_hook_active ` +
+      '— arret permis plutot que de bloquer indefiniment sur une garde absente.',
+  });
+  const casseeBlock = enJson({
+    decision: 'block',
+    reason: `la garde « ${garde} » est presente mais n a rendu aucun verdict lisible — elle a echoue. ` +
+      'Refus par defaut : une garde qui casse ne vaut jamais une garde permissive.',
+  });
+  const casseeArret = enJson({
+    systemMessage: `la garde « ${garde} » est presente mais a echoue, et l hote signale stop_hook_active ` +
+      '— arret permis plutot que de bloquer indefiniment sur une garde cassee.',
+  });
+  // Valide la sortie BRUTE de la garde (jamais l'entrée du hook) : deux formes
+  // acceptées, `decision:block` avec sa raison, ou `systemMessage` seul.
+  const filtre = 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{'
+    + 'var v=JSON.parse(s);'
+    + 'if(v&&v.decision==="block"&&typeof v.reason==="string"&&v.reason)'
+    + 'process.stdout.write(JSON.stringify({decision:"block",reason:v.reason}));'
+    + 'else if(v&&v.decision===undefined&&typeof v.systemMessage==="string"&&v.systemMessage)'
+    + 'process.stdout.write(JSON.stringify({systemMessage:v.systemMessage}))'
+    + '}catch(e){}})';
+  // Rend 0 si `stop_hook_active` vaut EXACTEMENT `true` dans l'entrée du hook, 1 sinon
+  // (absent, faux, ou entrée illisible — jamais interprété comme « c'est un rejeu »).
+  const testRejeu = 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{'
+    + 'try{process.exit(JSON.parse(s).stop_hook_active===true?0:1)}catch(e){process.exit(1)}})';
+  const repliSelonRejeu = (surRejeu, sinon) =>
+    `if printf '%s' "$E" | node -e '${testRejeu}' 2>/dev/null; then printf '%s\\n' '${surRejeu}'; ` +
+    `else printf '%s\\n' '${sinon}'; fi`;
+  return `G="${chemin || `$HOME/.somtech/gardes/${garde}.js`}"; E="$(cat)"; if [ -f "$G" ]; then ` +
+    `S=$(printf '%s' "$E" | ${prefixeEnv}node "$G" 2>/dev/null); RC=$?; ` +
+    `if [ $RC -eq 0 ] && [ -z "$S" ]; then :; ` +
+    `elif [ $RC -eq 0 ]; then V=$(printf '%s' "$S" | node -e '${filtre}' 2>/dev/null); ` +
+    `if [ -n "$V" ]; then printf '%s\\n' "$V"; else ${repliSelonRejeu(casseeArret, casseeBlock)}; fi; ` +
+    `else ${repliSelonRejeu(casseeArret, casseeBlock)}; fi; ` +
+    `else ${repliSelonRejeu(absenteArret, absenteBlock)}; fi`;
+}
+
 /** La forme courte d'un énoncé : sa première phrase, sans le gras. */
 const abreger = (t) => {
   const plat = String(t || '').replace(/\*\*/g, '');
@@ -127,9 +211,14 @@ const puce = (i, note) =>
   `- ${i.enonce_socle || i.enonce}` +
   `\n  <!-- ${i.id} · ${note || i.couche} -->`;
 
+// ⚠️ `.demande` EXCLU EN DÉFENSE, ET C'EST DÉLIBÉRÉ (T-20260925-0080, arbitrage A).
+// Le fichier `.demande` du lieu d'un orchestrateur porte le code de SA demande —
+// un fichier à part, qu'aucune mise à jour du pack ne doit pouvoir écraser. Rien
+// dans ce rendu ne produit aujourd'hui ce chemin, mais l'exclure ici garde
+// l'invariant vrai même si un classement futur tentait de le viser.
 const cheminSur = (c) =>
   !c.startsWith('/') && !c.includes('..') && !c.includes('.orchestrateur') &&
-  !c.includes('.gestionnaire') && !c.includes('CONTEXTE.md');
+  !c.includes('.gestionnaire') && !c.includes('CONTEXTE.md') && !c.includes('.demande');
 
 /**
  * Rend le métier d'un rôle depuis son classement.
@@ -363,7 +452,10 @@ export function rendre(classement) {
           hooks: [{ type: 'command', // Une commande DÉCLARÉE est reprise mot pour mot : deux copies d'un même
           // critère divergent en silence, et celle-ci est comparée à l'identique
           // par la convergence.
-          command: h.commande || commandeDeHook(h.garde, h.chemin) }],
+          // ⚠️ `Stop` a un CONTRAT DE SORTIE différent de `PreToolUse` (pas de
+          // `hookSpecificOutput`/`permissionDecision` — `decision:block` ou
+          // `systemMessage`) : deux générateurs, jamais un seul rendu générique.
+          command: h.commande || (h.evenement === 'Stop' ? commandeDeHookStop(h.garde, h.chemin, h.plafond_par_heure) : commandeDeHook(h.garde, h.chemin)) }],
         });
       }
     }
