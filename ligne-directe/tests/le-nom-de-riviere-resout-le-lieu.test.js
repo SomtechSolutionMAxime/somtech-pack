@@ -221,3 +221,40 @@ test('un rôle que le registre ne baptise pas « rivière » ne traduit RIEN —
   assert.equal(r.source, 'code');
   assert.equal(r.nom, 'rimouski');
 });
+
+test('le lien symbolique désigné par son code EXISTE et est EXACT — aussi pour un nom qui est une rivière', () => {
+  const racine = depot({});
+  const reel = mkdtempSync(join(tmpdir(), 'nom-riviere-reel-'));
+  mkdirSync(join(racine, DOSSIER), { recursive: true });
+  symlinkSync(reel, join(racine, DOSSIER, 'rimouski'));
+  const r = resoudre(racine, 'rimouski');
+  assert.equal(r.existe, true);
+  assert.equal(r.exact, true, 'sans quoi le CLI dirait « la casse diffère » d’un nom identique');
+  assert.equal(saisir(racine, 'rimouski').ok, true, 'la naissance ne refuse pas le code d’un lieu qui existe');
+});
+
+test('un lien CASSÉ n’est pas balayé aux noms : le refus « ni code ni nom » serait plus fort que la mesure', () => {
+  const racine = depot({});
+  mkdirSync(join(racine, DOSSIER), { recursive: true });
+  symlinkSync('/nonexistent-cible-cassee', join(racine, DOSSIER, 'j-casse'));
+  const r = resoudre(racine, 'j-casse');
+  assert.equal(r.source, 'code');
+  assert.equal(r.illisibles.length, 0);
+});
+
+test('un lieu-lien n’est PAS lu pour son .nom-agent : on ne traverse pas un lien vers l’extérieur', () => {
+  const racine = depot({});
+  const reel = mkdtempSync(join(tmpdir(), 'nom-riviere-reel-'));
+  writeFileSync(join(reel, '.nom-agent'), 'bonaventure\n');
+  mkdirSync(join(racine, DOSSIER), { recursive: true });
+  symlinkSync(reel, join(racine, DOSSIER, 'j-20260814-0001'));
+  const r = resoudre(racine, 'bonaventure');
+  assert.equal(r.existe, false, 'lire à travers le lien ferait dépendre le lieu retenu de ce qu’un lien désigne');
+});
+
+test('un code à MAJUSCULES tapé tel quel se résout sans jamais être « retrouvé sous une autre casse »', () => {
+  const racine = depot({ 'J-Upper': undefined });
+  const r = resoudre(racine, 'J-Upper');
+  assert.equal(r.exact, true);
+  assert.equal(r.demande, 'J-Upper');
+});

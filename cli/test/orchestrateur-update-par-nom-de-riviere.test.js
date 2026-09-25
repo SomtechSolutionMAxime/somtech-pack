@@ -140,3 +140,28 @@ test('un REPRÉSENTANT garde son refus d’avant — « jamais posé » — et n
   assert.match(texte, /jamais été « posé »/);
   assert.doesNotMatch(texte, /code du mandat|nom-agent/);
 });
+
+test('un code à majuscules tapé exactement ne dit PAS « la casse diffère »', async () => {
+  const repo = depot({ 'J-Upper': 'bonaventure' });
+  const { code, texte } = await lancer(['orchestrateur-update', '--nom', 'J-Upper', '--source', payload(), '--target', repo]);
+  assert.equal(code, 0, texte);
+  assert.doesNotMatch(texte, /la casse diffère/);
+  assert.equal(lu(repo, 'J-Upper'), V2);
+});
+
+test('un lien symbolique nommé comme une rivière ne dit pas « la casse diffère » d’un nom identique', async () => {
+  const repo = tmp('smtk-riviere-lien2-');
+  mkdirSync(join(repo, '.orchestrateur'), { recursive: true });
+  symlinkSync(tmp('smtk-riviere-reel2-'), join(repo, '.orchestrateur', 'rimouski'));
+  const { texte } = await lancer(['orchestrateur-update', '--nom', 'rimouski', '--source', payload(), '--target', repo]);
+  assert.doesNotMatch(texte, /la casse diffère/);
+});
+
+test('un lien CASSÉ : le refus ne prétend pas que « ce n’est le code d’aucun lieu »', async () => {
+  const repo = tmp('smtk-riviere-casse-');
+  mkdirSync(join(repo, '.orchestrateur'), { recursive: true });
+  symlinkSync('/nonexistent-cible-cassee', join(repo, '.orchestrateur', 'j-cassee'));
+  const { code, texte } = await lancer(['orchestrateur-update', '--nom', 'j-cassee', '--source', payload(), '--target', repo]);
+  assert.notEqual(code, 0);
+  assert.doesNotMatch(texte, /n'est ni le code d'un lieu/);
+});

@@ -56,7 +56,7 @@
 // et c'est à garder — un import vers `roles.js` casserait le miroir côté CLI.
 // ─────────────────────────────────────────────────────────────────────────────────────────
 
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -278,7 +278,13 @@ export function resoudreLieuParCodeOuNom(depot, dossier, saisie, lireNomInscrit,
   // faux pour lui ; l'appelant tranche sur son propre `existsSync`, qui les suit. Ici, sans
   // ce garde, le code d'un tel lieu tomberait au balayage des noms, ne trouverait aucun porteur
   // et serait refusé « ni code ni nom » — un refus FAUX, un code qui ne serait plus prioritaire.
-  if (existsSync(parCode.racine)) return { ...parCode, source: 'code', illisibles: [] };
+  // Le lien EXISTE (`existsSync` le suit) : on le dit tel — `existe` et `exact`, le chemin ayant été
+  // composé avec le nom tapé —, sans quoi la naissance le prendrait pour un nom introuvable et le
+  // CLI dirait « la casse diffère de » un nom identique (relevé en revue de fond).
+  if (existsSync(parCode.racine)) return { ...parCode, existe: true, exact: true, source: 'code', illisibles: [] };
+  // Un lien CASSÉ n'est pas « aucun lieu » : une entrée de ce nom existe. On ne le balaie pas aux
+  // noms — l'appelant garde son refus d'avant (« n'existe pas »), qui parle de la cible, pas d'un nom.
+  try { lstatSync(parCode.racine); return { ...parCode, source: 'code', illisibles: [] }; } catch { /* aucune entrée */ }
 
   const { parent, porteurs, illisibles } = lieuxPortantLeNom(depot, dossier, saisie, lireNomInscrit);
   if (porteurs.length === 1) {

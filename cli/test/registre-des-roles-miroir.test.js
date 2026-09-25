@@ -224,6 +224,22 @@ test('CONTRE-MESURE — une capitale de libellé ne rougit PAS, un libellé abse
   assert.match(sansLibelle[0], /libellé/);
 });
 
+test('CONTRE-MESURE — un baptême qui diverge rougit, et un baptême accordé ne fabrique aucun écart', () => {
+  // D-20260925-0002 : le CLI n'accepte le nom de rivière que pour les rôles baptisés ainsi. Ce champ
+  // DÉCIDE — le désarmer ferait accepter (ou refuser) un nom là où la naissance fait l'inverse.
+  const accorde = ecartsDeRegistre(
+    { orchestrateur: { gabarit: 'g', dossier: '.d', libelle: 'O', bapteme: 'riviere' } },
+    { orchestrateur: { gabarits: 'g', dossier: '.d', libelle: 'o', bapteme: 'riviere' } },
+  );
+  assert.deepEqual(accorde, []);
+  const diverge = ecartsDeRegistre(
+    { orchestrateur: { gabarit: 'g', dossier: '.d', libelle: 'O', bapteme: 'code' } },
+    { orchestrateur: { gabarits: 'g', dossier: '.d', libelle: 'o', bapteme: 'riviere' } },
+  );
+  assert.equal(diverge.length, 1, `un baptême divergent doit rougir, obtenu ${JSON.stringify(diverge)}`);
+  assert.match(diverge[0], /baptême/);
+});
+
 test('le commentaire de representant.js ne promet plus une garde qui n\'existe pas — il cite CELLE-CI', () => {
   // ⚠️ C'EST LA BOUCLE QUI VIENT DE COÛTER CETTE MESURE. Le commentaire affirmait qu'un test
   // comparait les deux tables ; il n'y en avait pas. Une affirmation de garantie inscrite dans
