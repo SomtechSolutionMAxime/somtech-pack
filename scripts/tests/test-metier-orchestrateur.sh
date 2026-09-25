@@ -1626,11 +1626,13 @@ fi
 
 # ── (d) Le LU part avec le PREMIER fait utile : jamais seul, jamais un message à lui.
 S_LU="$(section 'Accuser LU')"
-if printf '%s' "$S_LU" | grep -qF "**Aucun accusé seul** : le \`LU\` n'est jamais un message à lui. Il part avec le PREMIER fait utile — « LU — je commence X », « LU — état : … » —, jamais seul, jamais après vingt minutes." \
+if printf '%s' "$S_LU" | grep -qF "**Aucun accusé seul** : le \`LU\` n'est jamais un message à lui. Il part dès la réception avec le PREMIER fait — « LU — je commence X », « LU — en cours, je regarde Y » —, jamais nu, jamais retardé jusqu'à la fin du travail." \
+   && printf '%s' "$S_LU" | grep -qF "Jamais de \`LU\` nu, jamais de \`LU\` retardé jusqu'à la fin du travail." \
+   && printf '%s' "$S_LU" | grep -qF "Un simple « merci », sans travail à faire, n'appelle aucun accusé : rien à porter, rien d'attendu." \
    && ! printf '%s' "$S_LU" | grep -qiE "peut être un message à lui|n'est pas exigé"; then
   ok "12d — aucun accusé seul : le LU part avec le premier fait utile (phrase entière, contraire absent)"
 else
-  ko "12d — la phrase « aucun accusé seul… premier fait utile » n'est plus entière, ou son contraire est écrit : le LU redevient un message à lui"
+  ko "12d — la phrase « aucun accusé seul… dès la réception avec le premier fait » (ou ses deux compléments : LU nu, « merci ») n'est plus entière, ou son contraire est écrit : le LU redevient un message à lui"
 fi
 # A3 — un contraire écrit AILLEURS dans la section ne doit pas passer : on lit la section ENTIÈRE,
 # hors la phrase « Aucun accusé seul » elle-même (qui nomme « message à lui » pour l'interdire).
@@ -1705,7 +1707,7 @@ else
   ko "13c — ligne-directe autorise le code lisible sans distinguer la ligne cliente, où le code du chantier n'entre nulle part"
 fi
 # le LU : première ligne du message porteur, jamais seul, renvoi au métier.
-if printf '%s' "$S_TON" | grep -qF "**Le \`LU\` est la première ligne du message qui porte le fait, jamais un message à lui ; un LU rattrapé en retard part quand même, seul s'il le faut.**" \
+if printf '%s' "$S_TON" | grep -qF "**Le \`LU\` part dès la réception avec le premier fait (« je commence X », « en cours, je regarde Y »), jamais nu, jamais retardé jusqu'à la fin du travail : il est la première ligne du message qui porte le fait, jamais un message à lui. Un simple « merci » n'appelle aucun accusé ; un LU rattrapé en retard part quand même, seul s'il le faut.**" \
    && ! printf '%s' "$S_TON" | grep -qF "voir le métier"; then
   ok "13d — ligne-directe : la règle du LU est dite en autonome (première ligne du message porteur ; le LU rattrapé part quand même), sans renvoi à un métier"
 else
@@ -1790,6 +1792,25 @@ if ! printf '%s' "$S_DER" | grep -qiE "toujours (la|cette) ligne|même vide|peut
   ok "14vi — la section de la dernière ligne ne l'exige pas « même vide » et ne rouvre pas la question ouverte"
 else
   ko "14vi — la section de la dernière ligne exige la ligne « même vide », ou rouvre les questions ouvertes"
+fi
+
+# ── Point 2 — ligne-directe : les cas de parole spontanée incluent l'accusé, la réponse, le geste à poser.
+if grep -qF "Tu parles spontanément dans deux cas, plus l'accusé de réception (\`LU\` + premier fait), la réponse à une question du dirigeant et le geste à poser (pane gelé, login, dialogue) :" "$SK_LD" \
+   && grep -qF "Le reste attend le prochain jalon." "$SK_LD" \
+   && ! grep -qF "deux cas, et deux seulement" "$SK_LD"; then
+  ok "15a — ligne-directe : deux cas spontanés PLUS l'accusé, la réponse et le geste à poser ; le reste attend le jalon"
+else
+  ko "15a — ligne-directe exclut de nouveau le LU, la réponse ou le geste à poser (« deux cas, et deux seulement »)"
+fi
+# ── Point 3 — rondes : un tour vide se termine sans message ; une question sans réponse n'est pas re-posée.
+S_ROND1="$(section 'Tes agents et le travail qui tourne')"
+if printf '%s' "$S_ROND1" | grep -qF "un tour vide se termine sans message." \
+   && printf '%s' "$S_ROND1" | grep -qF "n'est pas re-posée à chaque tour : ré-adresse-la au plus une fois par échéance annoncée, ou sur un delta." \
+   && printf '%s' "$S_ROND1" | grep -qF "Un tour qui trouve quelque chose se termine sur l'un des deux" \
+   && ! printf '%s' "$S_ROND1" | grep -qF "Chaque tour se termine sur"; then
+  ok "15b — rondes : un tour vide se termine sans message, et une question sans réponse n'est pas re-posée à chaque tour"
+else
+  ko "15b — rondes : « chaque tour se termine sur un delta ou un arbitrage » contredit de nouveau « si tu ne trouves rien, tu te tais »"
 fi
 
 echo

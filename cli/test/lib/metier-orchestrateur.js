@@ -4134,16 +4134,38 @@ export const CONTROLES = [
       assert.equal(a.length, 1, `« aucun accusé seul » doit être énoncé une fois exactement (${a.length})`);
       exigeContrainte(a[0], 'aucun accusé seul');
       assert.match(a[0], /n'est jamais un message à lui/i, 'la phrase ne dit plus que le LU n’est jamais un message à lui');
-      assert.match(a[0], /PREMIER fait utile/i, 'la phrase ne dit plus AVEC QUOI part le LU : le premier fait utile');
-      assert.match(a[0], /jamais seul, jamais après vingt minutes/i, 'la phrase perd ses deux bornes : ni seul, ni tardif');
+      assert.match(a[0], /PREMIER fait/i, 'la phrase ne dit plus AVEC QUOI part le LU : le premier fait');
+      assert.match(a[0], /dès la réception/i, 'la phrase ne dit plus QUAND part le LU : dès la réception');
+      assert.match(a[0], /jamais nu, jamais retardé jusqu'à la fin du travail/i, 'la phrase perd ses deux bornes : ni nu, ni retardé jusqu’à la fin du travail');
+      // ── Le paragraphe d'ouverture de la section : le premier fait existe toujours, et le « merci » n'appelle rien.
+      const tete = s.corps.split('\n').filter((l) => /avant tout autre geste, et toujours avec son premier fait/i.test(l));
+      assert.equal(tete.length, 1, `le paragraphe d’ouverture du LU doit être énoncé une fois exactement (${tete.length})`);
+      assert.match(tete[0], /toujours avec son premier fait/i, 'l’ouverture ne dit plus que le LU part TOUJOURS avec son premier fait');
+      assert.match(tete[0], /Jamais de `LU` nu, jamais de `LU` retardé jusqu'à la fin du travail/i, 'l’ouverture perd ses deux interdits : LU nu, LU retardé');
+      assert.match(tete[0], /Un simple « merci », sans travail à faire, n'appelle aucun accusé/i, 'l’ouverture ne dit plus qu’un simple « merci » n’appelle aucun accusé : on accusera tout, et le bruit revient');
       const p = s.corps.split('\n').filter((l) => /en est la première ligne/i.test(l));
       assert.equal(p.length, 1, `« le LU en est la première ligne » doit être énoncé une fois exactement (${p.length})`);
       assert.match(p[0], /jamais la dernière/i, 'la première ligne ne dit plus « jamais la dernière »');
       exigePolarite(
         s.corps, /Aucun accusé seul/i,
         'aucun accusé seul : le LU est la première ligne du message qui porte le fait',
-        { inverse: /peut être un message à lui|n'est pas exigé|accusé seul est permis|part seul|LU nu\b|`LU` nu\b|LU seul|accusé seul (?:est|reste|peut)/i },
+        { inverse: /peut être un message à lui|n'est pas exigé|accusé seul est permis|part seul|LU nu (?:est|reste|part)|`LU` nu (?:est|reste|part)|nu s'il le faut|LU seul|accusé seul (?:est|reste|peut)/i },
       );
+    },
+  },
+
+  {
+    id: 'un-tour-vide-se-termine-sans-message',
+    quoi: 'un tour de ronde vide se termine sans message, et une question sans réponse n’est pas re-posée à chaque tour',
+    verifier({ metier }) {
+      const s = sectionDe(metier, /Tes agents et le travail qui tourne/i, 'sur la fin d’un tour de ronde');
+      const v = s.corpsEtendu.split('\n').filter((l) => /un tour vide se termine sans message/i.test(l));
+      assert.equal(v.length, 1, `« un tour vide se termine sans message » doit être énoncé une fois exactement (${v.length})`);
+      assert.match(v[0], /tu te tais|ne dis rien/i, 'le tour vide ne dit plus qu’on se tait');
+      assert.match(v[0], /n'est pas re-posée à chaque tour : ré-adresse-la au plus une fois par échéance annoncée, ou sur un delta/i, 'la question sans réponse n’est plus bornée : au plus une fois par échéance annoncée, ou sur un delta');
+      const u = s.corpsEtendu.split('\n').filter((l) => /Un tour qui trouve quelque chose se termine sur l'un des deux/i.test(l));
+      assert.equal(u.length, 1, `la fin d’un tour qui trouve quelque chose doit être énoncée une fois exactement (${u.length})`);
+      assert.ok(!/Chaque tour se termine sur/i.test(s.corpsEtendu), '« chaque tour se termine sur un delta ou un arbitrage » est revenu : il contredit « un tour vide se tait »');
     },
   },
 
@@ -6392,7 +6414,7 @@ export const MUTATIONS = [
     cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "**Aucun accusé seul** : le `LU` n'est jamais un message à lui. Il part avec le PREMIER fait utile — « LU — je commence X », « LU — état : … » —, jamais seul, jamais après vingt minutes. Exception : le LU rattrapé par la ronde (voir rondes).",
+      "**Aucun accusé seul** : le `LU` n'est jamais un message à lui. Il part dès la réception avec le PREMIER fait — « LU — je commence X », « LU — en cours, je regarde Y » —, jamais nu, jamais retardé jusqu'à la fin du travail. Exception : le LU rattrapé par la ronde (voir rondes).",
       "**Aucun accusé seul n'est exigé** : le `LU` peut être un message à lui.",
     ),
   },
@@ -6403,7 +6425,7 @@ export const MUTATIONS = [
     cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
     fichier: 'metier',
     muter: (t) => t.replace(
-      " Il part avec le PREMIER fait utile — « LU — je commence X », « LU — état : … » —, jamais seul, jamais après vingt minutes.",
+      " Il part dès la réception avec le PREMIER fait — « LU — je commence X », « LU — en cours, je regarde Y » —, jamais nu, jamais retardé jusqu'à la fin du travail.",
       '',
     ),
   },
@@ -6460,6 +6482,61 @@ export const MUTATIONS = [
     muter: (t) => t.replace(
       "**« Jamais seul » vaut pour le LU de réception ; un LU rattrapé part quand même, seul s'il le faut** : un LU tardif vaut infiniment mieux que pas de LU,",
       "**Un LU tardif vaut mieux que pas de LU** :",
+    ),
+  },
+
+  {
+    id: 'le-lu-nu-est-accepte',
+    quoi: 'mutation du point 1 — un LU nu (un « LU » sans rien après) redevient acceptable : « nu s’il le faut »',
+    cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "jamais nu, jamais retardé jusqu'à la fin du travail. Exception",
+      "nu s'il le faut, retardé jusqu'à la fin du travail. Exception",
+    ),
+  },
+
+  {
+    id: 'le-lu-est-retarde-jusqua-la-fin',
+    quoi: 'mutation du point 1 — le LU peut partir avec le résultat, à la fin : « jamais nu » reste, « jamais retardé » part',
+    cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Jamais de `LU` nu, jamais de `LU` retardé jusqu'à la fin du travail.**",
+      "**Jamais de `LU` nu ; il peut partir avec le résultat.**",
+    ),
+  },
+
+  {
+    id: 'la-precision-merci-est-retiree',
+    quoi: 'mutation du point 1 — la précision « un simple merci n’appelle aucun accusé » disparaît : on accuse tout, et le bruit revient',
+    cible: 'le-lu-part-avec-le-premier-fait-jamais-seul',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      " Un simple « merci », sans travail à faire, n'appelle aucun accusé : rien à porter, rien d'attendu.",
+      '',
+    ),
+  },
+
+  {
+    id: 'un-tour-vide-doit-quand-meme-parler',
+    quoi: 'mutation du point 3 — « chaque tour se termine sur un delta ou un arbitrage » revient : un tour vide doit parler, la ronde redevient bavarde',
+    cible: 'un-tour-vide-se-termine-sans-message',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "**Un tour qui trouve quelque chose se termine sur l'un des deux",
+      "**Chaque tour se termine sur l'un des deux",
+    ),
+  },
+
+  {
+    id: 'une-question-sans-reponse-est-reposee',
+    quoi: 'mutation du point 3 — la question restée sans réponse est re-posée à chaque tour : la volubilité que le lot combat',
+    cible: 'un-tour-vide-se-termine-sans-message',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      "n'est pas re-posée à chaque tour : ré-adresse-la au plus une fois par échéance annoncée, ou sur un delta.",
+      "est re-posée à chaque tour.",
     ),
   },
 
