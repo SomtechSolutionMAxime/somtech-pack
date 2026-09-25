@@ -548,7 +548,7 @@ git -C <repo> branch -D wt/<timestamp>
 git -C <repo> worktree prune
 ```
 
-**La question précède la fermeture, et un worktree qui refuse de se retirer est un signal, jamais un obstacle : pas de `--force`.** Pouvoir lire l'espace d'un chef ne dispense pas de LUI DEMANDER : `git log origin/<branche-cible>..HEAD` ne voit que ce qui est commité, et `status` n'en montre que les noms — un fichier ignoré (base, dump, `.env`), un stash, une autre branche, ce que le chef sait sans l'avoir écrit. Status propre + log vide ne veut pas dire rien à perdre. Sans réponse (chef gelé, `agent_not_found`), l'espace reste : relance par `livrer.js` (`node $HOME/.somtech/naissance-representant/bin/livrer.js <pane|nom> --texte "…"`, par le pane si le nom est introuvable), puis, sans réponse à la ronde suivante, escalade au CTO par ta ligne avec ce qui est en jeu — jamais de fermeture faute de réponse. Un chef `blocked` refuse le message : annule son dialogue de choix (Escape, sans répondre), puis demande ; n'escalade que si ça échoue. N'utilise jamais `@{u}` ici : une branche-socle n'a pas d'upstream, et l'erreur avalée se lit « tout est poussé ».
+**La question précède la fermeture, et un worktree qui refuse de se retirer est un signal, jamais un obstacle : pas de `--force`.** Pouvoir lire l'espace d'un chef ne dispense pas de LUI DEMANDER : `git log origin/<branche-cible>..HEAD` ne voit que ce qui est commité, et `status` n'en montre que les noms — un fichier ignoré (base, dump, `.env`), des commits jamais poussés de la branche-socle, ce que le chef sait sans l'avoir écrit. Status propre + log vide ne veut pas dire rien à perdre. `worktree remove` sans `--force` retire sans protester un espace qui contient des fichiers IGNORÉS : le refus n'est pas la protection, la question l'est ; `--ignored` liste aussi `node_modules`, `.next`, `dist` (régénérables : écarte-les, le reste va au chef). Sans réponse (chef gelé, `agent_not_found`), l'espace reste : relance par `livrer.js` (`node $HOME/.somtech/naissance-representant/bin/livrer.js <pane|nom> --texte "…"`, par le pane si le nom est introuvable), puis, sans réponse à la ronde suivante, escalade au CTO par ta ligne avec ce qui est en jeu — jamais de fermeture faute de réponse. Un chef `blocked` refuse le message : annule son dialogue de choix (`herdr pane send-keys <pane> Escape`, sans répondre ni `Enter`), puis demande ; n'escalade que si ça échoue. N'utilise jamais `@{u}` ici : une branche-socle n'a pas d'upstream, et l'erreur avalée se lit « tout est poussé ».
 
 **Ferme le pane, jamais le tab.** Un tab héberge souvent plusieurs panes — donc plusieurs agents, dont potentiellement toi. `herdr tab close` les emporte tous, sans confirmation : tu peux te fermer toi-même en croyant fermer ton chef d'équipe. Si tu veux savoir avec qui un agent partage son tab avant d'agir, `herdr agent list` donne le `tab_id` de chacun.
 
@@ -558,7 +558,7 @@ git -C <repo> worktree prune
 git -C <repo> worktree list          # compare avec herdr agent list
 ```
 
-Tout worktree sans agent vivant dedans est un orphelin **à signaler** au CTO, comme une décision qu'il doit prendre (retirer ou garder) ; l'espace RESTE tant qu'il n'a pas tranché, et on ne le retire jamais faute de réponse.
+Tout worktree sans agent vivant dedans est un orphelin **à signaler** au CTO par ta ligne, une seule fois, puis si son état change, en finissant par `J'ai besoin de toi : retirer ou garder <chemin>` ; l'espace RESTE tant qu'il n'a pas tranché, et on ne le retire jamais faute de réponse.
 
 **g. Pousser — et si la mise en ligne est occupée, le dire avant toute chose.**
 
@@ -701,7 +701,7 @@ Une **Demande** passe `delivered` toute seule quand tous ses enfants sont fermé
 - le jalon lui-même : tu le fais passer `qa` puis `deployed` à la main, dans cet ordre. `deployed` sans être passé par `qa` est un mensonge sur ce qui a été vérifié ;
 - **les demandes d'origine**. Un jalon est transverse : ses tickets viennent de plusieurs demandes, et fermer le jalon n'en ferme aucune. Reprends-les une à une. Celles dont *tous* les enfants sont fermés se seront mises à jour d'elles-mêmes ; celles dont il reste une story ailleurs sont encore ouvertes à bon droit — et c'est une information, pas un oubli : elle te dit que le besoin du client n'est pas entièrement couvert par ce que tu viens de livrer.
 
-Dans tous les cas, avant d'y arriver : vérifie qu'aucun epic ne reste ouvert pour de la dette qui aurait dû être sortie, et qu'aucun worktree orphelin ne traîne ; chaque chef a été interrogé à sa fermeture, et un espace resté (orphelin non tranché) figure au bilan de clôture sans bloquer la clôture.
+Dans tous les cas, avant d'y arriver : vérifie qu'aucun epic ne reste ouvert pour de la dette qui aurait dû être sortie, et qu'aucun worktree orphelin ne traîne ; chaque chef a été interrogé à sa fermeture, et un espace resté (orphelin non tranché) figure au bilan de clôture, qui finit par `J'ai besoin de toi : retirer ou garder <chemin>` et non par `rien.`, sans bloquer la clôture ; le CTO ou l'orchestrateur suivant exécute la réponse, par le ServiceDesk où il est écrit.
 
 **Referme ta ligne, avec son bilan** — c'est le dernier geste :
 

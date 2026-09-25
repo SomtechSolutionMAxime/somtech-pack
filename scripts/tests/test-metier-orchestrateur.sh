@@ -1062,8 +1062,8 @@ garde_ferme() {
 garde_ferme "Pouvoir lire l'espace d'un chef ne t'exempte pas de LUI DEMANDER avant de fermer son pane ou de retirer son espace." \
   "« Fermer proprement » exige de DEMANDER au chef avant de fermer, et dit que la lecture n'exempte pas" \
   "« Fermer proprement » n'exige plus de demander au chef — une lecture permise ferait fermer sur un « zéro commit »"
-garde_ferme "Ce log ne voit que ce qui est **commité**, et \`status\` n'en montre que les noms : ni l'un ni l'autre ne dit ce qui n'existe que là — un fichier ignoré par \`.gitignore\` (base de données, dump, \`.env\`), un stash, une autre branche, ce que le chef sait sans l'avoir écrit." \
-  "« Fermer proprement » dit le motif : ni log ni status ne voient l'ignoré, le stash, une autre branche, ce que le chef sait" \
+garde_ferme "Ce log ne voit que ce qui est **commité**, et \`status\` n'en montre que les noms : ni l'un ni l'autre ne dit ce qui n'existe que là — un fichier ignoré par \`.gitignore\` (base de données, dump, \`.env\`), des commits jamais poussés de la branche-socle, ce que le chef sait sans l'avoir écrit." \
+  "« Fermer proprement » dit le motif : ni log ni status ne voient l'ignoré, les commits non poussés de la branche-socle, ce que le chef sait" \
   "« Fermer proprement » ne nomme plus ce que ni log ni status ne voient — la règle deviendrait une formalité"
 garde_ferme "**Status propre + log vide ne veut pas dire rien à perdre.**" \
   "« Fermer proprement » : status propre + log vide ne veut pas dire rien à perdre" \
@@ -1153,7 +1153,7 @@ garde_skill "Status propre + log vide ne veut pas dire rien à perdre." \
 garde_skill "git -C ~/worktrees/<repo>/<timestamp> status --porcelain --ignored" \
   "skill étape f : le status montre l'ignoré (--ignored)" \
   "skill étape f : le status ne porte plus --ignored"
-garde_skill "annule son dialogue de choix (Escape, sans répondre), puis demande ; n'escalade que si ça échoue." \
+garde_skill "annule son dialogue de choix (\`herdr pane send-keys <pane> Escape\`, sans répondre ni \`Enter\`), puis demande ; n'escalade que si ça échoue." \
   "skill étape f : un chef blocked — on annule son dialogue, puis on demande" \
   "skill étape f : le chef blocked n'est plus traité"
 garde_skill "par le pane si le nom est introuvable" \
@@ -1169,7 +1169,9 @@ L_ORPH_RONDES="$(grep -F -- "**Les espaces de travail orphelins.**" "$METIER" | 
 orphelin() { # $1 libellé, $2 ligne
   if printf '%s' "$2" | grep -qF -- "à signaler" \
      && printf '%s' "$2" | grep -qF -- "l'espace RESTE tant qu'il n'a pas tranché, et on ne le retire jamais faute de réponse." \
-     && ! printf '%s' "$2" | grep -qiE "à retirer après|se retire|retire-le|au chef s'il répond"; then
+     && printf '%s' "$2" | grep -qF -- "une seule fois, puis si son état change" \
+     && printf '%s' "$2" | grep -qF -- "J'ai besoin de toi : retirer ou garder <chemin>" \
+     && ! printf '%s' "$2" | grep -qiE "à retirer après|se retire|retire-le|au chef s'il répond|est nettoyé|nettoyé par|retiré par la ronde|après [[:alnum:]]+ jours|plus de [[:alnum:]]+ jours"; then
     ok "$1 : l'orphelin est À SIGNALER au CTO, l'espace RESTE — et rien n'enseigne à le retirer"
   else
     ko "$1 : l'orphelin n'est plus « à signaler » / l'espace ne reste plus / un retrait est enseigné"
@@ -1204,7 +1206,7 @@ fi
 L_FIN_M="$(grep -F -- "Avant d'y arriver : vérifie qu'aucun epic" "$METIER" | head -1)"
 L_FIN_S="$(grep -F -- "avant d'y arriver : vérifie qu'aucun epic" "$SKILL" | head -1)"
 for pair in "mise-en-production|$L_FIN_M" "skill|$L_FIN_S"; do
-  if printf '%s' "${pair#*|}" | grep -qF "figure au bilan de clôture sans bloquer la clôture." \
+  if printf '%s' "${pair#*|}" | grep -qF "figure au bilan de clôture, qui finit par \`J'ai besoin de toi : retirer ou garder <chemin>\` et non par \`rien.\`, sans bloquer la clôture ; le CTO ou l'orchestrateur suivant exécute la réponse, par le ServiceDesk où il est écrit." \
      && ! printf '%s' "${pair#*|}" | grep -qF "après avoir demandé à chaque chef"; then
     ok "fin de chantier (${pair%%|*}) : l'espace resté figure au bilan, sans bloquer la clôture"
   else
@@ -1233,6 +1235,39 @@ ordre_et_force() { # $1 libellé, $2 texte
 ordre_et_force "« Fermer proprement »" "$S_FERMER"
 ordre_et_force "skill étape f" "$S_SKILL_F"
 exceptions_absentes "skill étape f" "$S_SKILL_F"
+
+# ── (4e revue) le geste d'annulation, le motif honnête, ce qui n'existe VRAIMENT que là
+S_DIALOGUE="$(section 'Devant un dialogue de choix ouvert par ton chef')"
+if printf '%s' "$S_DIALOGUE" | grep -qF -- "**Le geste : \`herdr pane send-keys <pane> Escape\`**, sans répondre ni \`Enter\`." \
+   && ! printf '%s' "$S_DIALOGUE" | grep -qF -- "send-keys <pane> Enter"; then
+  ok "« Devant un dialogue de choix » donne le geste : Escape, sans répondre ni Enter"
+else
+  ko "« Devant un dialogue de choix » ne donne plus le geste (Escape, sans Enter), ou prescrit Enter"
+fi
+garde_ferme "\`worktree remove\` sans \`--force\` retire sans protester un espace qui contient des fichiers IGNORÉS : le refus n'est pas la protection, la question l'est ; \`--ignored\` liste aussi \`node_modules\`, \`.next\`, \`dist\` (régénérables : écarte-les, le reste va au chef)." \
+  "« Fermer proprement » : un retrait sans --force ne protège pas de l'ignoré, la question oui ; node_modules/.next/dist s'écartent" \
+  "« Fermer proprement » ne dit plus que le refus de worktree remove n'est pas la protection"
+garde_skill "\`worktree remove\` sans \`--force\` retire sans protester un espace qui contient des fichiers IGNORÉS : le refus n'est pas la protection, la question l'est ; \`--ignored\` liste aussi \`node_modules\`, \`.next\`, \`dist\` (régénérables : écarte-les, le reste va au chef)." \
+  "skill étape f : un retrait sans --force ne protège pas de l'ignoré, la question oui" \
+  "skill étape f : la phrase sur le retrait sans --force a disparu"
+faux_stash() { # $1 libellé, $2 texte — négatif apparié à la présence de la question
+  if printf '%s' "$2" | grep -qF -- "DEMANDER" && ! printf '%s' "$2" | grep -qiE "un stash|une autre branche"; then
+    ok "$1 : ni « un stash » ni « une autre branche » donnés pour ce qui n'existe que dans l'espace"
+  else
+    ko "$1 : « un stash » / « une autre branche » réintroduits — faux, ils survivent au retrait du worktree"
+  fi
+}
+faux_stash "« Fermer proprement »" "$S_FERMER"
+faux_stash "skill étape f" "$S_SKILL_F"
+# Le bilan avec un espace resté ne finit JAMAIS par « rien. » (il attend une décision).
+L_BILAN_MSG="$(grep -F -- "Le bilan est un message comme les autres" "$METIER" | head -1)"
+for pair in "mise-en-production|$L_FIN_M" "bilan-message|$L_BILAN_MSG" "skill|$L_FIN_S"; do
+  if [ -n "${pair#*|}" ] && ! printf '%s' "${pair#*|}" | sed 's/non par `rien\.`//' | grep -qE "(se termine|finit|termine) par \`rien\.\`"; then
+    ok "bilan (${pair%%|*}) : ne finit pas par « rien. » quand un espace reste"
+  else
+    ko "bilan (${pair%%|*}) : « finit par rien. » est écrit (ou la ligne a disparu) — un espace resté attend une décision"
+  fi
+done
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ⑩ LE TEXTE NE GONFLE PAS

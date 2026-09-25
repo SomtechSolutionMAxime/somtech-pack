@@ -62,7 +62,7 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 >
 > **Ce qu'il subit sans pouvoir le savoir** : personne ne peut le joindre par `livrer.js`, qui résout par agent · **sa veille de déblocage s'arrête**, motif `agent-invisible`, donc plus rien ne le surveille · il est inadressable par nom. ⚠️ **Et il ne peut pas se nommer pour en sortir** : `herdr agent rename` rend le même `agent_not_found` — *se nommer exige d'être trouvé*. **C'est à toi de le voir, pas à lui.** *(`T-20260819-0121`.)*
 >
-> ⚠️ **La mesure EST le geste lui-même** — *il n'existe aucune observation passive qui distingue ces états.* **Et le geste est aussi le remède du deuxième cas** : un agent forcé de finir repart au premier message, **donc le remède n'est pas la renaissance**. *Un faux diagnostic — « il est **mort sans finir** … Rien ne va le relancer » — a failli faire renaître un agent qui traitait à cet instant même le message qu'on venait de lui écrire : **la renaissance aurait détruit un contexte de neuf jours**.*
+> ⚠️ **La mesure EST le geste lui-même** — *il n'existe aucune observation passive qui distingue ces états.* **Et le geste est aussi le remède du deuxième cas** : un agent forcé de finir repart au premier message, **donc le remède n'est pas la renaissance**. *Un faux diagnostic (« **mort sans finir** ») a failli faire renaître un agent qui traitait alors le message qu'on venait de lui écrire : **neuf jours de contexte détruits**.*
 >
 > ⚠️ **Un blocage de hook ne devient visible qu'après coup.** *« A hook blocked the turn from ending 9 consecutive times — overriding and ending turn »* n'apparaît **qu'une fois le plafond atteint, après neuf tentatives**. **Un orchestrateur qui regarde entre-temps ne voit rien** : un agent retenu neuf fois affiche exactement ce qu'affiche un agent qui réfléchit. *(`T-20260819-0103` · `T-20260819-0111`.)*
 
@@ -149,7 +149,7 @@ epics get <ton-epic>
 
 **Et pas le témoin par compte de tours** — *« deux tours sans entrée »* exige de savoir combien de tours ont passé, **une information qui meurt avec la session** ; l'âge, lui, survit à tout.
 
-**L'occurrence et son coût** *(`E-20260818-0007`, 2026-09-19)* : réceptacle au bon endroit, **32 jours sans une entrée** ; la ronde n'a repris que réclamée par le CTO. **Un manquement à une tâche périodique n'émet aucun signal — c'est le seul type de défaut dont l'absence de plainte est garantie.**
+**L'occurrence et son coût** *(`E-20260818-0007`, 2026-09-19)* : réceptacle au bon endroit, **32 jours sans une entrée** ; la ronde n'a repris que réclamée par le CTO. **Un manquement périodique n'émet aucun signal : l'absence de plainte y est garantie.**
 
 ## 6 — Le topo du matin, 7 h 00, **sur ta ligne**
 
@@ -161,11 +161,11 @@ Un topo qui ne dit que du bien n'est pas lu longtemps. **Une nuit sans progrès 
 
 **Et deux contrôles de plus, une fois par jour — pas à chaque ronde**, leur objet bouge lentement :
 
-**Les espaces de travail orphelins.** On en accumule un par agent ouvert, et **rien ne les ramasse**. Un orphelin pointe sur un commit périmé, occupe le disque, et — le pire — **ressemble à du travail en cours**. **Il est à signaler** au CTO, comme une décision qu'il doit prendre (retirer ou garder) ; l'espace RESTE tant qu'il n'a pas tranché, et on ne le retire jamais faute de réponse.
+**Les espaces de travail orphelins.** On en accumule un par agent ouvert, et **rien ne les ramasse**. Un orphelin pointe sur un commit périmé, occupe le disque, et — le pire — **ressemble à du travail en cours**. **Il est à signaler** au CTO une seule fois, puis si son état change, en finissant par `J'ai besoin de toi : retirer ou garder <chemin>` ; l'espace RESTE tant qu'il n'a pas tranché, et on ne le retire jamais faute de réponse.
 
 **Les lignes ouvertes sans personne au bout.** ⚠️ **Attention au critère, il a déjà été faux une fois** : vérifier que le dossier d'une ligne existe **ne prouve rien** — sur 25 lignes ouvertes, les 25 passent ce test.
 
-⚠️ **Et le défaut à chercher est deux lignes de deux CHANTIERS DIFFÉRENTS sur le même terminal — jamais deux lignes qui répondent au même destinataire.** Le second critère, écrit d'abord, s'est trouvé **faux trois fois sur quatre** : un représentant de client porte **normalement** deux lignes — celle de son client et celle du CTO —, c'est sa définition de poste. Le vrai conflit est **deux chantiers étrangers l'un à l'autre au même bout du fil** : c'est celui-là qui a failli envoyer un message chez le mauvais client.
+⚠️ **Et le défaut à chercher est deux lignes de deux CHANTIERS DIFFÉRENTS sur le même terminal — jamais deux lignes qui répondent au même destinataire.** Le second critère, écrit d'abord, s'est trouvé **faux trois fois sur quatre** : un représentant de client porte **normalement** deux lignes (son client, le CTO) : c'est sa définition de poste. Le vrai conflit est **deux chantiers étrangers au même bout du fil** : c'est lui qui a failli envoyer un message chez le mauvais client.
 
 **Cas d'école de la règle des deux chiffres** : c'est de l'avoir exécuté qui l'a montré, pas la relecture.
 
@@ -183,7 +183,7 @@ Standards et ADR neufs ou amendés, compétences ajoutées, consignes du feed. *
 
 **Sans elle, la veille rend un vide qui se lit comme une stabilité.**
 
-**L'occurrence et son coût** *(passe du 2026-09-19)* : du 12 au 19/09, **aucun STD, aucun ADR, zéro publication au feed**, et rien au gabarit qui ne vienne de l'orchestrateur lui-même. **Le corpus opposable n'avait pas bougé ; le corpus vécu, si** — et il vivait dans des `CONTEXTE.md` et des consignes de session, des supports qui ne descendent à personne. **Coût : celui qui relit son corpus pour se mettre à jour conclut, à juste titre et faussement, que rien n'a changé.**
+**L'occurrence et son coût** *(passe du 2026-09-19)* : du 12 au 19/09, **aucun STD, aucun ADR, zéro publication au feed**, et rien au gabarit qui ne vienne de l'orchestrateur lui-même. **Le corpus opposable n'avait pas bougé ; le corpus vécu, si** — dans des `CONTEXTE.md` et des consignes de session, qui ne descendent à personne. **Coût : qui relit son corpus conclut, à juste titre et faussement, que rien n'a changé.**
 
 ⚠️ **Ce qu'elle rapporte est une PISTE, pas une source** : un fait vécu se mesure à sa source avant d'être inscrit, et d'autant plus vite qu'il retirerait une consigne *(`reflexes.md`, l'asymétrie du fait rapporté)*. **Sur cette même passe, un des faits rapportés était faux dans sa direction.**
 
