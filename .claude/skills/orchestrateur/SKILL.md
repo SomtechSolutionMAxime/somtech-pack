@@ -397,29 +397,29 @@ le trousseau n'a pas été lu. Relance après avoir versé.
 > commit ne contenait. Ce que la revue de T-20260816-0004 a établi, c'est que ce refus n'a jamais
 > été une revue de code — il n'interroge que `HEAD`.
 
-## Sa vigilance ne s'installe pas toute seule — une fois par poste
+## Sa vigilance ne s'installe pas : elle s'affecte — vérifie-la
 
-Le métier d'un orchestrateur lui impose deux rendez-vous : **une ronde toutes les heures** et
-**un topo à 7 h** sur sa ligne. Le mécanisme qui les déclenche existe — et **rien ne
-l'installait**.
+Le métier d'un orchestrateur lui impose des rendez-vous : **une ronde régulière** et **un topo
+le matin** sur sa ligne. **Une seule source les déclenche** (décision du dirigeant, 16 sept.) :
+le **registre des rondes du portail**, qui pousse à un NOM, par **affectation**, et trace chaque
+poussée.
 
-**[MESURÉ, 2026-08-15]** Sur un poste où un orchestrateur travaillait depuis des jours :
-aucun des deux agents de session n'existait, ni chez `launchctl` ni sur disque. Il n'a **jamais
-reçu un seul réveil**, a fini par poser une boucle à la main, et **sans savoir ce qu'il
-contournait** — la seule preuve de l'absence d'un réveil est un non-événement.
+**[MESURÉ, 2026-08-15]** Un orchestrateur a travaillé des jours **sans recevoir un seul
+réveil** — la seule preuve de l'absence d'un réveil est un non-événement. **[MESURÉ,
+2026-09-25]** Deux orchestrateurs sur treize n'avaient **aucune affectation** au registre.
 
-```bash
-node $HOME/.somtech/naissance-representant/bin/rendez-vous.js service installer
-node $HOME/.somtech/naissance-representant/bin/rendez-vous.js service etat
-```
+**Donc, à chaque naissance : vérifie que le nouvel orchestrateur a au moins une affectation
+active au registre des rondes.** Lis les affectations à son nom (page `/rondes` du portail, ou
+la table `affectations` en lecture seule). ⚠️ Le « à blanc » du pousseur ne suffit pas : il
+rend « rien à pousser » aussi bien pour un orchestrateur non affecté que pour une ronde pas
+encore due. **Aucune affectation → dis-le au dirigeant avant de rendre la main** : sans elle,
+cet orchestrateur ne sera jamais réveillé, et son silence ressemblera à « rien à signaler ».
 
-**Une fois par poste, pas par orchestrateur** : les deux rendez-vous balaient toutes les
-sessions et servent tous les orchestrateurs vivants, y compris ceux qui naîtront demain. Un
-orchestrateur fermé cesse d'être réveillé sans qu'on ait rien à désinscrire.
-
-> **Vérifie l'état plutôt que de supposer.** C'est le genre de geste qu'on croit avoir fait :
-> il ne rend rien de visible quand il réussit, et son absence ne se voit qu'à un réveil qui
-> n'arrive pas — c'est-à-dire à rien.
+**N'installe pas les anciens rendez-vous du pack** (`ca.somtech.orchestrateur-ronde` et
+`-topo`) : ils balaient tous les orchestrateurs sans affectation ni trace, et doublent le
+registre. Leur commande **refuse d'elle-même** quand `ca.somtech.rondes-portail` est chargé
+(T-20260925-0068) — réinstallés le 20 sept. par une session qui suivait cette compétence, ils
+ont poussé des faux réveils. Sur un poste **sans** registre, c'est au dirigeant de choisir.
 
 ## Ce que cette compétence ne fait jamais
 
