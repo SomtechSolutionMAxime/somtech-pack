@@ -1572,7 +1572,21 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #   après la passe de revue de fond NO-GO sur `T-20260925-0080`.
 #
 # ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
-BASELINE=183512
+#
+# ── RE-BASELINE DU 2026-09-25 (4ᵉ) — #378 recalibrée sur main (T-20260925-0086, lot 3) ──
+#
+#   183 512 → 183 469. MARGE ZÉRO. −43 : c'est une BAISSE, et c'est pour elle que ce bloc existe.
+#   Mesuré sur le rendu FINAL de #378 fusionnée avec `main` (après #383), pas estimé.
+#
+#   Un plafond est aveugle par construction à ce qu'on RETIRE : laissée à 183 512, la ligne
+#   aurait offert 43 caractères de marge au lot suivant, sans que personne ne les ait arbitrés.
+#   #378 retire plus qu'elle n'ajoute ; la ligne de base suit la taille exacte, vers le bas aussi.
+#
+#   L'ARBITRAGE — même règle (arbitrage `batiscan`, `T-20260925-0048` : « à la taille EXACTE de
+#   ton rendu final, marge zéro »), mandat `T-20260925-0086` lot 3.
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
+BASELINE=183469
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"
