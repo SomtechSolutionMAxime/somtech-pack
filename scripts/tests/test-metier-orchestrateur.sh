@@ -1862,6 +1862,23 @@ else
   ko "16d — le compte de torts n'est plus « tenu d'un seul côté — les siens sans ceux de l'autre, ou l'inverse », ou un mobile non attesté est revenu"
 fi
 
+# ── 9e revue : la règle de la ronde redite dans le socle, et le signalement du réveil, portent la même borne.
+# Le socle rendu de la ronde vit en tête du chapitre, avant « # R5 » : on l'ancre sur cette tête.
+S_R5="$(awk '/^# R5/{exit} {print}' "$GABARIT/metier/chapitres/rondes.md")"
+if printf '%s' "$S_R5" | grep -qF "Un tour de ronde qui trouve quelque chose rend un avancement visible ou un NOUVEAU blocage nommé, décision demandée ; un tour vide ne rend rien" \
+   && ! printf '%s' "$S_R5" | grep -qF "Chaque tour de ronde rend" \
+   && ! printf '%s' "$S_R5" | grep -qiE "ou un arbitrage nommé au CTO"; then
+  ok "17a — rondes (socle) : un tour qui trouve quelque chose rend un avancement ou un NOUVEAU blocage, un tour vide ne rend rien"
+else
+  ko "17a — rondes (socle) : « chaque tour de ronde rend… un arbitrage nommé » est revenu, ou « NOUVEAU blocage » / « un tour vide ne rend rien » a disparu"
+fi
+S_REVEIL="$(section 'La ronde — ce qui te réveille')"
+if printf '%s' "$S_REVEIL" | grep -qF "tu signales qu'il manque (une fois, puis sur un delta de nature ou au plus une fois par heure et par message)"; then
+  ok "17b — reflexes : le signalement du réveil manquant est borné (une fois, puis delta de nature ou une fois par heure et par message)"
+else
+  ko "17b — reflexes : le signalement du réveil manquant n'a plus de borne : il se répète à chaque tour"
+fi
+
 echo
 if [ "$echecs" -eq 0 ]; then
   echo "✅ $total/$total — le métier prescrit des gestes qui tiennent"
