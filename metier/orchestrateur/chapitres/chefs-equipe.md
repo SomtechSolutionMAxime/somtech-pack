@@ -49,7 +49,7 @@ herdr pane current                                  # ton pane (result.pane.pane
 herdr agent rename <ton-pane> <ta-rivière>          # matapedia, bonaventure… — jamais un code de mandat
 ```
 
-⚠️ **Le nom d'agent n'est pas le titre de ton onglet.** Poser un titre de terminal ne te nomme pas : `herdr agent list` continue de te rendre anonyme, et **un agent anonyme est inadressable**. Vérifie par le fait — `herdr agent get <ton-pane>` doit rendre `name`. *(Mesuré : un agent s'est cru nommé vingt minutes, son coordonnateur ne le voyait pas — `E-20260819-0001`.)*
+⚠️ **Le nom d'agent n'est pas le titre de ton onglet.** Poser un titre de terminal ne te nomme pas : `herdr agent list` continue de te rendre anonyme, et **un agent anonyme est inadressable**. Vérifie par le fait — `herdr agent get <ton-pane>` doit rendre `name`. *(Un agent s'est cru nommé vingt minutes — `E-20260819-0001`.)*
 
 ## Déclarer le modèle — toujours, au lancement
 
@@ -139,9 +139,9 @@ Une seule ligne, sans apostrophe ni retour à la ligne. **La commande sort non n
 
 ⚠️ **`--en-attente` n'est pas décoratif** (`T-20260816-0114`). Il exige une session qui *attend* — c'est la garde du brief de naissance, où « elle a quitté l'attente » **est** la preuve qu'elle a pris. Et il **désarme la délivrance** : une session qui vient de naître peut être derrière un écran de démarrage qu'on ne reconnaît pas, et on ne pose pas un geste irréversible sur ce qu'on ne comprend pas.
 
-⚠️ **C'est `livrer.js` qui sert à parler à un agent, plus `herdr agent prompt`** (`T-20260814-0138`, mesuré contre le vrai service). Le geste nu rend un succès **que la soumission parte ou non** — et, cas grave, **écrire dans une boîte de saisie qui contient déjà quelque chose ne livre pas deux messages, il en livre UN, les deux textes collés**. L'agent travaille alors sur un texte que personne n'a écrit. **Un brief fusionné est pire qu'un brief absent** : l'absent se voit, le fusionné produit un travail plausible et faux.
+⚠️ **C'est `livrer.js` qui sert à parler à un agent, plus `herdr agent prompt`** (`T-20260814-0138`). Le geste nu rend un succès **que la soumission parte ou non** — et, cas grave, **écrire dans une boîte de saisie qui contient déjà quelque chose ne livre pas deux messages, il en livre UN, les deux textes collés**. **Un brief fusionné est pire qu'un brief absent** : l'absent se voit, le fusionné produit un travail plausible et faux.
 
-⚠️ **Si la boîte du destinataire est bloquée, `livrer.js` la délivre — il ne l'écrase jamais.** Une boîte laissée pleine mettait en famine **tous** les émetteurs suivants, et seul le destinataire pouvait la libérer : le seul qui ne sait pas qu'elle bloque. Quatre occurrences en quatre rondes, et une fois sur trois l'auteur du texte coincé était **déjà mort**. La commande attend **cinq minutes**, relit, et si le texte n'a pas bougé, **le soumet pour son auteur** — la touche d'envoi seule, sans écrire un caractère — puis livre le tien avec un avis. Elle s'abstient dans quatre cas : le texte **a bougé** · la boîte porte un **dialogue de choix** · la session est devant un **écran connu ou inconnu** · la boîte est **illisible**. **Rien ne s'écrit jamais dans une boîte qu'on n'a pas vue vide.**
+⚠️ **Si la boîte du destinataire est bloquée, `livrer.js` la délivre — il ne l'écrase jamais.** Une boîte pleine met en famine **tous** les émetteurs suivants. La commande attend **cinq minutes**, relit, et si le texte n'a pas bougé, **le soumet pour son auteur** — la touche d'envoi seule, sans écrire un caractère — puis livre le tien avec un avis. Elle s'abstient dans quatre cas : le texte **a bougé** · la boîte porte un **dialogue de choix** · la session est devant un **écran connu ou inconnu** · la boîte est **illisible**. **Rien ne s'écrit jamais dans une boîte qu'on n'a pas vue vide.**
 
 *Pourquoi cinq minutes et pas trente secondes* : une demi-minute suffit contre quelqu'un dont les doigts sont sur le clavier ; elle ne dit rien de quelqu'un qui a tapé la moitié d'une phrase puis s'est levé. Le geste ne se défait pas, donc il se compte en minutes.
 
@@ -187,13 +187,13 @@ gestionnaire-etat-boite "$P"
 
 🔴 **Si ton texte est resté dans sa boîte, le geste qui le soumet (`herdr pane send-keys <pane> Enter`) a TROIS conditions, jamais une** : ① **le texte est le TIEN**, tu l'as vu se déposer — soumettre celui d'autrui, c'est le faire parler à sa place ; ② **tu VIENS de relire la boîte**, juste avant le geste, pas il y a quinze minutes ; ③ **tu as mesuré son ÉTAT**, pas lu son écran — un `suggestion` n'a rien à soumettre, et la touche part alors dans le vide en te faisant croire le contraire.
 
-**Sans ②, tu agis sur un état supposé.** Mesuré : geste conseillé sur une description de quinze minutes — **le but était pris depuis quatre, la boîte était vide** (`T-20260818-0143`). *« Un texte vu il y a quinze minutes n'est pas un texte présent maintenant — et sur une boîte, un geste inutile n'est jamais sans effet. »* **Ça n'autorise jamais à écrire dans la boîte d'autrui** : ça reste `livrer.js`, seul à délivrer sans écraser.
+**Sans ②, tu agis sur un état supposé.** Mesuré : geste conseillé sur une description de quinze minutes — **le but était pris depuis quatre, la boîte était vide** (`T-20260818-0143`). **Ça n'autorise jamais à écrire dans la boîte d'autrui** : ça reste `livrer.js`, seul à délivrer sans écraser.
 
 🔴 **UN ARBITRAGE QUI CONTREDIT UN `/goal` DÉJÀ POSÉ CORRIGE LE `/goal` DANS LE MÊME GESTE.**
 
 Un `/goal` posé **ne s'efface pas** quand tu arbitres autrement en conversation : **il continue de rappeler sa condition, indéfiniment, à un agent qui n'a aucun moyen de savoir lequel des deux est le plus récent.**
 
-*Mesuré le 2026-08-19* : un `/goal` posé à la naissance — *« le dépôt à jour sur `origin/main` »* —, l'inverse arbitré deux heures plus tard, **le premier jamais corrigé**. Le hook de but a rappelé la condition d'origine, l'agent l'a relayée comme *« le CTO vient de poser comme condition »*, et **dix minutes ont été passées à chercher un message qui n'existait pas**.
+*Mesuré le 2026-08-19* : un `/goal` posé à la naissance, l'inverse arbitré deux heures plus tard, **le premier jamais corrigé** : le hook l'a rappelé, l'agent l'a relayé comme *« le CTO vient de poser comme condition »*, et **dix minutes ont été perdues à chercher un message inexistant**.
 
 > **Il a fait exactement ce qu'il fallait : il a refusé de trancher entre deux ordres opposés du même donneur d'ordre.** *L'incohérence était celle de qui avait posé les deux.*
 
@@ -201,11 +201,10 @@ Un `/goal` posé **ne s'efface pas** quand tu arbitres autrement en conversation
 
 ## Devant un dialogue de choix ouvert par ton chef — tu ANNULES
 
-**Tu ne réponds pas, même en choisissant l'option « par défaut » que tu as toi-même rédigée** : répondre tranche **à la place de celui à qui la question appartient**. *Annuler libère sans décider.*
+**Tu ne réponds pas, même en choisissant l'option « par défaut » que tu as toi-même rédigée** : répondre tranche **à la place de celui à qui la question appartient**. *Annuler libère sans décider (2026-09-20).* **Le geste, sur un dialogue de CHOIX reconnu à l'écran (`herdr pane read` d'abord) seulement : `herdr pane send-keys <pane> Escape`**, sans répondre ni `Enter` ; puis redemande au chef la question qu'il t'avait posée. **Escape REFUSE une demande de PERMISSION** : sur elle, ou sur un écran inconnu, ne presse rien, mets le pane devant le CTO (focus).
 
 ⚠️ **Et `livrer.js` REFUSE d'écrire à un agent `blocked`** : un dialogue ouvert rend une session **injoignable même pour son coordonnateur** — tu ne peux ni la débloquer par le texte, ni lui dire pourquoi.
 
-*Occurrence : 2026-09-20 — répondre aurait tranché à la place du dirigeant deux questions qu'on venait de lui poser.*
 
 ## Poser la veille de déblocage
 
@@ -216,9 +215,9 @@ scripts/orchestration/veille-deblocage.sh <pane> <agent> --detach   # une fois s
 scripts/orchestration/veille-deblocage.sh --list                    # pane, agent et MOTIF de chacune
 ```
 
-⚠️ **`--detach`, jamais un `&` nu — et après le brief, jamais à la naissance nue.** Ce texte prescrivait `… &` : lancée ainsi depuis une session Claude Code, la veille est une tâche de fond du harnais, **et le harnais la tue** — deux fois, pendant que celles d'un autre orchestrateur survivaient. *Même script, même poste, même journée : seule la façon de les lancer différait.* `--detach` détache le script **lui-même** : la survie ne dépend plus de ta discipline (`T-20260818-0109`).
+⚠️ **`--detach`, jamais un `&` nu — et après le brief, jamais à la naissance nue.** Ce texte prescrivait `… &` : lancée ainsi depuis une session Claude Code, la veille est une tâche de fond du harnais, **et le harnais la tue**. `--detach` détache le script **lui-même** : la survie ne dépend plus de ta discipline (`T-20260818-0109`).
 
-**Pour vérifier qu'elles tournent, `--list`, jamais un compte.** Un `ps | grep` a rendu « 3 » : **aucune des trois ne gardait mes agents.** *Compter ne suffit pas, il faut savoir ce qu'on compte.* `--list` rend le pane, l'agent, le pid et le **motif** de chacune — six motifs nommés, chacun avec son code de sortie. **Un arrêt annoncé sur un agent qui travaille encore n'est pas une fin de mandat : repose une veille.** Elle tient ~5 h 30 et prévient avant de s'éteindre ; l'ancienne valeur (~66 min) était plus courte que la plupart des lots.
+**Pour vérifier qu'elles tournent, `--list`, jamais un compte.** Un `ps | grep` a rendu « 3 » : **aucune des trois ne gardait mes agents.** *Compter ne suffit pas, il faut savoir ce qu'on compte.* `--list` rend le pane, l'agent, le pid et le **motif** de chacune — six motifs nommés. **Un arrêt annoncé sur un agent qui travaille encore n'est pas une fin de mandat : repose une veille.** Elle tient ~5 h 30 et prévient avant de s'éteindre.
 
 > 🔴 **ELLE DÉDUIT LA FIN D'UN MANDAT DE L'ABSENCE DE BUT AFFICHÉ.** Motif au journal : `agent-termine — l'agent a fini (confirmé sur deux relevés, aucun but actif à l'écran)`. **Un agent sans but n'a pas fini : il n'a pas de but** — les deux sont indistinguables à l'écran, et **l'un des deux fait disparaître la garde**.
 >
@@ -267,7 +266,7 @@ herdr agent wait "$P" --until done --until blocked --timeout 1800000   # en arri
 | **Sous-agent** | exploration, revue ponctuelle, vérification | une tâche, puis mort — `Agent(prompt)` |
 | **Coéquipier** | correction après revue, lot qu'on reprend, spécialiste reconsulté | persiste — `Agent(prompt, name: "…")` puis `SendMessage` |
 
-**Le critère : aura-t-on besoin de lui reparler ?** Chaque agent herdr rouvert repart de zéro — perte de 10-15 min à rejouer la même histoire. Le coéquipier évite ça. Laisse le sous-agent mourir.
+**Le critère : aura-t-on besoin de lui reparler ?** Un agent herdr rouvert repart de zéro (10-15 min perdues) ; le coéquipier l'évite. Laisse le sous-agent mourir.
 
 ## Fermer proprement — les trois choses, pas seulement le pane
 
@@ -276,27 +275,27 @@ herdr agent wait "$P" --until done --until blocked --timeout 1800000   # en arri
 #    complète la description de l'epic : PR #, branche, état, verdict
 
 # 2. vérifier que son travail est bien parti — ⚠️ PAS avec @{u}, voir juste en dessous
-git -C ~/worktrees/<repo>/<timestamp> status --porcelain
+git -C ~/worktrees/<repo>/<timestamp> status --porcelain --ignored
 git -C ~/worktrees/<repo>/<timestamp> log --oneline origin/<branche-cible>..HEAD
 
-# 3. fermer SON pane, pas son tab
+# 3. DEMANDER au chef ce qui n'existe que dans son espace — rien ne se ferme avant sa réponse
+
+# 4. fermer SON pane, pas son tab
 herdr pane close "$P"
 
-# 4. retirer l'espace de travail et sa branche-socle
+# 5. retirer l'espace de travail et sa branche-socle
 git -C <repo> worktree remove ~/worktrees/<repo>/<timestamp>
 git -C <repo> branch -D wt/<timestamp>
 git -C <repo> worktree prune
 ```
 
-> ⚠️ **N'utilise JAMAIS `@{u}` pour ce contrôle, et n'avale jamais son erreur.** C'est le défaut le plus coûteux de cette page : il **détruit du travail**.
+> ⚠️ **N'utilise JAMAIS `@{u}` pour ce contrôle, et n'avale jamais son erreur.** Deux gardes, deux défauts, un seul geste : **les deux, jamais l'une pour l'autre.**
 >
-> Une branche-socle `wt/<timestamp>` est créée par `git worktree add -b wt/$TS origin/main` — **elle n'a pas d'upstream**, et elle n'en aura jamais. `git log @{u}..` échoue donc *toujours*, et un `2>/dev/null` transforme cet échec en **sortie vide**. Une sortie vide se lit « tout est poussé ». **Tu détruis alors l'espace de travail avec les commits qu'il portait**, et rien ne t'aura prévenu — l'erreur qui aurait dû t'arrêter a été avalée par la redirection.
+> **La référence.** Une branche `wt/<timestamp>` **n'a pas d'upstream** : `git log @{u}..` échoue *toujours*, et un `2>/dev/null` change cet échec en sortie vide, lu « tout est poussé » : tu détruis les commits. `origin/<branche-cible>..HEAD` **échoue bruyamment** si elle est fausse.
 >
-> `origin/<branche-cible>..HEAD` compare à ce qui existe vraiment, et **échoue bruyamment** si la référence est fausse. Un échec qu'on voit vaut infiniment mieux qu'un vide qu'on croit.
->
-> *Deux orchestrateurs ont exécuté la version fautive aujourd'hui sans rien perdre — **par vigilance, pas par conception**. Le geste ne les protégeait pas.*
+> **La question (étape 3).** Pouvoir lire l'espace d'un chef ne t'exempte pas de LUI DEMANDER avant de fermer son pane ou de retirer son espace. Ce log ne voit que ce qui est **commité**, et `status` n'en montre que les noms : ni l'un ni l'autre ne dit ce qui n'existe que là — un fichier ignoré par `.gitignore` (base de données, dump, `.env`), des commits jamais poussés de la branche-socle, ce que le chef sait sans l'avoir écrit. **Status propre + log vide ne veut pas dire rien à perdre.** `worktree remove` sans `--force` retire sans protester un espace qui contient des fichiers IGNORÉS : le refus n'est pas la protection, la question l'est ; `--ignored` liste aussi `node_modules`, `.next`, `dist` (régénérables : écarte-les, le reste va au chef). **Sans réponse** (chef gelé, `agent_not_found`), l'espace RESTE : relance par `livrer.js` (`livrer.js <pane|nom> --texte "…"` avec son chemin complet, par le pane si le nom est introuvable), puis, sans réponse à la ronde suivante, escalade au CTO par ta ligne avec ce qui est en jeu — jamais de fermeture faute de réponse. Un chef `blocked` refuse le message : annule son dialogue de choix reconnu (voir « Devant un dialogue de choix ouvert par ton chef »), redemande-lui sa question, puis demande ; permission ou écran inconnu : ne presse rien, pane devant le CTO ; n'escalade que si ça échoue. Jamais `worktree remove --force` ni `-f` : un espace qui refuse de se retirer est un signal.
 
-⚠️ **Ferme le pane, jamais le tab.** Un tab héberge souvent plusieurs panes — donc plusieurs agents, **dont potentiellement toi**. `herdr tab close` les emporte tous, sans confirmation. `herdr agent list` donne le `tab_id` de chacun.
+⚠️ **Ferme le pane, jamais le tab** : il héberge souvent plusieurs agents, **dont toi**, et `herdr tab close` les emporte tous sans confirmation (`herdr agent list` donne le `tab_id`).
 
 **Tu as créé l'espace de travail toi-même avec `git worktree add` : c'est donc `git` qui le retire.** Le teardown du lanceur ne connaît pas ce qu'il n'a pas ouvert.
 

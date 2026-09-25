@@ -1030,6 +1030,265 @@ porte "Deux gardes justes, chacune bornée à sa section, ne gardent pas leur AC
   "2026-09-20"
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ⑨bis LA FERMETURE D'UN CHEF SE DEMANDE, ELLE NE SE DÉDUIT PAS DE LA LECTURE
+#                                                          (T-20260925-0015)
+#
+# Lire l'espace d'un chef (additionalDirectories, T-20260922-0156) répond à
+# « qu'y a-t-il ». Seule la question répond à « qu'est-ce qui n'existe QUE là ».
+# Cas réel : zéro commit hors main, et le chef portait l'unique exemplaire d'un
+# correctif d'extraction plus une base de 58 Mo — le refus de lecture avait forcé
+# à demander. Chaque assertion porte sur une PHRASE ENTIÈRE, dans la section de
+# fermeture seule ; chaque négative est appariée à ses positives.
+# ═══════════════════════════════════════════════════════════════════════════
+echo "⑨bis fermer un chef : demander avant de fermer — T-20260925-0015"
+
+# ⚠️ `section` s'arrête au premier « # » de colonne 0 — y compris un COMMENTAIRE de bloc bash,
+# et la fermeture en porte. On lit donc ici la section en ignorant les clôtures ```.
+section_hors_blocs() {
+  awk -v motif="$1" '
+    /^```/ { fence = !fence }
+    !fence && /^#+ / {
+      n = 0; while (substr($0, n+1, 1) == "#") n++
+      if (dedans && n <= niv) { dedans = 0 }
+      if (!dedans && index($0, motif) > 0) { dedans = 1; niv = n; next }
+    }
+    dedans { print }
+  ' "$METIER"
+}
+S_FERMER="$(section_hors_blocs 'Fermer proprement')"
+garde_ferme() {
+  if printf '%s' "$S_FERMER" | grep -qF -- "$1"; then ok "$2"; else ko "$3"; fi
+}
+garde_ferme "Pouvoir lire l'espace d'un chef ne t'exempte pas de LUI DEMANDER avant de fermer son pane ou de retirer son espace." \
+  "« Fermer proprement » exige de DEMANDER au chef avant de fermer, et dit que la lecture n'exempte pas" \
+  "« Fermer proprement » n'exige plus de demander au chef — une lecture permise ferait fermer sur un « zéro commit »"
+garde_ferme "Ce log ne voit que ce qui est **commité**, et \`status\` n'en montre que les noms : ni l'un ni l'autre ne dit ce qui n'existe que là — un fichier ignoré par \`.gitignore\` (base de données, dump, \`.env\`), des commits jamais poussés de la branche-socle, ce que le chef sait sans l'avoir écrit." \
+  "« Fermer proprement » dit le motif : ni log ni status ne voient l'ignoré, les commits non poussés de la branche-socle, ce que le chef sait" \
+  "« Fermer proprement » ne nomme plus ce que ni log ni status ne voient — la règle deviendrait une formalité"
+garde_ferme "**Status propre + log vide ne veut pas dire rien à perdre.**" \
+  "« Fermer proprement » : status propre + log vide ne veut pas dire rien à perdre" \
+  "« Fermer proprement » ne dit plus que status propre + log vide n'est pas « rien à perdre »"
+garde_ferme "status --porcelain --ignored" \
+  "« Fermer proprement » : le status montre aussi l'ignoré (--ignored)" \
+  "« Fermer proprement » : le status ne porte plus --ignored — une base de données ignorée serait invisible"
+garde_ferme "N'utilise JAMAIS \`@{u}\` pour ce contrôle, et n'avale jamais son erreur." \
+  "la garde @{u} est toujours là, dans la même section" \
+  "la garde @{u} a disparu de « Fermer proprement »"
+garde_ferme "Deux gardes, deux défauts, un seul geste : **les deux, jamais l'une pour l'autre.**" \
+  "les deux gardes se lisent ENSEMBLE : deux défauts, un seul geste" \
+  "les deux gardes ne se lisent plus ensemble — l'une ferait croire que l'autre suffit"
+
+contraire_absent() {
+  if printf '%s' "$S_FERMER" | grep -qiF -- "$1"; then
+    ko "« Fermer proprement » écrit le contraire : « $1 »"
+  else
+    ok "« Fermer proprement » n'écrit pas « $1 »"
+  fi
+}
+contraire_absent "lire suffit"
+contraire_absent "la lecture suffit"
+contraire_absent "inutile de demander"
+contraire_absent "la lecture remplace la question"
+contraire_absent "n'a pas besoin de demander"
+
+# ── (T-20260925-0015, revue) la question est une ÉTAPE, un silence ne ferme rien, le skill l'enseigne aussi
+garde_ferme "# 3. DEMANDER au chef ce qui n'existe que dans son espace — rien ne se ferme avant sa réponse" \
+  "la question est une ÉTAPE du bloc, avant la fermeture du pane" \
+  "la question n'est plus une étape du bloc de fermeture — elle redevient un encadré qu'on saute"
+garde_ferme "escalade au CTO par ta ligne avec ce qui est en jeu — jamais de fermeture faute de réponse." \
+  "sans réponse du chef : escalade au CTO par « ta ligne », jamais de fermeture faute de réponse" \
+  "le cas du chef qui ne répond pas n'est plus écrit — un silence se lirait « rien à perdre »"
+garde_ferme "Un chef \`blocked\` refuse le message : annule son dialogue de choix reconnu (voir « Devant un dialogue de choix ouvert par ton chef »), redemande-lui sa question, puis demande ; permission ou écran inconnu : ne presse rien, pane devant le CTO ; n'escalade que si ça échoue." \
+  "un chef blocked : on annule son dialogue, puis on demande" \
+  "le chef blocked n'est plus traité : annuler le dialogue avant de demander a disparu"
+garde_ferme "par le pane si le nom est introuvable" \
+  "la relance se fait par le pane si le nom est introuvable" \
+  "la relance d'un agent_not_found n'indique plus le pane"
+garde_ferme "Jamais \`worktree remove --force\` ni \`-f\`" \
+  "le chapitre interdit --force et -f en toutes lettres" \
+  "le chapitre n'interdit plus --force / -f en toutes lettres"
+
+# Le skill : son étape f est la seconde surface du même geste.
+S_SKILL_F="$(awk '/^\*\*f\. Fermer proprement/{d=1} /^\*\*Fais l.inventaire/{d=0} d' "$RACINE/.claude/skills/orchestrer-chantier/SKILL.md")"
+garde_skill() {
+  if printf '%s' "$S_SKILL_F" | grep -qF -- "$1"; then ok "$2"; else ko "$3"; fi
+}
+garde_skill "# 3. DEMANDER au chef ce qui n'existe que dans son espace — rien ne se ferme avant sa réponse" \
+  "skill étape f : la question précède la fermeture du pane" \
+  "skill étape f : la question avant de fermer a disparu"
+garde_skill "Pouvoir lire l'espace d'un chef ne dispense pas de LUI DEMANDER : \`git log origin/<branche-cible>..HEAD\` ne voit que ce qui est commité" \
+  "skill étape f : la lecture ne dispense pas de demander, et le motif est dit" \
+  "skill étape f : la lecture ne dispense plus de demander, ou le motif a disparu"
+garde_skill "git -C ~/worktrees/<repo>/<timestamp> log --oneline origin/<branche-cible>..HEAD" \
+  "skill étape f : le contrôle compare à origin/<branche-cible>" \
+  "skill étape f : le contrôle ne compare plus à origin/<branche-cible>"
+skill_sans() { # $1 motif ERE, $2 libellé — négatif apparié à la présence de la question
+  if printf '%s' "$S_SKILL_F" | grep -qF -- "# 3. DEMANDER au chef" \
+     && ! printf '%s' "$S_SKILL_F" | grep -E "$1" | grep -qv '^$'; then
+    ok "skill étape f : $2 — et la question est là"
+  else
+    ko "skill étape f : $2 est présent, ou la question a disparu"
+  fi
+}
+skill_sans '^git .*log.*@\{u\}' "aucun contrôle par @{u}"
+skill_sans '^git .*log.*2>[[:space:]]*/dev/null' "aucun contrôle qui avale son erreur"
+skill_sans '^git .*worktree remove.*--force' "aucun « worktree remove --force »"
+
+# Négatif de SECTION, famille d'exceptions : la question ne se contourne pas, même en phrases
+# séparées (« Sauf si git log est vide. », « Un espace propre à ta lecture se ferme sans rien demander. »).
+exceptions_absentes() { # $1 nom, $2 texte
+  if printf '%s' "$2" | grep -qF -- "DEMANDER" \
+     && ! printf '%s' "$2" | grep -qiE "sauf si|hormis|excepté|à moins|se ferme sans rien demander|sans rien demander|sans demander|se ferm(e|ent) directement|se ferme sans|ferme directement|sans poser la question"; then
+    ok "$1 : aucune exception à la question (sauf si / hormis / à moins / sans demander…)"
+  else
+    ko "$1 : une exception à la question est écrite — ou la question a disparu"
+  fi
+}
+exceptions_absentes "« Fermer proprement »" "$S_FERMER"
+
+# ── (3e revue) le skill porte les mêmes phrases ; orphelin, fin de chantier, @{u} partout, « ta ligne »
+garde_skill "Status propre + log vide ne veut pas dire rien à perdre." \
+  "skill étape f : status propre + log vide ne veut pas dire rien à perdre" \
+  "skill étape f : la phrase « status propre + log vide » a disparu"
+garde_skill "git -C ~/worktrees/<repo>/<timestamp> status --porcelain --ignored" \
+  "skill étape f : le status montre l'ignoré (--ignored)" \
+  "skill étape f : le status ne porte plus --ignored"
+garde_skill "annule son dialogue de choix, mais seulement s'il est reconnu comme tel à l'écran (\`herdr pane read\` d'abord) : \`herdr pane send-keys <pane> Escape\`, sans répondre ni \`Enter\` (Escape sur une demande de PERMISSION la REFUSE : sur elle, ou sur un écran inconnu, tu ne presses rien et tu mets le pane devant le CTO) ; puis redemande-lui la question qu'il t'avait posée, puis demande ; n'escalade que si ça échoue." \
+  "skill étape f : un chef blocked — on annule son dialogue, puis on demande" \
+  "skill étape f : le chef blocked n'est plus traité"
+garde_skill "par le pane si le nom est introuvable" \
+  "skill étape f : relance par le pane si le nom est introuvable" \
+  "skill étape f : la relance n'indique plus le pane"
+garde_skill "escalade au CTO par ta ligne avec ce qui est en jeu — jamais de fermeture faute de réponse." \
+  "skill étape f : escalade par « ta ligne », jamais faute de réponse" \
+  "skill étape f : l'escalade par « ta ligne » a disparu"
+
+SKILL="$RACINE/.claude/skills/orchestrer-chantier/SKILL.md"
+L_ORPH_SKILL="$(grep -F -- "Tout worktree sans agent vivant" "$SKILL" | head -1)"
+L_ORPH_RONDES="$(grep -F -- "**Les espaces de travail orphelins.**" "$METIER" | head -1)"
+orphelin() { # $1 libellé, $2 ligne
+  if printf '%s' "$2" | grep -qF -- "à signaler" \
+     && printf '%s' "$2" | grep -qF -- "l'espace RESTE tant qu'il n'a pas tranché, et on ne le retire jamais faute de réponse." \
+     && printf '%s' "$2" | grep -qF -- "une seule fois, puis si son état change (l'espace a changé de contenu ou le CTO a répondu)" \
+     && printf '%s' "$2" | grep -qF -- "fichiers ignorés NON régénérables (base, dump, \`.env\`)" \
+     && printf '%s' "$2" | grep -qF -- "au fil ServiceDesk du chantier" \
+     && printf '%s' "$2" | grep -qF -- "J'ai besoin de toi : retirer ou garder <chemin>" \
+     && ! printf '%s' "$2" | grep -qiE "à retirer après|se retire|retire-le|au chef s'il répond|est nettoyé|nettoyé par|retiré par la ronde|après [[:alnum:]]+ jours|plus de [[:alnum:]]+ jours"; then
+    ok "$1 : l'orphelin est À SIGNALER au CTO, l'espace RESTE — et rien n'enseigne à le retirer"
+  else
+    ko "$1 : l'orphelin n'est plus « à signaler » / l'espace ne reste plus / un retrait est enseigné"
+  fi
+}
+orphelin "rondes (espaces orphelins)" "$L_ORPH_RONDES"
+orphelin "skill (worktree orphelin)" "$L_ORPH_SKILL"
+
+# @{u} : dans TOUT le skill, aucune ligne exécutable ne l'emploie ; chaque mention est celle qui l'interdit.
+if ! grep -E '^git .*@\{u\}' "$SKILL" | grep -q . \
+   && ! grep -F '@{u}' "$SKILL" | grep -v "N'utilise jamais" | grep -q . \
+   && grep -qF "N'utilise jamais" "$SKILL"; then
+  ok "skill entier : @{u} n'apparaît que dans la phrase qui l'interdit"
+else
+  ko "skill entier : @{u} est employé hors de la phrase qui l'interdit (ou l'interdit a disparu)"
+fi
+L_DONE="$(grep -F -- "ne suffit pas" "$METIER" | grep -F -- "origin/<cible>..HEAD" | head -1)"
+if [ -n "$L_DONE" ] && ! printf '%s' "$L_DONE" | sed 's/ne suffit pas//' | grep -qF "suffit"; then
+  ok "rondes (chef done) : la garde origin/<cible>..HEAD « ne suffit pas » — et rien ne dit qu'elle suffit"
+else
+  ko "rondes (chef done) : la garde origin/<cible>..HEAD n'est plus dite insuffisante, ou « suffit » est écrit"
+fi
+
+# « ta ligne » : canal d'escalade dans le métier ET le skill (apparié à la question).
+if printf '%s' "$S_FERMER" | grep -qF "par ta ligne" && printf '%s' "$S_SKILL_F" | grep -qF "par ta ligne"; then
+  ok "l'escalade au CTO passe par « ta ligne », dans le métier comme dans le skill"
+else
+  ko "l'escalade au CTO ne passe plus par « ta ligne » dans le métier ou le skill"
+fi
+
+# Fin de chantier : les chefs ont déjà été interrogés ; ce qui reste va au BILAN, sans bloquer.
+L_FIN_M="$(grep -F -- "Avant d'y arriver : vérifie qu'aucun epic" "$METIER" | head -1)"
+L_FIN_S="$(grep -F -- "avant d'y arriver : vérifie qu'aucun epic" "$SKILL" | head -1)"
+for pair in "mise-en-production|$L_FIN_M" "skill|$L_FIN_S"; do
+  if printf '%s' "${pair#*|}" | grep -qF "figure au bilan de clôture, qui finit par \`J'ai besoin de toi : retirer ou garder <chemin>\` et non par \`rien.\`, sans bloquer la clôture ; le CTO ou l'orchestrateur suivant exécute la réponse, par le ServiceDesk où il est écrit." \
+     && ! printf '%s' "${pair#*|}" | grep -qF "après avoir demandé à chaque chef"; then
+    ok "fin de chantier (${pair%%|*}) : l'espace resté figure au bilan, sans bloquer la clôture"
+  else
+    ko "fin de chantier (${pair%%|*}) : « bilan de clôture » a disparu, ou la demande inexécutable est revenue"
+  fi
+done
+
+# ORDRE et --force / -f : dans le bloc de fermeture (métier ET étape f du skill), la question précède
+# `herdr pane close`, et aucun `worktree remove` ne force. Chaque négatif est apparié à la présence
+# de la question — un bloc sans question ne prouve rien.
+ordre_et_force() { # $1 libellé, $2 texte
+  local d c
+  d="$(printf '%s\n' "$2" | grep -n '^# 3\. DEMANDER au chef' | head -1 | cut -d: -f1)"
+  c="$(printf '%s\n' "$2" | grep -n '^herdr pane close' | head -1 | cut -d: -f1)"
+  if [ -n "$d" ] && [ -n "$c" ] && [ "$d" -lt "$c" ]; then
+    ok "$1 : la ligne « DEMANDER » vient AVANT « herdr pane close »"
+  else
+    ko "$1 : la ligne « DEMANDER » ne précède plus « herdr pane close » (ou l'une des deux a disparu)"
+  fi
+  if [ -n "$d" ] && ! printf '%s\n' "$2" | grep -E '^git .*worktree remove' | grep -qE -- '(^|[[:space:]])(--force|-f)([[:space:]]|$)'; then
+    ok "$1 : aucun « worktree remove » ne force (--force, -f) — et la question est là"
+  else
+    ko "$1 : un « worktree remove » force (--force / -f), ou la question a disparu"
+  fi
+}
+ordre_et_force "« Fermer proprement »" "$S_FERMER"
+ordre_et_force "skill étape f" "$S_SKILL_F"
+exceptions_absentes "skill étape f" "$S_SKILL_F"
+
+# ── (4e revue) le geste d'annulation, le motif honnête, ce qui n'existe VRAIMENT que là
+S_DIALOGUE="$(section 'Devant un dialogue de choix ouvert par ton chef')"
+if printf '%s' "$S_DIALOGUE" | grep -qF -- "**Le geste, sur un dialogue de CHOIX reconnu à l'écran (\`herdr pane read\` d'abord) seulement : \`herdr pane send-keys <pane> Escape\`**, sans répondre ni \`Enter\` ; puis redemande au chef la question qu'il t'avait posée." \
+   && printf '%s' "$S_DIALOGUE" | grep -qF -- "**Escape REFUSE une demande de PERMISSION** : sur elle, ou sur un écran inconnu, ne presse rien, mets le pane devant le CTO (focus)." \
+   && ! printf '%s' "$S_DIALOGUE" | grep -qF -- "send-keys <pane> Enter" \
+   && ! printf '%s' "$S_DIALOGUE" | grep -F -- "send-keys <pane> Escape" | grep -qv "reconnu"; then
+  ok "« Devant un dialogue de choix » : Escape seulement sur un dialogue de CHOIX reconnu, jamais sur une permission, puis on redemande la question"
+else
+  ko "« Devant un dialogue de choix » : Escape sans condition de dialogue de choix reconnu, permission non exclue, ou question non redemandée"
+fi
+# Skill entier : Escape sur un dialogue de chef porte sa condition ; jamais Enter comme réponse.
+SKILL_SANS_ENTER="$(sed 's/sans répondre ni `Enter`//g' "$SKILL")"
+if printf '%s' "$SKILL_SANS_ENTER" | grep -qE 'send-keys <pane> Enter|Enter le répond|`Enter` répond' ; then
+  ko "skill entier : « send-keys <pane> Enter » est prescrit comme réponse à un dialogue de chef"
+else
+  ok "skill entier : aucun « send-keys <pane> Enter » ne répond à un dialogue de chef"
+fi
+if printf '%s' "$S_SKILL_F" | grep -F -- "send-keys <pane> Escape" | grep -qv "reconnu comme tel"; then
+  ko "skill étape f : Escape sans condition de dialogue de choix reconnu"
+else
+  ok "skill étape f : Escape porte sa condition (dialogue de choix reconnu à l'écran)"
+fi
+garde_skill "Pouvoir lire l'espace d'un chef ne dispense pas de LUI DEMANDER : \`git log origin/<branche-cible>..HEAD\` ne voit que ce qui est commité, et \`status\` n'en montre que les noms — un fichier ignoré (base, dump, \`.env\`), des commits jamais poussés de la branche-socle, ce que le chef sait sans l'avoir écrit." \
+  "skill étape f : le motif nomme l'ignoré (base, dump, .env), les commits non poussés de la branche-socle, ce que le chef sait" \
+  "skill étape f : le motif ne nomme plus le fichier ignoré (base, dump, .env) — la règle deviendrait une formalité"
+garde_ferme "\`worktree remove\` sans \`--force\` retire sans protester un espace qui contient des fichiers IGNORÉS : le refus n'est pas la protection, la question l'est ; \`--ignored\` liste aussi \`node_modules\`, \`.next\`, \`dist\` (régénérables : écarte-les, le reste va au chef)." \
+  "« Fermer proprement » : un retrait sans --force ne protège pas de l'ignoré, la question oui ; node_modules/.next/dist s'écartent" \
+  "« Fermer proprement » ne dit plus que le refus de worktree remove n'est pas la protection"
+garde_skill "\`worktree remove\` sans \`--force\` retire sans protester un espace qui contient des fichiers IGNORÉS : le refus n'est pas la protection, la question l'est ; \`--ignored\` liste aussi \`node_modules\`, \`.next\`, \`dist\` (régénérables : écarte-les, le reste va au chef)." \
+  "skill étape f : un retrait sans --force ne protège pas de l'ignoré, la question oui" \
+  "skill étape f : la phrase sur le retrait sans --force a disparu"
+faux_stash() { # $1 libellé, $2 texte — négatif apparié à la présence de la question
+  if printf '%s' "$2" | grep -qF -- "DEMANDER" && ! printf '%s' "$2" | grep -qiE "un stash|une autre branche"; then
+    ok "$1 : ni « un stash » ni « une autre branche » donnés pour ce qui n'existe que dans l'espace"
+  else
+    ko "$1 : « un stash » / « une autre branche » réintroduits — faux, ils survivent au retrait du worktree"
+  fi
+}
+faux_stash "« Fermer proprement »" "$S_FERMER"
+faux_stash "skill étape f" "$S_SKILL_F"
+# Le bilan avec un espace resté ne finit JAMAIS par « rien. » (il attend une décision).
+L_BILAN_MSG="$(grep -F -- "Le bilan est un message comme les autres" "$METIER" | head -1)"
+for pair in "mise-en-production|$L_FIN_M" "bilan-message|$L_BILAN_MSG" "skill|$L_FIN_S"; do
+  if [ -n "${pair#*|}" ] && ! printf '%s' "${pair#*|}" | sed 's/non par `rien\.`//' | grep -qE "(se termine|finit|termine) par \`rien\.\`"; then
+    ok "bilan (${pair%%|*}) : ne finit pas par « rien. » quand un espace reste"
+  else
+    ko "bilan (${pair%%|*}) : « finit par rien. » est écrit (ou la ligne a disparu) — un espace resté attend une décision"
+  fi
+done
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ⑩ LE TEXTE NE GONFLE PAS
 #
 # Il est lu EN ENTIER à chaque naissance. Un métier qui gonfle à chaque leçon
@@ -1586,7 +1845,26 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #   ton rendu final, marge zéro »), mandat `T-20260925-0086` lot 3.
 #
 # ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
-BASELINE=183469
+#
+# ── RE-BASELINE DU 2026-09-25 (5ᵉ) — #379 recalibrée sur main (T-20260925-0086, lot 3) ──
+#
+#   183 469 → 183 806. MARGE ZÉRO. +337. Mesuré sur le rendu FINAL de #379 fusionnée avec
+#   `main` (après #383 et #378), après `pack metier rendre --role orchestrateur`, pas estimé.
+#
+#   ① CE QUI PÈSE — le texte de #379 (T-20260925-0015 : demander au chef avant de fermer), déjà
+#      revu dans sa PR, posé sur un `main` qui a entre-temps reçu #378 et #383.
+#   ② LES 22 CONFLITS — tous issus de 3 blocs dans 2 sources (`rondes.md` ×2, `reflexes.md` ×1) :
+#      les deux PR avaient raccourci les MÊMES paragraphes d'anecdote, chacune pour tenir son
+#      budget, sans changer le fond. Résolus bloc par bloc sur la version de #379 (la plus courte
+#      dans 2 cas sur 3), le reste de #378 conservé ; les 20 copies dérivées (rendu, gabarit,
+#      8 lieux) RÉGÉNÉRÉES par `metier rendre` et `orchestrateur-update`, jamais éditées à la main.
+#   ③ LA PART COUPÉE — aucune au-delà de ce que chaque PR avait déjà coupé.
+#
+#   L'ARBITRAGE — même règle (arbitrage `batiscan`, `T-20260925-0048` : « à la taille EXACTE de
+#   ton rendu final, marge zéro »), mandat `T-20260925-0086` lot 3.
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
+BASELINE=183806
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"

@@ -3,7 +3,7 @@
 > **Rien de ce qui attend sans se signaler ne dort plus d'un tour de ronde.**
 > *0 agent bloqué plus d'un tour · 0 constat qui meurt avec la session · 0 chantier mené sans ronde posée.*
 
-**Un agent bloqué ne fait aucun bruit.** Il n'échoue pas, il ne prévient pas, il attend — et rien ne distingue de l'extérieur un agent qui réfléchit d'un agent qui attend depuis quarante minutes. Mesuré : **trois agents ont attendu en silence, dont un près d'une heure**, parce que personne ne regardait.
+**Un agent bloqué ne fait aucun bruit.** Il n'échoue pas, il ne prévient pas, il attend — et rien ne distingue de l'extérieur un agent qui réfléchit d'un agent qui attend depuis quarante minutes. Mesuré : **trois agents ont attendu en silence, dont un près d'une heure**.
 
 **La veille de déblocage ne remplace pas ta ronde.** Elle répond aux demandes de permission, et rien d'autre. Elle ne dit rien d'un agent **qui a fini**, d'un agent **qui s'est arrêté proprement**, ni d'une **chaîne rouge**.
 
@@ -21,7 +21,7 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 >
 > **Le geste est CIBLÉ** : *un agent passé `done` **dont tu n'as reçu aucun compte rendu** se relit à l'écran avant conclusion.* **Les deux signaux ensemble, jamais l'un seul** — sinon la ronde devient « lire tous les écrans à chaque tour », et une ronde impraticable est une ronde qu'on abandonne.
 >
-> ⚠️ **Et ne ferme pas son pane sur cette lecture-là.** La garde `origin/<cible>..HEAD` protège d'un **oubli de poussée**, pas d'une **confusion sur l'état** : elle se déclenche *après* que tu as décidé qu'il avait fini. Un agent coupé a du travail non poussé.
+> ⚠️ **Et ne ferme pas son pane sur cette lecture-là.** La garde `origin/<cible>..HEAD` **ne suffit pas** : elle protège d'un **oubli de poussée**, pas d'une **confusion sur l'état**, et ne voit que le commité. Un agent coupé a du travail non poussé : relis, puis **demande-lui ce qui n'existe que là**.
 
 > 🔴 **TROIS ÉTATS SE RESSEMBLENT, ET LE SEUL GESTE QUI TRANCHE EST D'ÉCRIRE PUIS DE REMESURER.**
 >
@@ -36,13 +36,13 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 >
 > **Le protocole, trente secondes** : ① mesurer l'état → `idle` ; ② **déposer un texte + `Enter`** ; ③ **remesurer huit secondes plus tard**. *Un agent joignable serait passé `working` avec `esc to interrupt`. Chez un agent gelé, l'état ne bouge pas et le message est **avalé sans effet**.*
 >
-> 🔴 **Et le quatrième casse le protocole lui-même : son étape ① n'a pas de réponse.** *`herdr agent get <pane>` ne répond aucun état : il répond `agent_not_found` — alors que `herdr pane read <pane>` rend son écran, où il travaille.* **La surface PANE le voit, la surface AGENT ne le voit pas.** *Mesuré le 2026-08-19 sur un chef d'équipe en plein travail : 84 agents au registre, le sien absent.*
+> 🔴 **Et le quatrième casse le protocole lui-même : son étape ① n'a pas de réponse.** *`herdr agent get <pane>` ne répond aucun état : il répond `agent_not_found` — alors que `herdr pane read <pane>` rend son écran, où il travaille.* **La surface PANE le voit, la surface AGENT ne le voit pas.** *Mesuré le 2026-08-19 : 84 agents au registre, celui d'un chef au travail absent.*
 >
 > ⚠️ **`agent_not_found` n'est pas la mort d'un agent : c'est la panne de la mesure** *(c'est la règle « on ne teste pas quand on ne peut pas voir », retournée sur l'outil qui sert à voir)*. **Devant elle, tu lis son pane** — et tu ne conclus rien de l'absence.
 >
-> **Ce qu'il subit sans pouvoir le savoir** : personne ne peut le joindre par `livrer.js`, qui résout par agent · **sa veille de déblocage s'arrête**, motif `agent-invisible`, donc plus rien ne le surveille · il est inadressable par nom. ⚠️ **Et il ne peut pas se nommer pour en sortir** : `herdr agent rename` rend le même `agent_not_found` — *se nommer exige d'être trouvé*. **C'est à toi de le voir, pas à lui.** *(`T-20260819-0121`.)*
+> **Ce qu'il subit sans pouvoir le savoir** : personne ne peut le joindre par `livrer.js`, qui résout par agent · **sa veille de déblocage s'arrête**, motif `agent-invisible`, donc plus rien ne le surveille · il est inadressable par nom. ⚠️ **Et il ne peut pas se nommer pour en sortir** : `herdr agent rename` rend le même `agent_not_found` — *se nommer exige d'être trouvé*. **C'est à toi de le voir, pas à lui.** (`T-20260819-0121`)
 >
-> ⚠️ **La mesure EST le geste lui-même** — *il n'existe aucune observation passive qui distingue ces états.* **Et le geste est aussi le remède du deuxième cas** : un agent forcé de finir repart au premier message, **donc le remède n'est pas la renaissance**. *Un faux diagnostic — « il est **mort sans finir** … Rien ne va le relancer » — a failli faire renaître un agent qui traitait à cet instant même le message qu'on venait de lui écrire : **la renaissance aurait détruit un contexte de neuf jours**.*
+> ⚠️ **La mesure EST le geste lui-même** — *il n'existe aucune observation passive qui distingue ces états.* **Et le geste est aussi le remède du deuxième cas** : un agent forcé de finir repart au premier message, **donc le remède n'est pas la renaissance**. *Un faux diagnostic (« **mort sans finir** ») a failli faire renaître un agent qui traitait alors le message qu'on venait de lui écrire : **neuf jours de contexte détruits**.*
 >
 > ⚠️ **Un blocage de hook ne devient visible qu'après coup.** *« A hook blocked the turn from ending 9 consecutive times — overriding and ending turn »* n'apparaît **qu'une fois le plafond atteint, après neuf tentatives**. **Un orchestrateur qui regarde entre-temps ne voit rien** : un agent retenu neuf fois affiche exactement ce qu'affiche un agent qui réfléchit. *(`T-20260819-0103` · `T-20260819-0111`.)*
 
@@ -66,7 +66,7 @@ Ce que tu cherches : qui est bloqué · qui a fini sans le dire · qui n'a plus 
 
 > **Une ronde ne rend pas un état : elle en tire une conséquence. Sinon elle est un journal, et un journal que personne ne lit n'a rien dit.**
 
-C'est la seconde moitié de la clause ci-dessus, et les deux se tiennent : **ce que tu ne fais pas** (prendre le clavier) et **ce que tu dois faire** (conclure). **Ce n'est pas une maxime en l'air — elle a été payée** : voir le cas mesuré du 2026-08-16 en *[Si rien n'avance, repars du backlog](#4--si-rien-navance-repars-du-backlog)*, où une ronde a correctement listé trois agents `done` et n'en a rien conclu. Une ronde qui ne fait ni l'un ni l'autre a produit une liste que personne ne relira.
+C'est la seconde moitié de la clause ci-dessus, et les deux se tiennent : **ce que tu ne fais pas** (prendre le clavier) et **ce que tu dois faire** (conclure). **Elle a été payée** : cas du 2026-08-16 en *[Si rien n'avance, repars du backlog](#4--si-rien-navance-repars-du-backlog)*. Une ronde qui ne fait ni l'un ni l'autre a produit une liste que personne ne relira.
 
 ### Ta ronde rend un delta du chantier, ou un arbitrage
 
@@ -74,7 +74,7 @@ C'est la seconde moitié de la clause ci-dessus, et les deux se tiennent : **ce 
 
 Une découverte d'infrastructure hors du chantier s'inscrit en **ticket** (R1.4 : inscrire n'est pas exécuter) **et l'on revient au dossier** — jamais une excursion qui remplace la livraison.
 
-⚠️ **Mesuré, et c'est le motif de cette règle** : quatre jours sur un projet, sept epics, un complété, **zéro livraison enregistrée, zéro trace de travail liée** — l'énergie de la semaine était allée aux défauts du parc (`P-20260822-0001`), pas au chantier.
+⚠️ **Mesuré, et c'est le motif de cette règle** : quatre jours, sept epics, un complété, **zéro livraison enregistrée** — l'énergie était allée aux défauts du parc (`P-20260822-0001`), pas au chantier.
 
 ## 2 — Ta propre ligne et ta propre boîte de saisie
 
@@ -105,7 +105,7 @@ Ce que tu y cherches : une **décision** qui ne vit que dans ta conversation · 
 
 **C'est peut-être la plus importante : sans elle, un orchestrateur s'arrête dès que son dernier lot se termine et attend qu'on le réveille.** Et il ne se voit pas à l'arrêt — il voit des agents `done`, ce qui est un état parfaitement normal, et il passe.
 
-*Mesuré sur une ronde réelle, 2026-08-16* : trois agents étaient au repos avec du travail devant eux. La ronde les a correctement listés `done` — **et elle n'en a rien conclu**. Personne ne l'a su avant que le CTO demande *« vous travaillez sur quoi ? »*.
+*Mesuré le 2026-08-16* : trois agents au repos avec du travail devant eux, correctement listés `done` — **et rien n'en a été conclu** avant que le CTO demande *« vous travaillez sur quoi ? »*.
 
 Quand aucun lot n'avance, tu prends la suite **dans le backlog, au grain de la Demande** — jamais du ticket — et tu la lances.
 
@@ -129,7 +129,7 @@ epics get <ton-epic>
 
 **Et pas le témoin par compte de tours** — *« deux tours sans entrée »* exige de savoir combien de tours ont passé, **une information qui meurt avec la session** ; l'âge, lui, survit à tout.
 
-**L'occurrence et son coût** *(`E-20260818-0007`, 2026-09-19)* : réceptacle **au bon endroit**, **32 jours sans une entrée**, et la ronde n'a repris que parce que le CTO l'a réclamée — **le déclencheur que la dernière ligne de ce même epic interdisait**. **Un manquement à une tâche périodique n'émet aucun signal — c'est le seul type de défaut dont l'absence de plainte est garantie.**
+**L'occurrence et son coût** *(`E-20260818-0007`, 2026-09-19)* : réceptacle au bon endroit, **32 jours sans une entrée** ; la ronde n'a repris que réclamée par le CTO. **Un manquement périodique n'émet aucun signal : l'absence de plainte y est garantie.**
 
 ## 6 — Le topo du matin, 7 h 00, **sur ta ligne**
 
@@ -141,13 +141,13 @@ Un topo qui ne dit que du bien n'est pas lu longtemps. **Une nuit sans progrès 
 
 **Et deux contrôles de plus, une fois par jour — pas à chaque ronde**, leur objet bouge lentement :
 
-**Les espaces de travail orphelins.** On en accumule un par agent ouvert, et **rien ne les ramasse**. Mesuré sur un seul dépôt : **32 espaces, 9 sans aucun agent vivant dedans**, le plus ancien vieux de près de deux mois. Un orphelin pointe sur un commit périmé, occupe le disque, et — le pire — **ressemble à du travail en cours**.
+**Les espaces de travail orphelins.** On en accumule un par agent ouvert, et **rien ne les ramasse**. Un orphelin pointe sur un commit périmé, occupe le disque, et — le pire — **ressemble à du travail en cours**. **Il est à signaler** au CTO une seule fois, puis si son état change (l'espace a changé de contenu ou le CTO a répondu), en joignant ses fichiers ignorés NON régénérables (base, dump, `.env`) et en finissant par `J'ai besoin de toi : retirer ou garder <chemin>` ; sa décision et le fait « signalé le <date> » s'écrivent au fil ServiceDesk du chantier et s'y relisent avant de signaler : un successeur ne re-signale pas ; l'espace RESTE tant qu'il n'a pas tranché, et on ne le retire jamais faute de réponse.
 
 **Les lignes ouvertes sans personne au bout.** ⚠️ **Attention au critère, il a déjà été faux une fois** : vérifier que le dossier d'une ligne existe **ne prouve rien** — sur 25 lignes ouvertes, les 25 passent ce test.
 
-⚠️ **Et le défaut à chercher est deux lignes de deux CHANTIERS DIFFÉRENTS sur le même terminal — jamais deux lignes qui répondent au même destinataire.** Le second critère a été écrit d'abord, et la première exécution réelle l'a trouvé **faux trois fois sur quatre** : un représentant de client porte **normalement** deux lignes — celle de son client et celle du CTO —, c'est sa définition de poste. Le vrai conflit est **deux chantiers étrangers l'un à l'autre au même bout du fil**.
+⚠️ **Et le défaut à chercher est deux lignes de deux CHANTIERS DIFFÉRENTS sur le même terminal — jamais deux lignes qui répondent au même destinataire.** Le second critère, écrit d'abord, s'est trouvé **faux trois fois sur quatre** : un représentant de client porte **normalement** deux lignes (son client, le CTO) : c'est sa définition de poste. Le vrai conflit est **deux chantiers étrangers au même bout du fil** : c'est lui qui a failli envoyer un message chez le mauvais client.
 
-**C'est le cas d'école de la règle des deux chiffres** (voir la veille de déblocage) : ce critère attrapait quelque chose de réel, et il refusait à tort trois fois sur quatre. Personne ne l'a vu en le relisant — **c'est de l'avoir exécuté qui l'a montré**.
+**Cas d'école de la règle des deux chiffres** : c'est de l'avoir exécuté qui l'a montré, pas la relecture.
 
 ## 8 — Ce qui a changé dans le corpus
 
@@ -163,7 +163,7 @@ Standards et ADR neufs ou amendés, compétences ajoutées, consignes du feed. *
 
 **Sans elle, la veille rend un vide qui se lit comme une stabilité.**
 
-**L'occurrence et son coût** *(passe du 2026-09-19)* : du 12 au 19/09, **aucun STD, aucun ADR, zéro publication au feed**, et rien au gabarit qui ne vienne de l'orchestrateur lui-même. **Le corpus opposable n'avait pas bougé ; le corpus vécu, si** — et il vivait dans des `CONTEXTE.md` et des consignes de session, des supports qui ne descendent à personne. **Coût : celui qui relit son corpus pour se mettre à jour conclut, à juste titre et faussement, que rien n'a changé.**
+**L'occurrence et son coût** *(passe du 2026-09-19)* : du 12 au 19/09, **aucun STD, aucun ADR, zéro publication au feed**, et rien au gabarit qui ne vienne de l'orchestrateur lui-même. **Le corpus opposable n'avait pas bougé ; le corpus vécu, si** — dans des `CONTEXTE.md` et des consignes de session, qui ne descendent à personne. **Coût : qui relit son corpus conclut, à juste titre et faussement, que rien n'a changé.**
 
 ⚠️ **Ce qu'elle rapporte est une PISTE, pas une source** : un fait vécu se mesure à sa source avant d'être inscrit, et d'autant plus vite qu'il retirerait une consigne *(`reflexes.md`, l'asymétrie du fait rapporté)*. **Sur cette même passe, un des faits rapportés était faux dans sa direction.**
 

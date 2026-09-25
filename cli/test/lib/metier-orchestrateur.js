@@ -1393,6 +1393,157 @@ export const CONTROLES = [
   },
 
   {
+    id: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    quoi: 'avant de fermer le pane d’un chef ou de retirer son espace, l’orchestrateur LUI DEMANDE — pouvoir lire son espace ne l’en dispense pas, et le métier dit pourquoi',
+    verifier({ metier }) {
+      // T-20260925-0015. `git log origin/<cible>..HEAD` ne voit que ce qui est COMMITÉ : son
+      // « zéro commit » est vrai et TROMPEUR devant un fichier non suivi, une base, un correctif
+      // jamais indexé. Cas réel : le chef portait l'unique exemplaire d'un correctif et une base
+      // de 58 Mo ; la portée refusait la lecture de son répertoire, ce qui a forcé à demander.
+      // Desserrer la portée (T-20260922-0156) retire ce refus : le geste de remplacement est la
+      // question, écrite. ⚠️ Elle est éprouvée DANS la section de fermeture seule — une phrase
+      // déplacée ailleurs ne garde plus le geste qu'elle prétend garder.
+      const s = sectionDe(metier, /^Fermer proprement\b/, 'qui enseigne la fermeture d’un chef');
+      const corps = s.corps.replace(/\s+/g, ' ');
+      const exige = [
+        [/ne t['’]exempte pas de LUI DEMANDER avant de fermer son pane ou de retirer son espace/,
+          'la lecture n’exempte pas de DEMANDER au chef avant de fermer son pane ou de retirer son espace'],
+        [/ne voit que ce qui est \*\*commité\*\*, et `status` n['’]en montre que les noms.*?fichier ignoré.*?des commits jamais poussés de la branche-socle, ce que le chef sait sans l['’]avoir écrit/,
+          'le motif : ni log ni status ne voient l’ignoré, les commits non poussés de la branche-socle, ce que le chef sait'],
+        [/Status propre \+ log vide ne veut pas dire rien à perdre/, 'status propre + log vide ne veut pas dire rien à perdre'],
+        [/status --porcelain --ignored/, 'le status montre aussi l’ignoré (--ignored)'],
+        [/par le pane si le nom est introuvable/, 'la relance se fait par le pane si le nom est introuvable'],
+        [/Un chef `blocked` refuse le message : annule son dialogue de choix reconnu \(voir « Devant un dialogue de choix ouvert par ton chef »\), redemande-lui sa question, puis demande ; permission ou écran inconnu : ne presse rien, pane devant le CTO ; n['’]escalade que si ça échoue/,
+          'un chef blocked : dialogue de choix reconnu annulé, question redemandée ; permission ou écran inconnu : rien, pane devant le CTO'],
+        [/Jamais `worktree remove --force` ni `-f`/, 'le chapitre interdit --force et -f en toutes lettres'],
+        [/`worktree remove` sans `--force` retire sans protester un espace qui contient des fichiers IGNORÉS : le refus n['’]est pas la protection, la question l['’]est ; `--ignored` liste aussi `node_modules`, `\.next`, `dist` \(régénérables : écarte-les, le reste va au chef\)/,
+          'un retrait sans --force ne protège pas de l’ignoré ; la question, oui ; node_modules/.next/dist s’écartent'],
+        [/(?:Ne te sers|N['’]utilise) JAMAIS(?: de| d['’]utiliser)? `@\{u\}`/, 'la garde `@{u}`, dans la même section'],
+        [/les deux, jamais l['’]une pour l['’]autre/, 'les deux gardes (`@{u}` et la question) se lisent ENSEMBLE'],
+        [/# 3\. DEMANDER au chef ce qui n['’]existe que dans son espace — rien ne se ferme avant sa réponse/,
+          'la question est une ÉTAPE du bloc, avant la fermeture du pane'],
+        [/l['’]espace RESTE.*?escalade au CTO par ta ligne avec ce qui est en jeu — jamais de fermeture faute de réponse/,
+          'sans réponse du chef, l’espace reste : escalade par « ta ligne », jamais de fermeture faute de réponse'],
+      ];
+      for (const [motif, dit] of exige) {
+        assert.match(
+          corps, motif,
+          `la section de fermeture d’un chef ne dit plus : ${dit}. Une lecture permise ferait `
+            + `croire des fichiers redondants sur un « zéro commit » — et l'espace serait détruit.`,
+        );
+      }
+      const iq = s.corps.search(/^# 3\. DEMANDER au chef/m);
+      const ic = s.corps.search(/^herdr pane close/m);
+      assert.ok(iq >= 0 && ic >= 0 && iq < ic, 'la fermeture d’un chef : la ligne « DEMANDER » ne précède plus `herdr pane close`');
+      const force = s.corps.split('\n').filter((l) => /^git .*worktree remove/.test(l) && /(?:^|\s)(?:--force|-f)(?:\s|$)/.test(l));
+      assert.deepEqual(force, [], 'la fermeture d’un chef : un `worktree remove` force (--force / -f) — un worktree qui refuse est un signal');
+      const contraire = corps.match(/la lecture (?:suffit|remplace la question)|lire suffit|inutile de demander|pas besoin de demander|sauf si|hormis|excepté|à moins|sans rien demander|sans demander|se ferm(?:e|ent) directement|se ferme sans|ferme directement|sans poser la question|un stash|une autre branche/i);
+      assert.ok(
+        !contraire,
+        `la section de fermeture d’un chef écrit le contraire de la règle (« ${contraire && contraire[0]} ») : `
+          + `la lecture répond à « qu’y a-t-il », jamais à « qu’est-ce qui n’existe que là ».`,
+      );
+    },
+  },
+
+  {
+    id: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    quoi: 'l’étape f du skill (fermer un chef) demande avant de fermer, compare à origin/<cible>, et ne force jamais le retrait',
+    verifier({ competence }) {
+      // T-20260925-0015 (revue). Le skill enseignait le défaut que le métier ferme : `git log @{u}..
+      // 2>/dev/null` et `worktree remove … # --force`. Un agent qui suit le skill ferme sur un « zéro
+      // commit » trompeur et détruit le non-suivi. Ancré à l'ÉTAPE f seule, en phrases entières.
+      const i = competence.indexOf('**f. Fermer proprement');
+      assert.ok(i >= 0, 'le skill ne porte plus son étape f « Fermer proprement »');
+      const j = competence.indexOf('**Fais l’inventaire', i) >= 0 ? competence.indexOf('**Fais l’inventaire', i) : competence.indexOf('**Fais l\'inventaire', i);
+      const f = competence.slice(i, j > i ? j : undefined).replace(/[ \t]+/g, ' ');
+      const lignes = f.split('\n').map((l) => l.trim());
+      const question = f.includes('# 3. DEMANDER au chef ce qui n\'existe que dans son espace — rien ne se ferme avant sa réponse');
+      assert.ok(question, 'étape f du skill : la question « DEMANDER au chef » avant la fermeture a disparu');
+      assert.ok(
+        f.includes('Pouvoir lire l\'espace d\'un chef ne dispense pas de LUI DEMANDER : `git log origin/<branche-cible>..HEAD` ne voit que ce qui est commité'),
+        'étape f du skill : la lecture ne dispense plus de demander, ou le motif (git log ne voit que le commité) a disparu',
+      );
+      assert.ok(
+        lignes.some((l) => /^git .* log .*origin\/<branche-cible>\.\.HEAD$/.test(l)),
+        'étape f du skill : le contrôle ne compare plus à origin/<branche-cible>..HEAD',
+      );
+      const fautives = lignes.filter((l) => /^git\b/.test(l) && (
+        (/\blog\b/.test(l) && /@\{u\}/.test(l)) || (/\blog\b/.test(l) && /2\s*>\s*\/dev\/null/.test(l)) || (/worktree remove/.test(l) && /--force/.test(l))));
+      assert.deepEqual(fautives, [], 'étape f du skill : une ligne exécutable enseigne le défaut (@{u}, erreur avalée, ou --force)');
+      for (const [motif, dit] of [
+        [/Status propre \+ log vide ne veut pas dire rien à perdre/, 'status propre + log vide ne veut pas dire rien à perdre'],
+        [/status --porcelain --ignored/, 'le status montre l’ignoré (--ignored)'],
+        [/annule son dialogue de choix, mais seulement s['’]il est reconnu comme tel à l['’]écran \(`herdr pane read` d['’]abord\) : `herdr pane send-keys <pane> Escape`, sans répondre ni `Enter` \(Escape sur une demande de PERMISSION la REFUSE : sur elle, ou sur un écran inconnu, tu ne presses rien et tu mets le pane devant le CTO\) ; puis redemande-lui la question qu['’]il t['’]avait posée, puis demande ; n['’]escalade que si ça échoue/, 'un chef blocked : Escape seulement sur un dialogue de choix reconnu, jamais sur une permission, puis question redemandée'],
+        [/Pouvoir lire l['’]espace d['’]un chef ne dispense pas de LUI DEMANDER : `git log origin\/<branche-cible>\.\.HEAD` ne voit que ce qui est commité, et `status` n['’]en montre que les noms — un fichier ignoré \(base, dump, `\.env`\), des commits jamais poussés de la branche-socle, ce que le chef sait sans l['’]avoir écrit\./, 'le motif du skill nomme l’ignoré (base, dump, .env), les commits non poussés de la branche-socle, ce que le chef sait'],
+        [/`worktree remove` sans `--force` retire sans protester un espace qui contient des fichiers IGNORÉS : le refus n['’]est pas la protection, la question l['’]est/, 'un retrait sans --force ne protège pas de l’ignoré ; la question, oui'],
+        [/par le pane si le nom est introuvable/, 'la relance par le pane si le nom est introuvable'],
+        [/escalade au CTO par ta ligne avec ce qui est en jeu — jamais de fermeture faute de réponse/, 'l’escalade par « ta ligne », jamais faute de réponse'],
+      ]) assert.match(f, motif, `étape f du skill : ${dit} a disparu`);
+      const iqs = f.search(/^# 3\. DEMANDER au chef/m);
+      const ics = f.search(/^herdr pane close/m);
+      assert.ok(iqs >= 0 && ics >= 0 && iqs < ics, 'étape f du skill : la ligne « DEMANDER » ne précède plus `herdr pane close`');
+      assert.deepEqual(
+        lignes.filter((l) => /^git .*worktree remove/.test(l) && /(?:^|\s)(?:--force|-f)(?:\s|$)/.test(l)), [],
+        'étape f du skill : un `worktree remove` force (--force / -f)',
+      );
+      assert.deepEqual(f.split('\n').filter((l) => l.includes('send-keys <pane> Escape') && !l.includes('reconnu comme tel')), [], 'étape f du skill : Escape est prescrit sans condition de dialogue de choix reconnu');
+      const skillSansEnter = competence.replace(/sans répondre ni `Enter`/g, '');
+      assert.ok(!/send-keys <pane> Enter|Enter le répond|`Enter` répond/.test(skillSansEnter), 'le skill : « send-keys <pane> Enter » est prescrit comme réponse à un dialogue de chef');
+      const exc = f.match(/sauf si|hormis|excepté|à moins|sans rien demander|sans demander|se ferm(?:e|ent) directement|se ferme sans|ferme directement|sans poser la question|un stash|une autre branche/i);
+      assert.ok(!exc, `étape f du skill : une exception à la question est écrite (« ${exc && exc[0]} »)`);
+    },
+  },
+
+  {
+    id: 'orphelin-fin-de-chantier-et-canal-sans-contraire',
+    quoi: 'un espace orphelin se SIGNALE au CTO et reste ; @{u} n’est enseigné nulle part ; la garde du chef done ne suffit pas ; la fin de chantier écrit le reste au bilan',
+    verifier({ metier, competence }) {
+      // T-20260925-0015, 3e revue. Chaque phrase gardée est celle qu'un remplacement de même
+      // longueur peut retourner sans que le plafond de taille ne bouge.
+      const ligne = (texte, debut) => {
+        const l = texte.split('\n').find((x) => x.includes(debut));
+        assert.ok(l, `le texte ne porte plus la ligne « ${debut} »`);
+        return l;
+      };
+      const CONTRAIRE_RETRAIT = /à retirer après|se retire|retire-le|au chef s['’]il répond|est nettoyé|nettoyé par|retiré par la ronde|après \w+ jours|plus de \w+ jours/i;
+      for (const [nom, l] of [
+        ['rondes (espaces orphelins)', ligne(metier, '**Les espaces de travail orphelins.**')],
+        ['skill (worktree orphelin)', ligne(competence, 'Tout worktree sans agent vivant')],
+      ]) {
+        assert.ok(l.includes('à signaler'), `${nom} : l’orphelin n’est plus « à signaler » au CTO`);
+        assert.ok(l.includes("l'espace RESTE tant qu'il n'a pas tranché, et on ne le retire jamais faute de réponse."), `${nom} : l’espace ne reste plus tant que le CTO n’a pas tranché`);
+        assert.ok(l.includes("une seule fois, puis si son état change (l'espace a changé de contenu ou le CTO a répondu)"), `${nom} : le signalement n’est plus « une seule fois, puis si son état change (contenu changé ou réponse du CTO) »`);
+        assert.ok(l.includes('fichiers ignorés NON régénérables (base, dump, `.env`)'), `${nom} : le signalement ne joint plus les fichiers ignorés NON régénérables`);
+        assert.ok(l.includes('au fil ServiceDesk du chantier'), `${nom} : la décision et le signalement ne sont plus consignés au fil ServiceDesk du chantier`);
+        assert.ok(l.includes("J'ai besoin de toi : retirer ou garder <chemin>"), `${nom} : le signalement ne finit plus par « J'ai besoin de toi : retirer ou garder <chemin> »`);
+        assert.ok(!CONTRAIRE_RETRAIT.test(l), `${nom} : un retrait de l’orphelin est enseigné (« ${l.match(CONTRAIRE_RETRAIT)?.[0]} »)`);
+      }
+      const utilisations = competence.split('\n').filter((l) => l.includes('@{u}'));
+      assert.deepEqual(utilisations.filter((l) => /^git\b/.test(l.trim())), [], 'le skill entier : une ligne exécutable emploie @{u}');
+      assert.deepEqual(utilisations.filter((l) => !l.includes('N\'utilise jamais')), [], 'le skill entier : @{u} est mentionné hors de la phrase qui l’interdit');
+      const dlg = sectionDe(metier, /^Devant un dialogue de choix ouvert par ton chef/, 'sur le dialogue de choix d’un chef').corps;
+      assert.ok(dlg.includes("**Le geste, sur un dialogue de CHOIX reconnu à l'écran (`herdr pane read` d'abord) seulement : `herdr pane send-keys <pane> Escape`**, sans répondre ni `Enter` ; puis redemande au chef la question qu'il t'avait posée."), 'le dialogue de choix : Escape seulement sur un dialogue de CHOIX reconnu, puis la question redemandée, a disparu');
+      assert.ok(dlg.includes("**Escape REFUSE une demande de PERMISSION** : sur elle, ou sur un écran inconnu, ne presse rien, mets le pane devant le CTO (focus)."), 'le dialogue de choix : Escape refuse une permission — la mise en garde a disparu');
+      assert.deepEqual(dlg.split('\n').filter((l) => l.includes('send-keys <pane> Escape') && !l.includes('reconnu')), [], 'le dialogue de choix : Escape est prescrit sans condition de dialogue reconnu');
+      assert.ok(!dlg.includes('send-keys <pane> Enter'), 'le dialogue de choix : `send-keys <pane> Enter` est prescrit — c’est répondre');
+      const msgBilan = ligne(metier, 'Le bilan est un message comme les autres');
+      assert.ok(!/(?:se termine|finit|termine) par `rien\.`/.test(msgBilan), 'le bilan : « finit par rien. » est écrit');
+      const done = ligne(metier, 'origin/<cible>..HEAD');
+      assert.ok(done.includes('ne suffit pas'), 'rondes (chef done) : la garde origin/<cible>..HEAD n’est plus dite insuffisante');
+      assert.ok(!done.replace('ne suffit pas', '').includes('suffit'), 'rondes (chef done) : « suffit » est écrit à propos de la garde');
+      for (const [nom, l] of [
+        ['mise-en-production', ligne(metier, 'Avant d\'y arriver : vérifie qu\'aucun epic')],
+        ['skill', ligne(competence, 'avant d\'y arriver : vérifie qu\'aucun epic')],
+      ]) {
+        assert.ok(l.includes("figure au bilan de clôture, qui finit par `J'ai besoin de toi : retirer ou garder <chemin>` et non par `rien.`, sans bloquer la clôture ; le CTO ou l'orchestrateur suivant exécute la réponse, par le ServiceDesk où il est écrit."), `fin de chantier (${nom}) : le bilan avec un espace resté ne finit plus par « J'ai besoin de toi : retirer ou garder <chemin> », ou personne n'exécute plus la réponse`);
+        assert.ok(!/(?:se termine|finit|termine) par `rien\.`/.test(l.replace('non par `rien.`', '')), `fin de chantier (${nom}) : le bilan finit par « rien. » alors qu'un espace reste`);
+        assert.ok(!l.includes('après avoir demandé à chaque chef'), `fin de chantier (${nom}) : la demande inexécutable est revenue`);
+      }
+    },
+  },
+
+  {
     id: 'pas-de-chemin-de-machine',
     quoi: 'le gabarit ne porte aucun chemin de poste — il est déposé dans des dépôts qui ne sont pas celui-ci',
     verifier({ metier, contexte }) {
@@ -4990,6 +5141,273 @@ export const MUTATIONS = [
       'log --oneline origin/<branche-cible>..HEAD',
       'log --oneline origin/<branche-cible>..HEAD 2>/dev/null',
     ),
+  },
+  // ── fermer un chef : la question, pas seulement la lecture (T-20260925-0015)
+  {
+    id: 'la-question-avant-de-fermer-est-retiree',
+    quoi: 'le paragraphe « La question » disparaît — la lecture permise suffit alors, et le « zéro commit » fait fermer',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(/> \*\*La question \(étape 3\)\.\*\*[^\n]*\n\n?/, ''),
+  },
+  {
+    id: 'la-lecture-suffit-est-ecrit',
+    quoi: 'le contraire est écrit dans la section — « la lecture suffit », les positives restant intactes',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(
+      'ne veut pas dire rien à perdre.**',
+      'ne veut pas dire rien à perdre.** La lecture suffit.',
+    ),
+  },
+  {
+    id: 'la-question-est-deplacee-hors-de-la-section',
+    quoi: 'le paragraphe « La question » est intact mais vit dans une AUTRE section — il ne garde plus la fermeture',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => {
+      const m = t.match(/> \*\*La question \(étape 3\)\.\*\*[^\n]*\n/);
+      if (!m) return t;
+      return `${t.replace(m[0], '')}\n\n## Annexe déplacée\n\n${m[0]}\n`;
+    },
+  },
+  {
+    id: 'le-skill-perd-la-question',
+    quoi: 'la ligne « DEMANDER au chef » disparaît de l’étape f du skill — le worktree se retire sur un « zéro commit »',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace(/# 3\. DEMANDER au chef[^\n]*\n[^\n]*\n\n/, ''),
+  },
+  {
+    id: 'le-skill-revient-a-l-upstream-et-au-force',
+    quoi: 'le skill enseigne de nouveau `log @{u}.. 2>/dev/null` et `worktree remove --force`',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace('log --oneline origin/<branche-cible>..HEAD\n\n# 3.', 'log --oneline @{u}.. 2>/dev/null\n\n# 3.'),
+  },
+  {
+    id: 'le-skill-ecrit-une-exception',
+    quoi: 'le skill écrit « Sauf si git log est vide. » en phrase séparée — les positives restent intactes',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace('jamais de fermeture faute de réponse.', 'jamais de fermeture faute de réponse. Sauf si git log est vide.'),
+  },
+  {
+    id: 'la-fermeture-ecrit-une-exception-en-phrase-separee',
+    quoi: 'le métier écrit « Sauf si git log est vide. » à part — chaque phrase seule est correcte, la section ne l’est plus',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace('jamais de fermeture faute de réponse.', 'jamais de fermeture faute de réponse. Sauf si git log est vide.'),
+  },
+  {
+    id: 'la-fermeture-ecrit-se-ferme-sans-rien-demander',
+    quoi: 'le métier écrit « Un espace propre à ta lecture se ferme sans rien demander. » en phrase séparée',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace('jamais de fermeture faute de réponse.', 'jamais de fermeture faute de réponse. Un espace propre à ta lecture se ferme sans rien demander.'),
+  },
+  {
+    id: 'la-question-passe-apres-la-fermeture-du-pane',
+    quoi: 'le métier place « DEMANDER » APRÈS `herdr pane close` — la question existe encore, mais on ferme avant de la poser',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace(/(# 3\. DEMANDER au chef[^\n]*\n\n)(# 4\. fermer SON pane, pas son tab\nherdr pane close "\$P"\n\n)/, '$2$1'),
+  },
+  {
+    id: 'le-worktree-est-force-dans-le-metier',
+    quoi: 'le métier écrit `worktree remove --force` dans son bloc de fermeture',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace('git -C <repo> worktree remove ~/worktrees/<repo>/<timestamp>\n', 'git -C <repo> worktree remove --force ~/worktrees/<repo>/<timestamp>\n'),
+  },
+  {
+    id: 'la-fermeture-ecrit-se-ferment-directement',
+    quoi: 'le métier écrit en prose « Une branche à zéro commit et un status propre se ferment directement. »',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace('jamais de fermeture faute de réponse.', 'jamais de fermeture faute de réponse. Une branche à zéro commit et un status propre se ferment directement.'),
+  },
+  {
+    id: 'le-skill-pose-la-question-apres-le-pane',
+    quoi: 'le skill place « DEMANDER » après `herdr pane close`',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace(/(# 3\. DEMANDER au chef[^\n]*\n[^\n]*\n\n)(# 4\. fermer SON pane, pas son tab\nherdr pane close "\$P"\n\n)/, '$2$1'),
+  },
+  {
+    id: 'le-skill-force-avec-f',
+    quoi: 'le skill écrit `worktree remove -f` — la forme courte du même défaut',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace('git -C <repo> worktree remove ~/worktrees/<repo>/<timestamp>\n', 'git -C <repo> worktree remove -f ~/worktrees/<repo>/<timestamp>\n'),
+  },
+  {
+    id: 'orphelin-rondes-a-retirer',
+    quoi: 'rondes : « Il est à signaler » devient « Il est à retirer » — même longueur, sens inverse',
+    cible: 'orphelin-fin-de-chantier-et-canal-sans-contraire',
+    fichier: 'metier',
+    muter: (t) => t.replace('Il est à signaler', 'Il est à retirer'),
+  },
+  {
+    id: 'orphelin-skill-a-retirer',
+    quoi: 'skill : l’orphelin n’est plus « à signaler » mais « à retirer »',
+    cible: 'orphelin-fin-de-chantier-et-canal-sans-contraire',
+    fichier: 'competence',
+    muter: (t) => t.replace('orphelin **à signaler** au CTO', 'orphelin **à retirer** au CTO'),
+  },
+  {
+    id: 'garde-done-suffit',
+    quoi: 'rondes : la garde origin/<cible>..HEAD « suffit » au lieu de « ne suffit pas »',
+    cible: 'orphelin-fin-de-chantier-et-canal-sans-contraire',
+    fichier: 'metier',
+    muter: (t) => t.replace('**ne suffit pas** : elle protège', 'suffit : elle protège'),
+  },
+  {
+    id: 'skill-mentionne-arobase-hors-interdit',
+    quoi: 'le skill mentionne @{u} dans le paragraphe de l’orphelin, hors de la phrase qui l’interdit',
+    cible: 'orphelin-fin-de-chantier-et-canal-sans-contraire',
+    fichier: 'competence',
+    muter: (t) => t.replace('sans agent vivant dedans est un orphelin', 'sans agent vivant dedans (@{u}) est un orphelin'),
+  },
+  {
+    id: 'fin-de-chantier-sans-bilan-metier',
+    quoi: 'mise-en-production : « bilan de clôture » devient « rapport de clôture »',
+    cible: 'orphelin-fin-de-chantier-et-canal-sans-contraire',
+    fichier: 'metier',
+    muter: (t) => t.replace('figure au bilan de clôture', 'figure au rapport de clôture'),
+  },
+  {
+    id: 'fin-de-chantier-sans-bilan-skill',
+    quoi: 'skill : « bilan de clôture » devient « rapport de clôture »',
+    cible: 'orphelin-fin-de-chantier-et-canal-sans-contraire',
+    fichier: 'competence',
+    muter: (t) => t.replace('figure au bilan de clôture', 'figure au rapport de clôture'),
+  },
+  {
+    id: 'escalade-hors-de-la-ligne-metier',
+    quoi: 'métier : l’escalade ne passe plus par « ta ligne »',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace('escalade au CTO par ta ligne', 'escalade au CTO par mail'),
+  },
+  {
+    id: 'escalade-hors-de-la-ligne-skill',
+    quoi: 'skill : l’escalade ne passe plus par « ta ligne »',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace('escalade au CTO par ta ligne', 'escalade au CTO par mail'),
+  },
+  {
+    id: 'blocked-sans-annuler-metier',
+    quoi: 'métier : le chef blocked n’est plus débloqué par l’annulation',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace('annule son dialogue de choix reconnu (voir', 'écris-lui un mot (voir'),
+  },
+  {
+    id: 'blocked-sans-annuler-skill',
+    quoi: 'skill : le chef blocked n’est plus débloqué par l’annulation',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace('annule son dialogue de choix, mais seulement', 'écris-lui un mot de choix, mais seulement'),
+  },
+  {
+    id: 'status-sans-ignored-metier',
+    quoi: 'métier : `--ignored` retiré du status',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace('status --porcelain --ignored', 'status --porcelain'),
+  },
+  {
+    id: 'status-sans-ignored-skill',
+    quoi: 'skill : `--ignored` retiré du status',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace('status --porcelain --ignored', 'status --porcelain'),
+  },
+  {
+    id: 'motif-sans-ignore',
+    quoi: 'métier : le motif ne nomme plus le fichier ignoré',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace('un fichier ignoré par', 'un fichier suivi par'),
+  },
+  {
+    id: 'stash-autre-branche-reintroduits-metier',
+    quoi: 'métier : « un stash, une autre branche » redonnés pour ce qui n’existe que dans l’espace — faux',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace('des commits jamais poussés de la branche-socle', 'un stash, une autre branche'),
+  },
+  {
+    id: 'stash-autre-branche-reintroduits-skill',
+    quoi: 'skill : « un stash, une autre branche » redonnés — faux',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace('des commits jamais poussés de la branche-socle', 'un stash, une autre branche'),
+  },
+  {
+    id: 'refus-du-retrait-presente-comme-protection',
+    quoi: 'métier : la phrase « le refus n’est pas la protection » devient « le refus est la protection »',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace("le refus n'est pas la protection, la question l'est", "le refus est la protection, la question l'est"),
+  },
+  {
+    id: 'orphelin-nettoye-par-la-ronde',
+    quoi: 'rondes : « un orphelin resté sans réponse plus de trois jours est nettoyé par la ronde »',
+    cible: 'orphelin-fin-de-chantier-et-canal-sans-contraire',
+    fichier: 'metier',
+    muter: (t) => t.replace('on ne le retire jamais faute de réponse.', 'on ne le retire jamais faute de réponse. Un orphelin resté sans réponse plus de trois jours est nettoyé par la ronde.'),
+  },
+  {
+    id: 'orphelin-nettoye-par-la-ronde-skill',
+    quoi: 'skill : le même nettoyage automatique après trois jours',
+    cible: 'orphelin-fin-de-chantier-et-canal-sans-contraire',
+    fichier: 'competence',
+    muter: (t) => t.replace('on ne le retire jamais faute de réponse.', 'on ne le retire jamais faute de réponse. Un orphelin resté sans réponse plus de trois jours est nettoyé par la ronde.'),
+  },
+  {
+    id: 'bilan-finit-par-rien-avec-un-espace',
+    quoi: 'mise-en-production : « le bilan de clôture se termine par `rien.` même si un espace reste »',
+    cible: 'orphelin-fin-de-chantier-et-canal-sans-contraire',
+    fichier: 'metier',
+    muter: (t) => t.replace('par le ServiceDesk où il est écrit.', 'par le ServiceDesk où il est écrit. Le bilan de clôture se termine par `rien.` même si un espace reste.'),
+  },
+  {
+    id: 'dialogue-sans-le-geste',
+    quoi: 'métier : le geste d’annulation (Escape) disparaît de la section du dialogue de choix',
+    cible: 'orphelin-fin-de-chantier-et-canal-sans-contraire',
+    fichier: 'metier',
+    muter: (t) => t.replace("**Le geste, sur un dialogue de CHOIX reconnu à l'écran (`herdr pane read` d'abord) seulement : `herdr pane send-keys <pane> Escape`**, sans répondre ni `Enter` ; puis", 'Annule ; puis'),
+  },
+  {
+    id: 'skill-motif-sans-fichier-ignore',
+    quoi: 'skill : « un fichier ignoré (base, dump, `.env`), » retiré du motif',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace('un fichier ignoré (base, dump, `.env`), ', ''),
+  },
+  {
+    id: 'skill-enter-repond-au-dialogue',
+    quoi: 'skill : « send-keys <pane> Enter » répond au dialogue du chef',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace("n'escalade que si ça échoue. N'utilise jamais", "n'escalade que si ça échoue ; `herdr pane send-keys <pane> Enter` le répond. N'utilise jamais"),
+  },
+  {
+    id: 'escape-sans-condition-metier',
+    quoi: 'métier : Escape prescrit SANS condition de dialogue de choix reconnu',
+    cible: 'orphelin-fin-de-chantier-et-canal-sans-contraire',
+    fichier: 'metier',
+    muter: (t) => t.replace("**Le geste, sur un dialogue de CHOIX reconnu à l'écran (`herdr pane read` d'abord) seulement : `herdr pane send-keys <pane> Escape`**", '**Le geste : `herdr pane send-keys <pane> Escape`**'),
+  },
+  {
+    id: 'escape-sans-condition-skill',
+    quoi: 'skill : Escape prescrit sans condition de dialogue reconnu',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace("annule son dialogue de choix, mais seulement s'il est reconnu comme tel à l'écran (`herdr pane read` d'abord) : `herdr pane send-keys <pane> Escape`", 'annule son dialogue : `herdr pane send-keys <pane> Escape`'),
   },
   {
     id: 'un-chemin-de-machine-entre-dans-le-gabarit',
