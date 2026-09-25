@@ -260,7 +260,7 @@ async function installerService() {
   // éprouvent dans les deux sens, et un refus de cloison la masquerait.
   const registre = await mesurerLeRegistre();
   const verdict = verdictDInstallation(registre);
-  if (!verdict.autorise) return { ok: false, refusRegistre: true, erreur: verdict.motif };
+  if (!verdict.autorise) return { ok: false, erreur: verdict.motif };
   if (enEssais()) {
     refuser(
       "l'installation des rendez-vous de l'orchestrateur",

@@ -152,15 +152,34 @@ function fichiersTexte(racine) {
   return out;
 }
 
-// La FONCTION cherchée, pas le mot : l'invocation d'installation des rendez-vous, sous ses
-// deux noms (le fichier et le binaire déclaré dans package.json), sur une ligne JOINTE —
-// une phrase coupée en deux lignes survivrait à un grep ligne à ligne.
-const PRESCRIPTION = /(rendez-vous\.js|orchestrateur-rendez-vous)\s+service\s+installer/;
+// ⚠️ LE MOT NE SUFFIT PAS (passe 2 de revue, mutation M3) : une recherche de l'invocation
+// littérale restait VERTE sur « lance `orchestrateur-rendez-vous` avec comme premier
+// sous-argument `service`, puis comme second `installer` ». On cherche donc au grain du
+// PARAGRAPHE : tout paragraphe qui nomme la commande (sous ses deux noms, fichier et binaire
+// de package.json) ET parle d'installer est fautif. Le texte de remplacement ne nomme pas la
+// commande — il nomme les étiquettes launchd — et n'a donc pas à être exempté.
+const COMMANDE = /rendez-vous\.js|orchestrateur-rendez-vous/;
+const INSTALLER = /\binstall/i;
 
-test('aucun texte lu par un agent ne prescrit `rendez-vous.js service installer`', () => {
+function paragraphesFautifs(texte) {
+  return texte.split(/\n\s*\n/).filter((p) => COMMANDE.test(p) && INSTALLER.test(p));
+}
+
+test('le témoin textuel attrape l’invocation, la phrase coupée ET la paraphrase', () => {
+  assert.equal(paragraphesFautifs('node $HOME/x/bin/rendez-vous.js service installer').length, 1);
+  assert.equal(paragraphesFautifs('lance rendez-vous.js service\ninstaller').length, 1);
+  assert.equal(
+    paragraphesFautifs('lance `orchestrateur-rendez-vous` avec comme premier sous-argument `service`, puis comme second `installer`').length,
+    1
+  );
+  assert.equal(paragraphesFautifs('Installe la ligne.\n\nPuis `rendez-vous.js service etat`.').length, 0,
+    'deux paragraphes distincts ne se contaminent pas');
+});
+
+test('aucun texte lu par un agent ne prescrit d’installer les rendez-vous du pack', () => {
   const fichiers = LIEUX_LUS.flatMap((l) => fichiersTexte(join(REPO_ROOT, l)));
   assert.ok(fichiers.length > 20, `balayage vide — ${fichiers.length} fichiers : le témoin ne regarderait rien`);
-  const fautifs = fichiers.filter((f) => PRESCRIPTION.test(readFileSync(f, 'utf8').replace(/\s+/g, ' ')));
+  const fautifs = fichiers.filter((f) => paragraphesFautifs(readFileSync(f, 'utf8')).length > 0);
   assert.deepEqual(fautifs.map((f) => relative(REPO_ROOT, f)), []);
 });
 
