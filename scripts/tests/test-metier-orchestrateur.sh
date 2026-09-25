@@ -1526,7 +1526,53 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #   Il supersède le constat de `T-20260925-0045` (un plafond qui « dicterait » le contenu).
 #
 # ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
-BASELINE=182576
+#
+# ── RE-BASELINE DU 2026-09-25 (2ᵉ) — T-20260925-0080 (hook `Stop` scribe des tâches) ──
+#
+#   182 576 → 183 385. MARGE ZÉRO, comme les précédentes. +809. Mesuré sur le rendu FINAL,
+#   après `pack metier rendre --role orchestrateur`, pas estimé.
+#
+#   ① LE GESTE PRESCRIT — l'orchestrateur doit savoir qu'un hook `Stop` lit son dernier
+#      message : sans le texte, il ignore la forme du bloc ```` ```taches ```` (verbes
+#      `ouvrir`/`en-cours`/`fait`/`attend`), la demande qu'il déclare dans `.demande`, et le
+#      fait que `attend: dirigeant` écrit mais ne relance pas.
+#   ② LE DÉFAUT ÉVITÉ, MESURÉ — un scribe que l'agent ne sait pas nourrir reste silencieux :
+#      « pas de bloc → le hook ne fait rien » se lirait comme « le hook ne sert à rien »
+#      plutôt que comme « je n'ai pas rendu mon bloc ce tour-ci ».
+#   ③ LA PART COUPÉE — AUCUNE section existante n'a été retirée ; le paragraphe ajouté est
+#      la forme la plus courte trouvée (bloc + `attend: dirigeant` + pointeur vers `.demande`).
+#   ④ LE LIEU — `metier/orchestrateur/chapitres/servicedesk.md`, section « Le hook `Stop`
+#      écrit tes tâches — et lit ta suite », juste avant « L'hygiène du ServiceDesk » : c'est
+#      le chapitre qui tient déjà la tenue du ServiceDesk du chantier.
+#
+#   L'ARBITRAGE — même règle que les précédentes (arbitrage `batiscan` du 2026-09-25,
+#   `T-20260925-0048` : « TU RELÈVES LA LIGNE DE BASE, à la taille EXACTE de ton rendu
+#   final, marge zéro »), appliquée par le chef d'équipe `t-20260925-0086` sur `T-20260925-0080`.
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
+#
+# ── RE-BASELINE DU 2026-09-25 (3ᵉ) — T-20260925-0080 (revue de fond, défaut D1) ──
+#
+#   183 385 → 183 512. MARGE ZÉRO, comme les précédentes. +127. Mesuré sur le rendu FINAL,
+#   après `pack metier rendre --role orchestrateur`, pas estimé.
+#
+#   ① LE GESTE PRESCRIT — la revue de fond a trouvé un défaut réel : un bloc ```` ```taches ````
+#      CITÉ en exemple (« voici la syntaxe : … » suivi d'autre texte) créait un vrai ticket, parce
+#      que l'extraction balayait tout le message au lieu de ne retenir que le bloc qui le
+#      termine. Corrigé côté code (`extraireBloc`) ; le texte doit dire la règle, pas seulement
+#      la coder — sinon l'orchestrateur continue de croire qu'un exemple cité est sans danger.
+#   ② LE DÉFAUT ÉVITÉ, MESURÉ — un ticket créé depuis un exemple pédagogique, jamais voulu comme
+#      directive.
+#   ③ LA PART COUPÉE — AUCUNE.
+#   ④ LE LIEU — `metier/orchestrateur/chapitres/servicedesk.md`, une phrase ajoutée juste après
+#      la mise en garde sur le bloc mal formé, dans la même section.
+#
+#   L'ARBITRAGE — même règle que les précédentes (arbitrage `batiscan`, `T-20260925-0048` :
+#   « TU RELÈVES LA LIGNE DE BASE, à la taille EXACTE de ton rendu final, marge zéro »), appliquée
+#   après la passe de revue de fond NO-GO sur `T-20260925-0080`.
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
+BASELINE=183512
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"

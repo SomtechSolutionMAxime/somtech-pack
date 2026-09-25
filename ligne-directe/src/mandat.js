@@ -213,6 +213,15 @@ export function transportServiceDesk({
     });
     if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
     const enveloppe = await reponse.json();
+    // ⚠️ UNE ERREUR JSON-RPC ARRIVE EN HTTP 200 — MESURÉ CONTRE LE VRAI SERVICE
+    // (QA, T-20260925-0080) : `tickets add_comment` sans `author_label` rend
+    // `{"error":{"code":-32603,"message":"author_label is required"},...}`,
+    // PAS un HTTP en erreur. Sans ce contrôle, `!texte` jetait « réponse sans
+    // contenu » — vrai, mais ça PERD le message du service (« author_label is
+    // required »), le seul indice qui dit QUOI réparer. On jette le message du
+    // service quand il y en a un ; le comportement générique reste inchangé
+    // pour toute autre réponse sans contenu exploitable.
+    if (enveloppe?.error?.message) throw new Error(String(enveloppe.error.message));
     const texte = enveloppe?.result?.content?.[0]?.text;
     if (!texte) throw new Error('réponse sans contenu');
     return JSON.parse(texte);

@@ -90,6 +90,23 @@ Ce que la ligne porte : le nom de l'agent **en minuscules**, son pane, son espac
 
 **Cette consigne repose sur ta discipline, et c'est sa faiblesse.** Elle tiendra jusqu'à ce que la naissance d'un agent soit outillée et que l'outil enregistre la filiation sans te la demander.
 
+## Le hook `Stop` écrit tes tâches — et lit ta suite
+
+**Le hook `Stop` de ton lieu est un scribe** : à chaque fin de tour, il lit ton dernier message. S'il y trouve un bloc ```` ```taches ```` bien formé, il **écrit** ce que tu dis avoir ouvert, pris en charge ou fini — sous **ta demande**, déclarée dans le fichier `.demande` de ton lieu — puis **rend ta prochaine tâche**. Pas de bloc dans ton message : il ne fait rien, ne relance rien.
+
+Forme du bloc, une ligne par geste :
+
+```taches
+ouvrir: <titre de la tâche>
+en-cours: T-YYYYMMDD-NNNN
+fait: T-YYYYMMDD-NNNN — <commentaire de fermeture>
+attend: dirigeant
+```
+
+⚠️ **Un bloc mal formé refuse et relance** — il ne devine jamais. **`attend: dirigeant`** écrit tes tâches mais ne relance pas : pose-le quand tu attends un arbitrage, jamais pour te taire.
+
+⚠️ **Seul le bloc qui CLÔT ton message compte** — un exemple cité plus haut, suivi d'autre texte, n'est jamais une directive.
+
 ## L'hygiène du ServiceDesk
 
 **Relis-toi après chaque livraison** : un epic en cours dont le travail est mergé, une story fermée dont le correctif n'est pas fait, un agent assigné qui n'existe plus. **Un ServiceDesk qui ment coûte plus cher qu'un ServiceDesk vide** — on s'y fie.
