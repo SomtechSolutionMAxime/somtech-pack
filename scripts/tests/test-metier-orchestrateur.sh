@@ -1550,7 +1550,29 @@ echo "⑩ le texte n'a pas gonflé sans raison"
 #   final, marge zéro »), appliquée par le chef d'équipe `t-20260925-0086` sur `T-20260925-0080`.
 #
 # ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
-BASELINE=183385
+#
+# ── RE-BASELINE DU 2026-09-25 (3ᵉ) — T-20260925-0080 (revue de fond, défaut D1) ──
+#
+#   183 385 → 183 512. MARGE ZÉRO, comme les précédentes. +127. Mesuré sur le rendu FINAL,
+#   après `pack metier rendre --role orchestrateur`, pas estimé.
+#
+#   ① LE GESTE PRESCRIT — la revue de fond a trouvé un défaut réel : un bloc ```` ```taches ````
+#      CITÉ en exemple (« voici la syntaxe : … » suivi d'autre texte) créait un vrai ticket, parce
+#      que l'extraction balayait tout le message au lieu de ne retenir que le bloc qui le
+#      termine. Corrigé côté code (`extraireBloc`) ; le texte doit dire la règle, pas seulement
+#      la coder — sinon l'orchestrateur continue de croire qu'un exemple cité est sans danger.
+#   ② LE DÉFAUT ÉVITÉ, MESURÉ — un ticket créé depuis un exemple pédagogique, jamais voulu comme
+#      directive.
+#   ③ LA PART COUPÉE — AUCUNE.
+#   ④ LE LIEU — `metier/orchestrateur/chapitres/servicedesk.md`, une phrase ajoutée juste après
+#      la mise en garde sur le bloc mal formé, dans la même section.
+#
+#   L'ARBITRAGE — même règle que les précédentes (arbitrage `batiscan`, `T-20260925-0048` :
+#   « TU RELÈVES LA LIGNE DE BASE, à la taille EXACTE de ton rendu final, marge zéro »), appliquée
+#   après la passe de revue de fond NO-GO sur `T-20260925-0080`.
+#
+# ⚠️ CE RELÈVEMENT NE CRÉE AUCUN DROIT POUR LE SUIVANT. La marge reste à 0.
+BASELINE=183512
 MARGE=0
 PLAFOND=$((BASELINE + MARGE))
 TAILLE="$(wc -m < "$METIER" | tr -d ' ')"

@@ -105,6 +105,8 @@ attend: dirigeant
 
 ⚠️ **Un bloc mal formé refuse et relance** — il ne devine jamais. **`attend: dirigeant`** écrit tes tâches mais ne relance pas : pose-le quand tu attends un arbitrage, jamais pour te taire.
 
+⚠️ **Seul le bloc qui CLÔT ton message compte** — un exemple cité plus haut, suivi d'autre texte, n'est jamais une directive.
+
 ## L'hygiène du ServiceDesk
 
 **Relis-toi après chaque livraison** : un epic en cours dont le travail est mergé, une story fermée dont le correctif n'est pas fait, un agent assigné qui n'existe plus. **Un ServiceDesk qui ment coûte plus cher qu'un ServiceDesk vide** — on s'y fie.

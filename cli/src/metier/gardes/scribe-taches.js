@@ -28,6 +28,22 @@
 // refus (ce qui a été écrit, ce qui ne l'a pas été). Ce module ne fait aucune
 // tentative de rollback : le ServiceDesk n'offre pas d'écriture transactionnelle
 // multi-appels, et prétendre le contraire serait une garantie fausse.
+//
+// 🔴 REJEU = DOUBLONS, ET C'EST UN DÉFAUT RÉEL trouvé en revue de fond
+// (T-20260925-0080) : un hook `Stop` peut être redéclenché sur le MÊME dernier
+// message (retry de l'hôte, relance manuelle) — sans garde, deux appels créent
+// deux tickets identiques. La garde est une EMPREINTE (sha256 du bloc), gardée
+// dans l'état du plafond (même fichier, par lieu) : une empreinte qui rejoue
+// celle du DERNIER bloc écrit AVEC SUCCÈS n'écrit rien de nouveau — mais elle
+// peut toujours relire la suite (la prochaine tâche), ce n'est QUE l'écriture qui
+// est sautée. Enregistrée seulement APRÈS un succès complet — jamais avant.
+
+import { createHash } from 'node:crypto';
+
+/** Empreinte (sha256, hex) du contenu BRUT d'un bloc — sert l'idempotence du rejeu (D2). */
+export function empreinteBloc(contenuBrut) {
+  return createHash('sha256').update(String(contenuBrut)).digest('hex');
+}
 
 /** Les quatre verbes que le bloc `taches` reconnaît — et rien d'autre. */
 export const VERBES_CONNUS = new Set(['ouvrir', 'en-cours', 'fait', 'attend']);
@@ -59,9 +75,26 @@ const TAILLE_PAGE_LISTE = 100;
 // à « ce que le bloc CONTIENT est-il valide ? » (refus nommé si non). Le fil mince
 // n'a besoin d'appeler `analyserBloc` (donc de risquer un réseau) qu'après avoir
 // vu un bloc présent — jamais avant.
+//
+// 🔴 SEUL LE BLOC QUI TERMINE LE MESSAGE COMPTE — défaut réel trouvé en revue de
+// fond (T-20260925-0080) : la première version balayait TOUT le message, donc un
+// exemple CITÉ (« voici la syntaxe : ```taches ouvrir: X ``` — j'attends ta
+// réponse ») créait un vrai ticket. Un bloc `taches` qui n'est pas suivi
+// UNIQUEMENT de blancs jusqu'à la fin du message n'est JAMAIS une directive — il
+// est ignoré, silencieusement, comme s'il n'existait pas. Ce n'est pas une erreur
+// (« refus nommé ») : une citation n'est pas une tentative ratée d'écrire, elle
+// n'en est pas une du tout.
+//
+// Conséquence mécanique : deux blocs `taches` dans le même message ne peuvent
+// JAMAIS être tous les deux terminaux (un seul peut être suivi de rien) — le
+// refus « deux blocs » qui existait ici a donc été RETIRÉ, pas contourné : sous
+// cette règle, il ne peut plus jamais se déclencher. Un bloc cité, suivi plus
+// loin d'un second bloc qui lui termine le message, se résout simplement au
+// second : le premier est une citation comme une autre, ignorée.
 
 /**
- * Cherche un bloc ```taches``` dans un texte.
+ * Cherche le bloc ```taches``` qui TERMINE un texte (le dernier caractère non
+ * blanc du texte appartient à sa clôture) — jamais un bloc cité plus tôt.
  *
  * @param {string|null|undefined} texte
  * @returns {{presence:false}|{presence:true, ok:true, contenu:string}|{presence:true, ok:false, erreur:string}}
@@ -70,16 +103,24 @@ export function extraireBloc(texte) {
   if (typeof texte !== 'string' || texte.length === 0) return { presence: false };
   const ouvertures = [...texte.matchAll(/```taches[ \t]*\r?\n/g)];
   if (ouvertures.length === 0) return { presence: false };
-  if (ouvertures.length > 1) {
-    return {
-      presence: true, ok: false,
-      erreur: `${ouvertures.length} blocs \`taches\` trouvés dans le même message — un seul est accepté.`,
-    };
-  }
-  const debut = ouvertures[0].index + ouvertures[0][0].length;
+  // On ne juge que la DERNIÈRE ouverture : toute ouverture antérieure — citée,
+  // expliquée, redonnée en exemple — est hors-jeu par construction dès que ce
+  // bloc-ci se referme correctement en fin de message.
+  const derniere = ouvertures[ouvertures.length - 1];
+  const debut = derniere.index + derniere[0].length;
   const fermeture = texte.indexOf('```', debut);
   if (fermeture === -1) {
+    // Rien ne referme le DERNIER bloc ouvert : par construction, il n'y a plus
+    // rien après lui dans le texte — c'est une clôture manquante, jamais une
+    // citation (une citation, elle, se refermerait avant la fin du message).
     return { presence: true, ok: false, erreur: "le bloc `taches` n'est jamais refermé (clôture ``` manquante)." };
+  }
+  if (texte.slice(fermeture + 3).trim() !== '') {
+    // Le dernier bloc trouvé EST refermé, mais autre chose le suit dans le
+    // message (au-delà des blancs) : il n'est donc pas le bloc terminal — une
+    // citation ou un exemple. Silence, jamais une erreur : aucune directive n'a
+    // été vue passer.
+    return { presence: false };
   }
   return { presence: true, ok: true, contenu: texte.slice(debut, fermeture) };
 }
@@ -408,16 +449,20 @@ export async function trouverProchaineTache({ demandeId, demandeCreatedAt, direc
  * @param {number[]} entree.horodatagesRelances  timestamps (ms) des relances déjà connues
  * @param {number|null|undefined} entree.plafondParHeure
  * @param {number} entree.maintenant  `Date.now()` injecté
+ * @param {string|null|undefined} entree.empreinteDernierBloc  empreinte (D2) du dernier
+ *   bloc écrit AVEC SUCCÈS, lue de l'état du lieu — `null`/absent si aucune encore connue.
  * @returns {Promise<{
  *   silence:boolean,
  *   sortie:{decision?:'block', reason?:string, systemMessage?:string},
- *   blocEmis:boolean
+ *   blocEmis:boolean,
+ *   empreinteAEnregistrer?:string
  * }>}
  */
 export async function deciderStop(entree) {
-  const { texteAssistant, contenuDemande, appeler, horodatagesRelances, plafondParHeure, maintenant } = entree;
+  const { texteAssistant, contenuDemande, appeler, horodatagesRelances, plafondParHeure, maintenant, empreinteDernierBloc } = entree;
 
-  // ── Pas de bloc : silence total, zéro appel — la SEULE sortie muette.
+  // ── Pas de bloc (ou un bloc cité, pas terminal) : silence total, zéro appel —
+  // la SEULE sortie muette.
   const extrait = extraireBloc(texteAssistant);
   if (!extrait.presence) return { silence: true, sortie: {}, blocEmis: false };
 
@@ -443,30 +488,50 @@ export async function deciderStop(entree) {
   const preflight = await preverifierDemande({ code: demandeLue.code, appeler });
   if (!preflight.ok) return gate(preflight.erreur);
 
-  // Vérifie CHAQUE ticket cité (en-cours ET fait) AVANT la première écriture.
-  const codesACiter = [...new Set([...taches.enCours, ...taches.fait.map((f) => f.code)])];
-  const ticketsVerifies = new Map();
-  for (const code of codesACiter) {
-    const v = await verifierTicketAppartient({ code, demandeId: preflight.id, appeler });
-    if (!v.ok) return gate(v.erreur);
-    ticketsVerifies.set(code, v.id);
-  }
+  // ── D2 — REJEU = DOUBLONS. Le même bloc, déjà écrit avec succès (empreinte
+  // identique) : on ne réécrit rien, mais on peut toujours relire la suite.
+  const empreinte = empreinteBloc(extrait.contenu);
+  const dejaEcrit = !!empreinteDernierBloc && empreinteDernierBloc === empreinte;
 
-  const ecriture = await executerEcritures({ taches, demandeId: preflight.id, ticketsVerifies, appeler });
-  if (!ecriture.toutesReussies) {
-    return gate(
-      `${ecriture.erreur} Écrit : ${ecriture.ecrits.length ? ecriture.ecrits.join(' · ') : 'rien'}. `
-      + `Non écrit : ${ecriture.nonEcrits.join(' · ')}.`,
-    );
+  let ecriture;
+  if (dejaEcrit) {
+    ecriture = { toutesReussies: true, ecrits: [], nonEcrits: [], dejaEcrit: true };
+  } else {
+    // Vérifie CHAQUE ticket cité (en-cours ET fait) AVANT la première écriture.
+    const codesACiter = [...new Set([...taches.enCours, ...taches.fait.map((f) => f.code)])];
+    const ticketsVerifies = new Map();
+    for (const code of codesACiter) {
+      const v = await verifierTicketAppartient({ code, demandeId: preflight.id, appeler });
+      if (!v.ok) return gate(v.erreur);
+      ticketsVerifies.set(code, v.id);
+    }
+
+    ecriture = await executerEcritures({ taches, demandeId: preflight.id, ticketsVerifies, appeler });
+    if (!ecriture.toutesReussies) {
+      return gate(
+        `${ecriture.erreur} Écrit : ${ecriture.ecrits.length ? ecriture.ecrits.join(' · ') : 'rien'}. `
+        + `Non écrit : ${ecriture.nonEcrits.join(' · ')}.`,
+      );
+    }
   }
+  // Enregistrée SEULEMENT après un succès complet (frais ou déjà connu) — jamais
+  // avant, et jamais sur un chemin de refus.
+  const empreinteAEnregistrer = dejaEcrit ? undefined : empreinte;
+
+  const resumeEcriture = dejaEcrit
+    ? 'déjà écrit (empreinte identique à la dernière écriture réussie) — aucune réécriture'
+    : `écrit (${ecriture.ecrits.join(' · ') || 'rien'})`;
 
   if (taches.attend === 'dirigeant') {
-    return arret(
-      `scribe des tâches : écrit (${ecriture.ecrits.join(' · ') || 'rien'}) — \`attend: dirigeant\` posé, pas de relance.`,
-    );
+    return {
+      ...arret(`scribe des tâches : ${resumeEcriture} — \`attend: dirigeant\` posé, pas de relance.`),
+      empreinteAEnregistrer,
+    };
   }
 
-  const nbOuvrirCrees = taches.ouvrir.length;
+  // Un `ouvrir` FRAIS ajoute au compte de la demande ; un `ouvrir` déjà écrit
+  // (rejeu) a déjà été compté par le pré-vol de CE tour — pas une seconde fois.
+  const nbOuvrirCrees = dejaEcrit ? 0 : taches.ouvrir.length;
   const suite = await trouverProchaineTache({
     demandeId: preflight.id,
     demandeCreatedAt: preflight.createdAt,
@@ -475,19 +540,22 @@ export async function deciderStop(entree) {
   });
 
   if (!suite.ok) {
-    return arret(`scribe des tâches : écrit (${ecriture.ecrits.join(' · ') || 'rien'}) — suite non lue (${suite.erreur}).`);
+    return { ...arret(`scribe des tâches : ${resumeEcriture} — suite non lue (${suite.erreur}).`), empreinteAEnregistrer };
   }
   if (!suite.mesureCoherente) {
-    return arret(
-      `scribe des tâches : écrit (${ecriture.ecrits.join(' · ') || 'rien'}) — comptes divergents à la lecture de la `
-      + `suite (${suite.trouve} trouvé(s) pour ${suite.annonce} annoncé(s)) : non mesuré, aucune tâche nommée.`,
-    );
+    return {
+      ...arret(
+        `scribe des tâches : ${resumeEcriture} — comptes divergents à la lecture de la `
+        + `suite (${suite.trouve} trouvé(s) pour ${suite.annonce} annoncé(s)) : non mesuré, aucune tâche nommée.`,
+      ),
+      empreinteAEnregistrer,
+    };
   }
   if (!suite.tache) {
-    return arret(`scribe des tâches : écrit (${ecriture.ecrits.join(' · ') || 'rien'}) — aucune tâche ouverte restante.`);
+    return { ...arret(`scribe des tâches : ${resumeEcriture} — aucune tâche ouverte restante.`), empreinteAEnregistrer };
   }
 
-  return gate(`prochaine tâche : ${suite.tache.code} — ${suite.tache.titre}`);
+  return { ...gate(`prochaine tâche : ${suite.tache.code} — ${suite.tache.titre}`), empreinteAEnregistrer };
 }
 
 /**

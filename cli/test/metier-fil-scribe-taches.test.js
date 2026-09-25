@@ -102,3 +102,17 @@ test('`last_assistant_message` de l\'entrée du hook prime sur le transcript, qu
   assert.equal(j.decision, 'block');
   assert.match(j.reason, /verbe inconnu/);
 });
+
+test('D2 — un fichier d\'état ANCIEN FORMAT (sans dernierBlocEmpreinte, pré-existant) ne fait pas planter le fil', () => {
+  const t = join(TMP, 'transcript.jsonl');
+  writeFileSync(t, transcriptAvec(['```taches', 'verbe-inconnu: x', '```'].join('\n')));
+  const etat = join(TMP, 'etat');
+  const sha1 = createHash('sha1').update(TMP).digest('hex');
+  mkdirSync(etat, { recursive: true });
+  // Format du lot précédent (D1 seul) : uniquement `horodatages`.
+  writeFileSync(join(etat, `${sha1}.json`), JSON.stringify({ horodatages: [] }));
+  const env = { SOMTECH_SCRIBE_ETAT: etat, SOMTECH_SCRIBE_RELANCES_PAR_HEURE: '30' };
+  const sortie = JSON.parse(executerGarde({ cwd: TMP, transcriptPath: t, env }));
+  assert.equal(sortie.decision, 'block');
+  assert.match(sortie.reason, /verbe inconnu/);
+});

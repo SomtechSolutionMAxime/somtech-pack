@@ -89,21 +89,30 @@ function cheminEtat(cwd) {
   return join(base, `${createHash('sha1').update(cwd).digest('hex')}.json`);
 }
 
-function lireHorodatages(chemin) {
-  if (!existsSync(chemin)) return [];
+/**
+ * L'état du plafond ET l'empreinte du dernier bloc écrit (D2) — LE MÊME fichier,
+ * par lieu. `dernierBlocEmpreinte` reste `null` tant qu'aucune écriture n'a
+ * encore réussi.
+ */
+function lireEtat(chemin) {
+  if (!existsSync(chemin)) return { horodatages: [], dernierBlocEmpreinte: null };
   try {
     const j = JSON.parse(readFileSync(chemin, 'utf8'));
-    return Array.isArray(j?.horodatages) ? j.horodatages.filter((n) => typeof n === 'number') : [];
-  } catch { return []; }
+    return {
+      horodatages: Array.isArray(j?.horodatages) ? j.horodatages.filter((n) => typeof n === 'number') : [],
+      dernierBlocEmpreinte: typeof j?.dernierBlocEmpreinte === 'string' ? j.dernierBlocEmpreinte : null,
+    };
+  } catch { return { horodatages: [], dernierBlocEmpreinte: null }; }
 }
 
-function ecrireHorodatages(chemin, horodatages) {
+function ecrireEtat(chemin, etat) {
   try {
     mkdirSync(dirname(chemin), { recursive: true });
-    writeFileSync(chemin, JSON.stringify({ horodatages }));
+    writeFileSync(chemin, JSON.stringify(etat));
   } catch {
     // Best-effort : une écriture d'état qui échoue ne doit pas faire tomber le
-    // verdict déjà rendu — au pire, le plafond suivant sous-comptera.
+    // verdict déjà rendu — au pire, le plafond suivant sous-comptera, ou un
+    // rejeu réécrira ce que D2 aurait sauté.
   }
 }
 
@@ -156,7 +165,7 @@ async function main() {
   const N = Number(process.env.SOMTECH_SCRIBE_RELANCES_PAR_HEURE);
   const chemin = cheminEtat(cwd);
   const maintenant = Date.now();
-  const horodatages = lireHorodatages(chemin);
+  const { horodatages, dernierBlocEmpreinte } = lireEtat(chemin);
 
   let resultat;
   try {
@@ -165,14 +174,21 @@ async function main() {
       horodatagesRelances: horodatages,
       plafondParHeure: Number.isFinite(N) ? N : undefined,
       maintenant,
+      empreinteDernierBloc: dernierBlocEmpreinte,
     });
   } catch (e) {
     repondre({ systemMessage: `scribe des tâches : panne de décision (${e?.message ?? 'cause inconnue'}) — arrêt permis plutôt qu'un verdict non calculé.` });
     return;
   }
 
-  if (resultat.blocEmis) {
-    ecrireHorodatages(chemin, [...module.purgerHorodatages(horodatages, maintenant), maintenant]);
+  // Deux champs indépendants du même état : le plafond compte les BLOCKS émis,
+  // D2 retient l'empreinte du dernier bloc ÉCRIT AVEC SUCCÈS. L'un peut bouger
+  // sans l'autre (un `attend: dirigeant` écrit sans jamais émettre de block).
+  if (resultat.blocEmis || resultat.empreinteAEnregistrer) {
+    ecrireEtat(chemin, {
+      horodatages: resultat.blocEmis ? [...module.purgerHorodatages(horodatages, maintenant), maintenant] : horodatages,
+      dernierBlocEmpreinte: resultat.empreinteAEnregistrer ?? dernierBlocEmpreinte,
+    });
   }
   repondre(resultat.sortie);
 }

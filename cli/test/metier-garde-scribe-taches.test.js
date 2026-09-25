@@ -19,7 +19,7 @@ import assert from 'node:assert/strict';
 import {
   VERBES_CONNUS, CODE_TICKET, CODE_DEMANDE,
   extraireBloc, analyserBloc, lireCodeDemande,
-  purgerHorodatages, jugerPlafond,
+  purgerHorodatages, jugerPlafond, empreinteBloc,
   preverifierDemande, verifierTicketAppartient, executerEcritures, trouverProchaineTache,
   deciderStop,
 } from '../src/metier/gardes/scribe-taches.js';
@@ -43,25 +43,50 @@ test('aucun bloc `taches` dans le texte → presence:false, jamais une erreur', 
   assert.deepEqual(extraireBloc(undefined), { presence: false });
 });
 
-test('un bloc `taches` bien clos est extrait avec son contenu exact', () => {
-  const r = extraireBloc('avant\n```taches\nouvrir: X\n```\naprès');
+test('un bloc `taches` qui TERMINE le message (rien que des blancs après) est extrait avec son contenu exact', () => {
+  const r = extraireBloc('avant\n```taches\nouvrir: X\n```\n');
   assert.equal(r.presence, true);
   assert.equal(r.ok, true);
   assert.equal(r.contenu.trim(), 'ouvrir: X');
 });
 
-test('clôture non fermée → refus nommé', () => {
+test('clôture non fermée (le dernier bloc ouvert n\'a rien après lui) → refus nommé', () => {
   const r = extraireBloc('```taches\nouvrir: X\nplus de fermeture');
   assert.equal(r.presence, true);
   assert.equal(r.ok, false);
   assert.match(r.erreur, /refermé/);
 });
 
-test('deux blocs `taches` dans le même message → refus nommé', () => {
-  const r = extraireBloc('```taches\nouvrir: X\n```\ntexte\n```taches\nouvrir: Y\n```');
+// ═══════════════════════════════════════════════════════════════════════════
+// D1 — SEUL LE BLOC QUI TERMINE LE MESSAGE COMPTE (revue de fond, T-20260925-0080).
+// Un exemple CITÉ (« voici la syntaxe : ```taches...``` ») ne doit jamais créer de
+// ticket — silence total, jamais une erreur, jamais un appel.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test('un bloc `taches` clos SUIVI de prose (pas seulement des blancs) → presence:false, PAS une erreur — c\'est une citation', () => {
+  const r = extraireBloc('avant\n```taches\nouvrir: X\n```\naprès, encore du texte');
+  assert.deepEqual(r, { presence: false });
+});
+
+test('deux blocs : un cité plus tôt, un terminal → SEUL le terminal est extrait', () => {
+  const r = extraireBloc('```taches\nouvrir: CITÉ, ignoré\n```\ntexte entre les deux\n```taches\nouvrir: TERMINAL\n```\n');
   assert.equal(r.presence, true);
-  assert.equal(r.ok, false);
-  assert.match(r.erreur, /deux blocs|2 blocs/i);
+  assert.equal(r.ok, true);
+  assert.equal(r.contenu.trim(), 'ouvrir: TERMINAL');
+});
+
+test('deux blocs, ni l\'un ni l\'autre terminal (prose après le second aussi) → presence:false', () => {
+  const r = extraireBloc('```taches\nouvrir: A\n```\ntexte\n```taches\nouvrir: B\n```\nencore du texte après');
+  assert.deepEqual(r, { presence: false });
+});
+
+test('un bloc terminal précédé d\'un bloc cité NON REFERMÉ → seul le terminal (bien refermé) compte', () => {
+  // Le premier bloc n'est même pas syntaxiquement clos ; seul le dernier, qui
+  // termine le message, doit être vu.
+  const r = extraireBloc('exemple : ```taches\nouvrir sans fermeture ici\n```taches\nouvrir: TERMINAL\n```\n');
+  assert.equal(r.presence, true);
+  assert.equal(r.ok, true);
+  assert.equal(r.contenu.trim(), 'ouvrir: TERMINAL');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -114,6 +139,12 @@ test('`attend:` avec une valeur autre que `dirigeant` → refus nommé', () => {
   const r = analyserBloc('attend: quelqu-un-d-autre');
   assert.equal(r.ok, false);
   assert.match(r.erreur, /dirigeant/);
+});
+
+test('deux lignes `attend:` dans le même bloc → refus nommé, même si les deux valent « dirigeant »', () => {
+  const r = analyserBloc('attend: dirigeant\nattend: dirigeant');
+  assert.equal(r.ok, false);
+  assert.match(r.erreur, /plusieurs lignes .attend:./);
 });
 
 test('ligne non reconnue (pas de « verbe: valeur ») → refus nommé', () => {
@@ -176,6 +207,16 @@ test('purgerHorodatages retire tout ce qui a plus d\'une heure', () => {
     maintenant + 5000,           // dans le futur : rejeté aussi (défensif)
   ];
   assert.deepEqual(purgerHorodatages(horodatages, maintenant), [maintenant - 59 * 60 * 1000, maintenant - 1000]);
+});
+
+test('purgerHorodatages — borne EXACTE de l\'heure glissante : 3 600 000 ms pile est EXCLU', () => {
+  const maintenant = 2_000_000_000;
+  const pile = maintenant - 3_600_000;       // exactement une heure : hors fenêtre (< strict)
+  const unMsDedans = maintenant - 3_599_999; // un ms de moins : dans la fenêtre
+  assert.deepEqual(purgerHorodatages([pile], maintenant), [],
+    'un horodatage vieux de PILE une heure doit être purgé — la comparaison est stricte (<)');
+  assert.deepEqual(purgerHorodatages([unMsDedans], maintenant), [unMsDedans],
+    'un horodatage vieux d\'une heure moins 1 ms doit rester dans la fenêtre');
 });
 
 test('N absent ou invalide → aucune relance, et c\'est dit', () => {
@@ -317,6 +358,26 @@ test('executerEcritures — échec en cours de route : ce qui a été écrit ET 
   assert.equal(r.toutesReussies, false);
   assert.equal(r.ecrits.length, 1, `ecrits: ${JSON.stringify(r.ecrits)}`);
   assert.equal(r.nonEcrits.length, 3, `nonEcrits: ${JSON.stringify(r.nonEcrits)}`);
+});
+
+test('executerEcritures — ÉCHEC APPLICATIF (success:false, sans jeter) au milieu du plan : nomme aussi ce qui a été écrit et ce qui ne l\'a pas été', async () => {
+  let compteur = 0;
+  const appeler = async () => {
+    compteur += 1;
+    // Le 2e appel « réussit » côté transport (pas de throw) mais le corps porte
+    // success:false — c'est L'AUTRE forme d'échec (estEchecApplicatif), distincte
+    // du throw réseau du test précédent.
+    if (compteur === 2) return { success: false, error: 'refusé par une policy côté serveur' };
+    return { success: true };
+  };
+  const taches = { ouvrir: ['A'], enCours: ['T-20260925-0001'], fait: [{ code: 'T-20260925-0002', commentaire: 'x' }] };
+  const ticketsVerifies = new Map([['T-20260925-0001', 'uuid-1'], ['T-20260925-0002', 'uuid-2']]);
+  const r = await executerEcritures({ taches, demandeId: 'uuid-demande', ticketsVerifies, appeler });
+  assert.equal(r.toutesReussies, false);
+  assert.equal(r.ecrits.length, 1, `ecrits: ${JSON.stringify(r.ecrits)}`);
+  assert.equal(r.nonEcrits.length, 3, `nonEcrits: ${JSON.stringify(r.nonEcrits)}`);
+  assert.match(r.erreur, /refusée par le ServiceDesk/);
+  assert.match(r.erreur, /refusé par une policy côté serveur/);
 });
 
 test('trouverProchaineTache — comptes cohérents, prochaine tâche triée sequence_order puis created_at', async () => {
@@ -536,4 +597,112 @@ test('N absent → aucune relance jamais, et dit — même quand tout le reste r
   assert.equal(r.sortie.decision, undefined);
   assert.equal(r.blocEmis, false);
   assert.match(r.sortie.systemMessage, /absente ou invalide|aucune relance/);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// D1 (orchestration) — un exemple CITÉ n'écrit jamais, un bloc terminal précédé
+// d'un bloc cité n'écrit QUE ce que le terminal porte.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test('D1 — exemple `taches` CITÉ suivi de prose → silence total, ZÉRO appel (comme "pas de bloc")', async () => {
+  const texte = [
+    'Voici comment je vais faire à l\'avenir, pour référence :',
+    '```taches',
+    'ouvrir: exemple de titre',
+    '```',
+    'Et voilà, j\'attends ton retour.',
+  ].join('\n');
+  const r = await deciderStop({
+    texteAssistant: texte,
+    contenuDemande: 'D-20260925-0003',
+    appeler: appelerQuiCrieSiAppele,
+    horodatagesRelances: [], plafondParHeure: 30, maintenant: 1000,
+  });
+  assert.deepEqual(r, { silence: true, sortie: {}, blocEmis: false });
+});
+
+test('D1 — bloc terminal précédé d\'un bloc cité → SEULES les lignes du terminal sont écrites', async () => {
+  const { appeler, appels } = construireAppeler({
+    demandes: { 'D-20260925-0003': { id: 'uuid-demande', created_at: '2026-09-25T00:00:00Z', direct_ticket_count: 0 } },
+    listePages: [[]],
+  });
+  const texte = [
+    'Pour rappel, la syntaxe est :',
+    '```taches',
+    'ouvrir: CECI NE DOIT JAMAIS ÊTRE ÉCRIT',
+    '```',
+    'Ce que je fais réellement maintenant :',
+    '```taches',
+    'ouvrir: seul ceci doit être écrit',
+    'attend: dirigeant',
+    '```',
+  ].join('\n');
+  const r = await deciderStop({
+    texteAssistant: texte, contenuDemande: 'D-20260925-0003', appeler,
+    horodatagesRelances: [], plafondParHeure: 30, maintenant: 1000,
+  });
+  const creations = appels.filter((a) => a.args.action === 'create');
+  assert.equal(creations.length, 1, `une seule création attendue : ${JSON.stringify(creations)}`);
+  assert.equal(creations[0].args.title, 'seul ceci doit être écrit');
+  assert.ok(!creations.some((a) => a.args.title === 'CECI NE DOIT JAMAIS ÊTRE ÉCRIT'));
+  assert.equal(r.sortie.decision, undefined, 'attend: dirigeant du bloc terminal doit être respecté, pas de relance');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// D2 — REJEU = DOUBLONS. Le même dernier message relu (hook redéclenché) ne
+// réécrit rien la seconde fois — mais peut toujours relire la suite.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test('D2 — même message rejoué deux fois → UN SEUL tickets.create, la seconde fois le dit', async () => {
+  const { appeler, appels } = construireAppeler({
+    demandes: { 'D-20260925-0003': { id: 'uuid-demande', created_at: '2026-09-25T00:00:00Z', direct_ticket_count: 0 } },
+    listePages: [[{ id: 'n', ticket_id: 'T-20260925-0009', title: 'nouvelle tâche', status: 'new', demand_id: 'uuid-demande', created_at: '2026-09-25T01:00:00Z', sequence_order: null }]],
+  });
+  const texte = ['```taches', 'ouvrir: nouvelle tâche', 'attend: dirigeant', '```'].join('\n');
+
+  const premier = await deciderStop({
+    texteAssistant: texte, contenuDemande: 'D-20260925-0003', appeler,
+    horodatagesRelances: [], plafondParHeure: 30, maintenant: 1000,
+    empreinteDernierBloc: null,
+  });
+  assert.equal(typeof premier.empreinteAEnregistrer, 'string', 'un succès frais doit rendre une empreinte à enregistrer');
+  assert.equal(premier.empreinteAEnregistrer, empreinteBloc(extraireBloc(texte).contenu));
+
+  // Le hook est redéclenché (retry de l'hôte) sur EXACTEMENT le même message —
+  // le fil mince relirait la même empreinte depuis l'état du lieu.
+  const second = await deciderStop({
+    texteAssistant: texte, contenuDemande: 'D-20260925-0003', appeler,
+    horodatagesRelances: [], plafondParHeure: 30, maintenant: 2000,
+    empreinteDernierBloc: premier.empreinteAEnregistrer,
+  });
+
+  const creations = appels.filter((a) => a.args.action === 'create');
+  assert.equal(creations.length, 1, `deux rejeux ne doivent créer qu'UN SEUL ticket : ${JSON.stringify(creations)}`);
+  assert.match(second.sortie.systemMessage ?? '', /déjà écrit|empreinte identique/,
+    'le second appel doit LE DIRE, pas rester muet sur le fait qu\'il n\'a rien réécrit');
+  assert.equal(second.empreinteAEnregistrer, undefined, 'rien de neuf à enregistrer : l\'empreinte était déjà la bonne');
+});
+
+test('D2 — un rejeu peut RELIRE LA SUITE sans réécrire (pas seulement se taire)', async () => {
+  const { appeler, appels } = construireAppeler({
+    demandes: { 'D-20260925-0003': { id: 'uuid-demande', created_at: '2026-09-25T00:00:00Z', direct_ticket_count: 1 } },
+    tickets: { 'T-20260925-0001': { id: 'uuid-1', demand_id: 'uuid-demande' } },
+    listePages: [[
+      { id: '1', ticket_id: 'T-20260925-0001', title: 'X', status: 'in_progress', demand_id: 'uuid-demande', created_at: '2026-09-25T00:30:00Z', sequence_order: null },
+    ]],
+  });
+  const texte = ['```taches', 'en-cours: T-20260925-0001', '```'].join('\n');
+  const empreinte = empreinteBloc(extraireBloc(texte).contenu);
+
+  const r = await deciderStop({
+    texteAssistant: texte, contenuDemande: 'D-20260925-0003', appeler,
+    horodatagesRelances: [], plafondParHeure: 30, maintenant: 1000,
+    empreinteDernierBloc: empreinte, // déjà écrit lors d'un tour précédent
+  });
+
+  assert.ok(!appels.some((a) => ['create', 'update', 'add_comment'].includes(a.args.action)),
+    `aucune écriture n'était attendue sur un rejeu : ${JSON.stringify(appels)}`);
+  assert.ok(appels.some((a) => a.args.action === 'list'), 'la suite doit quand même être relue sur un rejeu');
+  assert.equal(r.sortie.decision, 'block');
+  assert.match(r.sortie.reason, /prochaine tâche/);
 });
