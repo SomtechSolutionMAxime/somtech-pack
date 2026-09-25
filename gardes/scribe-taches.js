@@ -161,11 +161,30 @@ async function main() {
   const contenuDemande = lireFichierDemande(cwd);
 
   let appeler = null;
-  try {
-    const { transportServiceDesk } = await import(join(ICI, '..', 'ligne-directe', 'src', 'mandat.js'));
-    appeler = transportServiceDesk();
-  } catch {
-    appeler = null; // absence de transport = absence de clé/dépendance : jugée par `deciderStop`.
+  // 🔒 SEUIL DE TEST, DOUBLEMENT GARDÉ — jamais un chemin de production.
+  // `SOMTECH_SCRIBE_APPELER_TEST` pointe un module qui exporte `appeler`, et n'est
+  // honoré QUE si `NODE_TEST_CONTEXT` est AUSSI présent — le même signal que la
+  // cloison d'essais de `ligne-directe/src/cloison.js`, posé UNIQUEMENT par
+  // `node --test`, jamais en production. Sans ce seuil, un témoin de bout en
+  // bout du fil mince (deux VRAIS lancements du process, même fichier d'état) ne
+  // peut atteindre AUCUN double : `transportServiceDesk()` refuse tout appel
+  // réseau sous `NODE_TEST_CONTEXT` (la cloison), par construction — et c'est
+  // voulu, pas contourné : ce seuil bypasse `transportServiceDesk` lui-même
+  // plutôt que de désarmer sa cloison.
+  if (process.env.NODE_TEST_CONTEXT && process.env.SOMTECH_SCRIBE_APPELER_TEST) {
+    try {
+      const mod = await import(process.env.SOMTECH_SCRIBE_APPELER_TEST);
+      appeler = typeof mod.appeler === 'function' ? mod.appeler : null;
+    } catch {
+      appeler = null;
+    }
+  } else {
+    try {
+      const { transportServiceDesk } = await import(join(ICI, '..', 'ligne-directe', 'src', 'mandat.js'));
+      appeler = transportServiceDesk();
+    } catch {
+      appeler = null; // absence de transport = absence de clé/dépendance : jugée par `deciderStop`.
+    }
   }
 
   const N = Number(process.env.SOMTECH_SCRIBE_RELANCES_PAR_HEURE);
@@ -181,6 +200,16 @@ async function main() {
       plafondParHeure: Number.isFinite(N) ? N : undefined,
       maintenant,
       journalPrecedent: journal,
+      // ⚠️ FERME LE TROU DU DÉLAI INTERNE (T-20260925-0080, revue de fond, passe 3) :
+      // si le minuteur ci-dessus tue le process AU MILIEU du plan d'écritures, cette
+      // fonction `deciderStop` ne rend JAMAIS son `journalAEnregistrer` — le process
+      // sort par `repondre()`/`process.exit(0)` avant que sa promesse ne se résolve.
+      // Ce rappel persiste donc le journal IMMÉDIATEMENT, étape par étape, pendant
+      // que le plan tourne encore — la DERNIÈRE écriture réellement réussie est ainsi
+      // déjà sur disque quoi qu'il arrive ensuite (délai dépassé, SIGKILL, panne).
+      // La persistance finale plus bas reste nécessaire pour les horodatages du
+      // plafond et pour un bloc qui échoue sans jamais écrire une seule étape.
+      onEtapeReussie: (j) => ecrireEtat(chemin, { horodatages, journal: j }),
     });
   } catch (e) {
     repondre({ systemMessage: `scribe des tâches : panne de décision (${e?.message ?? 'cause inconnue'}) — arrêt permis plutôt qu'un verdict non calculé.` });

@@ -484,6 +484,14 @@ export async function trouverProchaineTache({ demandeId, demandeCreatedAt, direc
  *   journal (D2/D3) lu de l'état du lieu — les étapes déjà réussies pour la DERNIÈRE
  *   empreinte connue. `null`/absent si aucun journal encore connu. Un bloc d'empreinte
  *   DIFFÉRENTE ignore ce journal (repart d'un plan vide) : c'est un bloc neuf.
+ * @param {((journal:{empreinte:string, etapes:string[]})=>void)|undefined} entree.onEtapeReussie
+ *   rappel SYNCHRONE, appelé après CHAQUE étape réussie, avec le journal À JOUR à cet
+ *   instant précis — c'est ce qui permet au fil mince de persister sur disque avant même
+ *   que ce module ait fini de décider. SANS lui, un process tué en cours de plan (le délai
+ *   interne du fil mince, un `SIGKILL`) perdrait une écriture pourtant déjà réussie : le
+ *   `journalAEnregistrer` rendu à la FIN de cette fonction n'est jamais atteint si le
+ *   process meurt avant. Optionnel — ce module reste pur (aucune I/O propre), c'est
+ *   l'appelant qui décide ce que ce rappel fait.
  * @returns {Promise<{
  *   silence:boolean,
  *   sortie:{decision?:'block', reason?:string, systemMessage?:string},
@@ -492,7 +500,7 @@ export async function trouverProchaineTache({ demandeId, demandeCreatedAt, direc
  * }>}
  */
 export async function deciderStop(entree) {
-  const { texteAssistant, contenuDemande, appeler, horodatagesRelances, plafondParHeure, maintenant, journalPrecedent } = entree;
+  const { texteAssistant, contenuDemande, appeler, horodatagesRelances, plafondParHeure, maintenant, journalPrecedent, onEtapeReussie } = entree;
 
   // ── Pas de bloc (ou un bloc cité, pas terminal) : silence total, zéro appel —
   // la SEULE sortie muette.
@@ -549,7 +557,13 @@ export async function deciderStop(entree) {
   const ecriture = await executerEcritures({
     taches, demandeId: preflight.id, ticketsVerifies, appeler,
     etapesDejaFaites,
-    noterEtapeReussie: (cle) => etapesAJour.add(cle),
+    noterEtapeReussie: (cle) => {
+      etapesAJour.add(cle);
+      // Persistance IMMÉDIATE, PAR ÉTAPE — voir la doc de `onEtapeReussie` ci-dessus :
+      // un `try/catch` best-effort, le rappel est celui de l'appelant, jamais un
+      // motif pour faire échouer une écriture par ailleurs réussie.
+      try { onEtapeReussie?.({ empreinte, etapes: [...etapesAJour] }); } catch { /* best-effort */ }
+    },
   });
 
   // Le journal à enregistrer reflète TOUJOURS l'état réellement atteint — succès
