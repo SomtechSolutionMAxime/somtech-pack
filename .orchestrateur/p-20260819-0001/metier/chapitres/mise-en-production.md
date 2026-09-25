@@ -96,7 +96,7 @@ Avant d'y arriver : vérifie qu'aucun epic ne reste ouvert pour de la dette qui 
 
 > 🔴 **Tu ne refermes ta ligne que si le CHANTIER est clos — jamais si c'est TOI qui t'arrêtes** (renaissance, relais). Le chantier continue sans toi, et refermer **couperait le CTO entre ta mort et la naissance de ton successeur**.
 >
-> **Tu écris à la place** un dernier message : où en est le chantier, **que le canal reste ouvert**, ce qui reste `[non établi]` — puis, s'il attend quelque chose de lui, sa dernière ligne.
+> **Tu écris à la place** un dernier message : où en est le chantier, **que le canal reste ouvert**, ce qui reste `[non établi]` — puis, si ce message attend quelque chose de lui, sa dernière ligne.
 >
 > ⚠️ **Durable ou jetable ?** Une ligne **durable** rouvre sous le même titre ; une **jetable** est archivée, **donc irréversible** — le désarchivage est réservé à un compte humain. *(Mesuré sur un jalon `planned` portant 14 demandes — `T-20260818-0128`.)*
 
@@ -104,7 +104,7 @@ Avant d'y arriver : vérifie qu'aucun epic ne reste ouvert pour de la dette qui 
 
 ```bash
 node "$HOME/.somtech/ligne-directe/bin/ligne-directe.js" fermer \
-  --bilan "<ce qui a été livré, ce qui reste, ce qui appartient au CTO>"
+  --bilan "<ce qui a été livré, ce qui reste, ce qu'il attend de lui>"
 ```
 
 **Le bilan est un message comme les autres** : des faits ; `J'ai besoin de toi : …` en dernière ligne **seulement** si le bilan attend quelque chose de lui.

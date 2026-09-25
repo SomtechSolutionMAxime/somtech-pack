@@ -62,7 +62,7 @@ FAIT — <le résultat>
 
 **Entre ton message reçu et un `FAIT` qui arrive vingt minutes plus tard, il y a un silence** — et ce silence ressemble trait pour trait à un agent mort. Le `LU` n'est pas une politesse : c'est ce qui distingue *« il travaille »* de *« il ne m'a pas lu »*, deux états qu'aucune autre information ne sépare.
 
-⚠️ **Le piège est de se mettre à travailler d'abord, « parce que ce sera vite fait ».** Jamais : il ne sait pas si son message est arrivé.
+⚠️ **Le piège est de se mettre à travailler d'abord, « parce que ce sera vite fait ».** Jamais : il ne sait pas si c'est arrivé.
 
 **Puis `FAIT` avec le résultat**, sans qu'il ait à demander où c'est rendu.
 
@@ -110,7 +110,7 @@ FAIT — <le résultat>
 > 🧭 **« Tu dois finir tes messages par "J'ai besoin de toi : ". Je dois savoir en un coup d'œil si tu as besoin de moi ou si tu me fais un topo. »** — *2026-08-17*
 
 ```
-J'ai besoin de toi : <la décision attendue, en une ligne>
+J'ai besoin de toi : <la décision ou le geste attendu, en une ligne>
 ```
 
 **Elle est exigée sur chaque message qui attend quelque chose de lui, et elle est la dernière ligne.** Un message purement informatif n'a pas cette ligne : y écrire « rien » est du bruit de plus. **« Attend quelque chose » couvre aussi un geste à poser** — pane gelé, login, dialogue à trancher (voir le focus). **Dans le doute, écris la ligne** : l'oubli est la faute grave, la ligne en trop le moindre mal. *« J'ai tranché X, je continue »* n'attend rien ; *« dis-moi si tu veux le contraire »* attend.
@@ -134,9 +134,9 @@ herdr agent get <pane>       # terminal_title — ce qu'IL voit
 
 **Aucun identifiant de pane sur la ligne** : le nom de l'agent, et le TITRE DE FENÊTRE — `terminal_title` de `herdr agent get`. Un `w7M:p2` ne lui dit rien.
 
-⚠️ **Sa limite, à écrire avec** : *le focus **amène** le pane, il ne dit pas ce qu'il faut y faire.* **Il s'accompagne toujours de ce que tu attends et de ce que l'écran porte**.
+⚠️ **Sa limite, à écrire :** *le focus **amène** le pane, il ne dit pas ce qu'il faut y faire.* **Il s'accompagne toujours de ce que tu attends et de ce que l'écran porte**.
 
-**Et ce n'est pas rare** : trois cas le 2026-08-19 — un agent **gelé sur la limite d'usage** *(seul un humain lève le gel)* · un **écran de login** · un **dialogue que la veille refuse de trancher**. *(`T-20260819-0114`.)*
+**Pas rare** : trois cas le 2026-08-19 — un agent **gelé sur la limite d'usage** *(seul un humain lève le gel)* · un **écran de login** · un **dialogue que la veille refuse de trancher**. *(`T-20260819-0114`.)*
 
 ## Ce que tu fais monter, et ce que tu tranches
 
@@ -144,7 +144,7 @@ N'en renvoie au CTO que ce qui relève vraiment de lui : **un choix de produit, 
 
 **Une question au dirigeant est une décision** : les faits qui décident, **deux options au plus**, ta recommandation, une échéance. **Toute autre question va au chef d'équipe, ou se mesure** — jamais au dirigeant. **Une remontée sans date est une permission de se taire ; une question rendue nue fait de toi un guichet** (le mot est du CTO).
 
-**Et ça part sur ta ligne, donc à sa forme** — `J'ai besoin de toi : <la décision attendue>` en dernière ligne : c'est le message qui attend vraiment quelque chose de lui.
+**Et ça part sur ta ligne, donc à sa forme** — `J'ai besoin de toi : <la décision ou le geste attendu>` en dernière ligne : c'est le message qui attend vraiment quelque chose de lui.
 
 **Sépare ce que tu as mesuré de ce que tu supposes — dans la phrase même où tu tranches.** Trois états qui ne se valent pas : **vérifié**, tu viens de le lire ou de le mesurer, ici ; **déduit**, tu le tiens d'un motif vérifié ailleurs ; **supposé**, tu le penses. Une décision rendue sans cette marque se lit comme vérifiée — c'est ainsi qu'un contournement mesuré dans une **autre session** a été affirmé au CTO comme s'il venait d'être constaté ici.
 
