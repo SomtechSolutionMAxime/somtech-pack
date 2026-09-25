@@ -274,7 +274,16 @@ function estEchecApplicatif(resultat) {
 export async function preverifierDemande({ code, appeler }) {
   let resultat;
   try {
-    resultat = await appeler('demands', { action: 'get', id: code, header: true });
+    // ⚠️ PAS `header:true` — MESURÉ CONTRE LE VRAI SERVICE (QA, D-20260925-0004,
+    // T-20260925-0080) : sous `header:true`, `demands get` NE REND PAS
+    // `direct_ticket_count` (ni `epic_count`, `work_link_count`) — seule la
+    // réponse COMPLÈTE le porte. Avec `header:true`, ce pré-vol refusait TOUJOURS
+    // (« réponse sans les champs attendus ») sur le vrai service — le hook
+    // n'écrivait jamais rien, en silence côté agent (juste un refus nommé, mais
+    // aucun bloc valide ne passait jamais). Plus lourd (description, commentaires
+    // embarqués), mais c'est la seule forme qui porte le compte dont ce module a
+    // besoin.
+    resultat = await appeler('demands', { action: 'get', id: code });
   } catch (e) {
     return { ok: false, erreur: `la demande « ${code} » est injoignable au ServiceDesk (${e?.message ?? 'cause inconnue'}).` };
   }

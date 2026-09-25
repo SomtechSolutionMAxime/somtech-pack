@@ -56,6 +56,20 @@ test('garde ABSENTE, stop_hook_active absent/false → decision:block, raison no
   }
 });
 
+test('M2 — garde ABSENTE, stop_hook_active TRUTHY MAIS PAS `true` STRICT ("false" en chaîne, 1, "1") → decision:block, PAS l\'arrêt', () => {
+  // ⚠️ Sans l'égalité STRICTE (`stop_hook_active===true`), un hôte qui sérialise
+  // le champ en chaîne (`"false"`, elle-même TRUTHY en JS) ou en nombre (`1`)
+  // désarmerait la commande de repli par accident — elle laisserait s'arrêter
+  // alors qu'AUCUN hôte connu n'a réellement rejoué ce tour.
+  const chemin = join(TMP, 'introuvable.js');
+  const cmd = commandePourGardeStop(chemin);
+  for (const entree of [{ stop_hook_active: 'false' }, { stop_hook_active: 1 }, { stop_hook_active: '1' }, { stop_hook_active: 'true' }]) {
+    const sortie = JSON.parse(executer(cmd, entree));
+    assert.equal(sortie.decision, 'block', `entree=${JSON.stringify(entree)} doit rester un block strict`);
+    assert.match(sortie.reason, /introuvable/);
+  }
+});
+
 test('garde ABSENTE, stop_hook_active:true → arrêt permis, systemMessage nommé — sinon boucle infinie', () => {
   const chemin = join(TMP, 'introuvable.js');
   const cmd = commandePourGardeStop(chemin);
@@ -104,6 +118,21 @@ test('garde SAINE qui rend un block valide → repris à l\'identique', () => {
   const cmd = commandePourGardeStop(chemin);
   const sortie = JSON.parse(executer(cmd, {}));
   assert.deepEqual(sortie, { decision: 'block', reason: 'prochaine tâche : T-20260925-0001 — X' });
+});
+
+test('M1 — garde qui rend `{"decision":"block","reason":""}` (raison VIDE) → traitée comme CASSÉE, jamais transmise telle quelle', () => {
+  // ⚠️ Sans le contrôle `&&v.reason` (rendu.js, filtre du hook Stop), une raison
+  // vide passerait le filtre (`typeof ""==="string"` est vrai) et serait
+  // retransmise à l'identique — un `decision:block` sans texte relancerait
+  // l'agent SANS RIEN LUI DIRE POURQUOI, exactement le silence que ce lot
+  // combat partout ailleurs.
+  const chemin = join(TMP, 'raison-vide.js');
+  writeFileSync(chemin, 'process.stdout.write(JSON.stringify({decision:"block",reason:""}));\n');
+  const cmd = commandePourGardeStop(chemin);
+  const sortie = JSON.parse(executer(cmd, {}));
+  assert.equal(sortie.decision, 'block', 'la commande de repli refuse toujours par défaut — jamais un silence');
+  assert.notEqual(sortie.reason, '', 'la raison VIDE de la garde ne doit jamais ressortir telle quelle');
+  assert.match(sortie.reason, /aucun verdict lisible|echoue/);
 });
 
 test('garde SAINE qui rend un systemMessage seul → repris à l\'identique', () => {

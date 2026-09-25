@@ -259,6 +259,16 @@ function construireAppeler({ demandes = {}, tickets = {}, listePages = [[]], ech
     if (nom === 'demands' && args.action === 'get') {
       const d = demandes[args.id];
       if (!d) throw new Error(`demande « ${args.id} » introuvable (double conforme : le vrai jette sur un code inconnu)`);
+      if (args.header === true) {
+        // ⚠️ CONFORME AU RÉEL — MESURÉ EN QA CONTRE LE VRAI SERVICE (D-20260925-0004,
+        // T-20260925-0080) : sous `header:true`, `direct_ticket_count` (et
+        // `epic_count`, `work_link_count`) N'EXISTENT PAS dans la réponse — seule
+        // la réponse COMPLÈTE les porte. Un double qui les rendrait quand même
+        // sous `header:true` serait plus cohérent que le vrai service, et
+        // masquerait exactement le défaut réel qui a empêché toute écriture.
+        const { direct_ticket_count, epic_count, work_link_count, ...enTete } = d;
+        return { demand: enTete };
+      }
       return { demand: d };
     }
     if (nom === 'tickets' && args.action === 'get') {
@@ -293,6 +303,18 @@ test('preverifierDemande — succès sur une demande connue', async () => {
   });
   const r = await preverifierDemande({ code: 'D-20260925-0003', appeler });
   assert.deepEqual(r, { ok: true, id: 'uuid-demande', createdAt: '2026-09-25T03:36:28.213Z', directTicketCount: 3 });
+});
+
+test('preverifierDemande — N\'APPELLE JAMAIS `demands get` avec `header:true` — mesuré contre le vrai service (QA D-20260925-0004) : direct_ticket_count n\'existe pas sous header', async () => {
+  const { appeler, appels } = construireAppeler({
+    demandes: { 'D-20260925-0003': { id: 'uuid-demande', created_at: '2026-09-25T00:00:00Z', direct_ticket_count: 5 } },
+  });
+  const r = await preverifierDemande({ code: 'D-20260925-0003', appeler });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const appel = appels.find((a) => a.nom === 'demands' && a.args.action === 'get');
+  assert.ok(appel, 'aucun appel demands.get journalisé');
+  assert.notEqual(appel.args.header, true,
+    'header:true ferait perdre direct_ticket_count sur le vrai service — refus systématique sur un bloc pourtant valide (T-20260925-0080, QA D-20260925-0004)');
 });
 
 test('preverifierDemande — `direct_ticket_count` ABSENT ou NON NUMÉRIQUE → refus nommé, jamais une suite nommée', async () => {
@@ -410,6 +432,24 @@ test('trouverProchaineTache — comptes cohérents, prochaine tâche triée sequ
   assert.deepEqual(r.tache, { code: 'T-20260925-0001', titre: 'A' });
 });
 
+test('M4 — trouverProchaineTache — candidats MÊLÉS avec/sans sequence_order : celui qui a un rang passe D\'ABORD, les sans-rang en dernier par created_at', async () => {
+  const listePages = [[
+    // « Sans rang » créé le PLUS TÔT — doit quand même passer APRÈS le rangé.
+    { id: '1', ticket_id: 'T-20260925-0001', title: 'SANS RANG, plus ancien', status: 'new', demand_id: 'uuid-demande', created_at: '2026-09-25T01:00:00Z', sequence_order: null },
+    // « Rangé » créé PLUS TARD — doit quand même passer EN PREMIER (rang gagne sur date).
+    { id: '2', ticket_id: 'T-20260925-0002', title: 'RANGÉ', status: 'new', demand_id: 'uuid-demande', created_at: '2026-09-25T05:00:00Z', sequence_order: 3 },
+    { id: '3', ticket_id: 'T-20260925-0003', title: 'SANS RANG, plus récent', status: 'new', demand_id: 'uuid-demande', created_at: '2026-09-25T02:00:00Z', sequence_order: null },
+  ]];
+  const { appeler } = construireAppeler({ listePages });
+  const r = await trouverProchaineTache({
+    demandeId: 'uuid-demande', demandeCreatedAt: '2026-09-25T00:00:00Z', directTicketCountAjuste: 3, appeler,
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.mesureCoherente, true);
+  assert.deepEqual(r.tache, { code: 'T-20260925-0002', titre: 'RANGÉ' },
+    `le candidat RANGÉ doit passer avant les non-rangés, quelle que soit la date : ${JSON.stringify(r.tache)}`);
+});
+
 test('trouverProchaineTache — comptes divergents → mesureCoherente:false, aucune tâche', async () => {
   const listePages = [[
     { id: '1', ticket_id: 'T-20260925-0001', title: 'A', status: 'new', demand_id: 'uuid-demande', created_at: '2026-09-25T08:00:00Z', sequence_order: null },
@@ -495,6 +535,29 @@ test('success:false au pré-vol → refus nommé, zéro écriture', async () => 
   });
   assert.equal(r.sortie.decision, 'block');
   assert.match(r.sortie.reason, /refuse/);
+});
+
+test('M5 — bloc avec SEUL `en-cours:` d\'une AUTRE demande → refus AVANT toute écriture, ZÉRO update', async () => {
+  // ⚠️ ISOLE `en-cours` DE `fait` — sans ce test, retirer `...taches.enCours` de
+  // `codesACiter` (cli/src/metier/gardes/scribe-taches.js) survit : le seul
+  // autre témoin croise un `fait` d'une mauvaise demande AVEC un `en-cours`
+  // d'une bonne, donc `fait` seul suffit déjà à faire refuser — `en-cours`
+  // n'est alors JAMAIS ce qui fait la différence.
+  const { appeler, appels } = construireAppeler({
+    demandes: { 'D-20260925-0003': { id: 'uuid-demande', created_at: '2026-09-25T00:00:00Z', direct_ticket_count: 5 } },
+    tickets: { 'T-20260925-0001': { id: 'uuid-1', demand_id: 'uuid-UNE-AUTRE-demande' } },
+  });
+  const texte = ['```taches', 'en-cours: T-20260925-0001', '```'].join('\n');
+  const r = await deciderStop({
+    texteAssistant: texte, contenuDemande: 'D-20260925-0003', appeler,
+    horodatagesRelances: [], plafondParHeure: 30, maintenant: 1000,
+  });
+  assert.equal(r.sortie.decision, 'block');
+  assert.match(r.sortie.reason, /n'appartient pas/);
+  assert.ok(!appels.some((a) => ['create', 'update', 'add_comment'].includes(a.args.action)),
+    `une écriture est partie avant la vérification : ${JSON.stringify(appels)}`);
+  assert.ok(appels.some((a) => a.nom === 'tickets' && a.args.action === 'get' && a.args.id === 'T-20260925-0001'),
+    'le ticket en-cours doit avoir été VÉRIFIÉ (sinon le refus vient d\'ailleurs, pas de la vérification)');
 });
 
 test('ticket `fait` d\'une AUTRE demande → refus AVANT toute écriture', async () => {
