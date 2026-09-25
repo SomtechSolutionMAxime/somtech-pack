@@ -1,0 +1,167 @@
+// `orchestrateur-update` accepte le NOM de rivière là où il exigeait le code du mandat
+// (D-20260925-0002 : « je trouve ça mêlant »).
+//
+// Le dirigeant tape `bonaventure` ; le lieu s'appelle `j-20260814-0001` et le reste. La commande
+// résout le lieu par son `.nom-agent`, DIT lequel elle a retenu, et refuse — en nommant — quand
+// deux lieux portent le nom ou quand aucun ne le porte. Preuve par CONTENU du lieu réel.
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, chmodSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { run } from '../src/cli.js';
+import { alignerLePosteSur } from './lib/poste-conforme.js';
+
+const tmp = (p) => mkdtempSync(join(tmpdir(), p));
+const V1 = '# metier v1\n';
+const V2 = '# metier v2 — apres correctif\n';
+
+function payload() {
+  const root = tmp('smtk-riviere-payload-');
+  writeFileSync(join(root, 'pack.json'), JSON.stringify({
+    name: 'fixture-pack', version: '9.9.9', modules: { core: { default: true, paths: ['.claude/'] } },
+  }));
+  const g = join(root, '.claude', 'templates', 'orchestrateur');
+  mkdirSync(g, { recursive: true });
+  writeFileSync(join(g, 'CLAUDE.md'), V2);
+  const gr = join(root, '.claude', 'templates', 'gestionnaire-client');
+  mkdirSync(gr, { recursive: true });
+  writeFileSync(join(gr, 'CLAUDE.md'), V2);
+  alignerLePosteSur(root);
+  return root;
+}
+
+function depot(lieux) {
+  const repo = tmp('smtk-riviere-repo-');
+  for (const [code, nomAgent] of Object.entries(lieux)) {
+    const l = join(repo, '.orchestrateur', code);
+    mkdirSync(l, { recursive: true });
+    writeFileSync(join(l, 'CLAUDE.md'), V1);
+    writeFileSync(join(l, 'CONTEXTE.md'), '# contexte\n');
+    if (nomAgent !== undefined) writeFileSync(join(l, '.nom-agent'), `${nomAgent}\n`);
+  }
+  return repo;
+}
+
+/** Capture stdout/stderr de la commande : ce qu'elle DIT fait partie de ce qu'elle promet. */
+async function lancer(args) {
+  const sorties = [];
+  const log = console.log, err = console.error;
+  console.log = (...a) => sorties.push(a.join(' '));
+  console.error = (...a) => sorties.push(a.join(' '));
+  try {
+    const code = await run(args);
+    return { code, texte: sorties.join('\n') };
+  } finally {
+    console.log = log; console.error = err;
+  }
+}
+
+const lu = (repo, code) => readFileSync(join(repo, '.orchestrateur', code, 'CLAUDE.md'), 'utf8');
+
+test('G1 — le nom de rivière met à jour le lieu qui le porte, et la commande DIT lequel', async () => {
+  const repo = depot({ 'j-20260814-0001': 'bonaventure', 'j-20260814-0002': 'batiscan' });
+  const { code, texte } = await lancer(['orchestrateur-update', '--nom', 'bonaventure', '--source', payload(), '--target', repo]);
+  assert.equal(code, 0, texte);
+  assert.equal(lu(repo, 'j-20260814-0001'), V2, 'le lieu du nom a convergé');
+  assert.equal(lu(repo, 'j-20260814-0002'), V1, 'l’autre lieu n’a PAS bougé');
+  assert.match(texte, /bonaventure/);
+  assert.match(texte, /j-20260814-0001/, 'la commande dit quel lieu elle a retenu');
+  // ⚠️ L'en-tête « Orchestrateur « bonaventure » → …/j-20260814-0001 » contient DÉJÀ le code : le
+  // relevé de revue (retirer la phrase de traduction laissait ce test vert) exige donc la phrase.
+  assert.match(texte, /« bonaventure » est le nom inscrit dans le lieu « j-20260814-0001 »/, 'la traduction est DITE, pas seulement visible dans un chemin');
+  assert.deepEqual(readdirSync(join(repo, '.orchestrateur')).sort(), ['j-20260814-0001', 'j-20260814-0002'], 'aucun lieu créé à côté');
+});
+
+test('G1 — le CODE du mandat marche toujours, sans le dire comme une traduction', async () => {
+  const repo = depot({ 'j-20260814-0001': 'bonaventure' });
+  const { code, texte } = await lancer(['orchestrateur-update', '--nom', 'j-20260814-0001', '--source', payload(), '--target', repo]);
+  assert.equal(code, 0, texte);
+  assert.equal(lu(repo, 'j-20260814-0001'), V2);
+  assert.doesNotMatch(texte, /porte le nom|inscrit/i);
+});
+
+test('G2 — deux lieux portent le nom : refus qui les nomme, rien écrit', async () => {
+  const repo = depot({ 'j-20260814-0001': 'bonaventure', 'j-20260814-0002': 'bonaventure' });
+  const { code, texte } = await lancer(['orchestrateur-update', '--nom', 'bonaventure', '--source', payload(), '--target', repo]);
+  assert.notEqual(code, 0);
+  assert.match(texte, /j-20260814-0001/);
+  assert.match(texte, /j-20260814-0002/);
+  assert.equal(lu(repo, 'j-20260814-0001'), V1);
+  assert.equal(lu(repo, 'j-20260814-0002'), V1);
+});
+
+test('G3 — aucun lieu ne porte le nom : « inscrit dans aucun lieu », jamais « n’existe pas »', async () => {
+  const repo = depot({ 'j-20260814-0001': 'bonaventure' });
+  const { code, texte } = await lancer(['orchestrateur-update', '--nom', 'saguenay', '--source', payload(), '--target', repo]);
+  assert.notEqual(code, 0);
+  assert.match(texte, /inscrit dans aucun lieu/);
+  assert.doesNotMatch(texte, /n['’]existe pas|jamais « posé »/);
+  assert.equal(lu(repo, 'j-20260814-0001'), V1);
+});
+
+test('G4 — un .nom-agent illisible : le refus dit que la mesure a manqué, pas « aucun lieu »', {
+  skip: process.getuid?.() === 0 ? 'root lit tout : non prouvable ici' : false,
+}, async () => {
+  const repo = depot({ 'j-20260814-0001': 'bonaventure', 'j-20260814-0002': 'batiscan' });
+  const f = join(repo, '.orchestrateur', 'j-20260814-0002', '.nom-agent');
+  chmodSync(f, 0o000);
+  let r;
+  try {
+    r = await lancer(['orchestrateur-update', '--nom', 'batiscan', '--source', payload(), '--target', repo]);
+  } finally { chmodSync(f, 0o600); }
+  assert.notEqual(r.code, 0);
+  assert.match(r.texte, /j-20260814-0002/);
+  assert.doesNotMatch(r.texte, /inscrit dans aucun lieu/);
+});
+
+test('un nom qui traverse un répertoire reste refusé par la garde anti-évasion', async () => {
+  const repo = depot({ 'j-20260814-0001': 'bonaventure' });
+  const { code, texte } = await lancer(['orchestrateur-update', '--nom', '../evil', '--source', payload(), '--target', repo]);
+  assert.notEqual(code, 0);
+  assert.match(texte, /segment de chemin/);
+});
+
+test('un lieu qui est un LIEN SYMBOLIQUE, désigné par son code, n’est pas refusé « ni code ni nom » (comme avant ce lot)', async () => {
+  const repo = tmp('smtk-riviere-lien-');
+  const reel = tmp('smtk-riviere-reel-');
+  mkdirSync(join(repo, '.orchestrateur'), { recursive: true });
+  symlinkSync(reel, join(repo, '.orchestrateur', 'j-20260814-0001'));
+  const { texte } = await lancer(['orchestrateur-update', '--nom', 'j-20260814-0001', '--source', payload(), '--target', repo]);
+  assert.doesNotMatch(texte, /inscrit dans aucun lieu/, 'le refus « ni code ni nom » serait faux : c’est le code d’un lieu');
+});
+
+test('un REPRÉSENTANT garde son refus d’avant — « jamais posé » — et n’est pas prié de donner « le code du mandat »', async () => {
+  const repo = tmp('smtk-riviere-rep-');
+  const { code, texte } = await lancer(['representant-update', '--client', 'acme', '--source', payload(), '--target', repo]);
+  assert.notEqual(code, 0);
+  assert.match(texte, /jamais été « posé »/);
+  assert.doesNotMatch(texte, /code du mandat|nom-agent/);
+});
+
+test('un code à majuscules tapé exactement ne dit PAS « la casse diffère »', async () => {
+  const repo = depot({ 'J-Upper': 'bonaventure' });
+  const { code, texte } = await lancer(['orchestrateur-update', '--nom', 'J-Upper', '--source', payload(), '--target', repo]);
+  assert.equal(code, 0, texte);
+  assert.doesNotMatch(texte, /la casse diffère/);
+  assert.equal(lu(repo, 'J-Upper'), V2);
+});
+
+test('un lien symbolique nommé comme une rivière ne dit pas « la casse diffère » d’un nom identique', async () => {
+  const repo = tmp('smtk-riviere-lien2-');
+  mkdirSync(join(repo, '.orchestrateur'), { recursive: true });
+  symlinkSync(tmp('smtk-riviere-reel2-'), join(repo, '.orchestrateur', 'rimouski'));
+  const { texte } = await lancer(['orchestrateur-update', '--nom', 'rimouski', '--source', payload(), '--target', repo]);
+  assert.doesNotMatch(texte, /la casse diffère/);
+});
+
+test('un lien CASSÉ : le refus ne prétend pas que « ce n’est le code d’aucun lieu »', async () => {
+  const repo = tmp('smtk-riviere-casse-');
+  mkdirSync(join(repo, '.orchestrateur'), { recursive: true });
+  symlinkSync('/nonexistent-cible-cassee', join(repo, '.orchestrateur', 'j-cassee'));
+  const { code, texte } = await lancer(['orchestrateur-update', '--nom', 'j-cassee', '--source', payload(), '--target', repo]);
+  assert.notEqual(code, 0);
+  assert.doesNotMatch(texte, /n'est ni le code d'un lieu/);
+});
