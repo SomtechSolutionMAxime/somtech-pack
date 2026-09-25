@@ -32,11 +32,20 @@
 // 🔴 REJEU = DOUBLONS, ET C'EST UN DÉFAUT RÉEL trouvé en revue de fond
 // (T-20260925-0080) : un hook `Stop` peut être redéclenché sur le MÊME dernier
 // message (retry de l'hôte, relance manuelle) — sans garde, deux appels créent
-// deux tickets identiques. La garde est une EMPREINTE (sha256 du bloc), gardée
-// dans l'état du plafond (même fichier, par lieu) : une empreinte qui rejoue
-// celle du DERNIER bloc écrit AVEC SUCCÈS n'écrit rien de nouveau — mais elle
-// peut toujours relire la suite (la prochaine tâche), ce n'est QUE l'écriture qui
-// est sautée. Enregistrée seulement APRÈS un succès complet — jamais avant.
+// deux tickets identiques. La garde est un JOURNAL PAR ÉTAPE — l'empreinte
+// (sha256) du bloc COURANT, plus l'ensemble des étapes du PLAN déjà réussies
+// pour cette empreinte — gardé dans l'état du plafond (même fichier, par lieu).
+//
+// 🔴 UNE EMPREINTE DE FIN DE PLAN NE SUFFIT PAS, ET C'EST UN DÉFAUT RÉEL, REPRODUIT
+// (passe 2 bis) : si `ouvrir` réussit puis `en-cours` tombe en panne, le refus
+// nommé qui en résulte pousse l'agent à réémettre le MÊME bloc au tour suivant —
+// c'est la réaction normale à « ServiceDesk en panne ». Sans mémoire PAR ÉTAPE,
+// le rejeu recrée `ouvrir` une seconde fois. Le journal retient donc CHAQUE
+// étape réussie individuellement (pas seulement « tout a réussi ») : un rejeu
+// sur la même empreinte saute ce qui est déjà fait et ne rejoue que le reste.
+// Un bloc d'empreinte DIFFÉRENTE ignore le journal précédent (bloc neuf, plan
+// neuf). Le journal reflète TOUJOURS l'état réellement atteint — y compris sur
+// un chemin de refus (échec partiel) — jamais seulement sur un succès complet.
 
 import { createHash } from 'node:crypto';
 
@@ -311,50 +320,72 @@ export async function verifierTicketAppartient({ code, demandeId, appeler }) {
  * Exécute le plan d'écritures, EN ORDRE : tous les `ouvrir`, puis tous les
  * `en-cours`, puis tous les `fait` (commentaire puis fermeture).
  *
- * ⚠️ CE QU'ELLE NE PEUT PAS FAIRE : défaire une écriture déjà partie si une
- * suivante échoue. Elle s'arrête au premier échec et rend, séparément, ce qui a
- * été écrit et ce qui ne l'a pas été — c'est au fil mince (et à l'humain) de
- * décider la suite.
+ * 🔴 REJEU APRÈS ÉCHEC PARTIEL = DOUBLON, ET C'EST UN DÉFAUT RÉEL, REPRODUIT
+ * (T-20260925-0080, revue de fond, passe 2 bis). `ouvrir` réussit, `en-cours`
+ * tombe en panne → refus nommé → l'agent réémet le MÊME bloc au tour suivant
+ * (c'est la réaction attendue à un refus « ServiceDesk en panne ») → sans
+ * mémoire PAR ÉTAPE, tout le plan rejoue, et `ouvrir` crée un second ticket
+ * identique. La granularité D2 (une empreinte de FIN de plan) ne protégeait que
+ * le cas « tout a réussi » — jamais un rejeu après échec partiel.
  *
- * @param {{taches:object, demandeId:string, ticketsVerifies:Map<string,string>, appeler:Function}} args
- * @returns {Promise<{toutesReussies:boolean, ecrits:string[], nonEcrits:string[], erreur?:string}>}
+ * `etapesDejaFaites` (un `Set` de clés, voir `clesDuPlan`) fait sauter les
+ * étapes déjà réussies lors d'un tour précédent SUR LE MÊME BLOC — elles sont
+ * comptées à part (`sautees`), jamais réexécutées. `noterEtapeReussie(cle)` est
+ * appelé SYNCHRONE, immédiatement après CHAQUE écriture réussie — c'est ce qui
+ * permet à l'appelant de savoir ce qui a réellement réussi même si une étape
+ * suivante échoue : le module reste pur (aucune I/O propre), c'est l'appelant
+ * qui décide quoi faire de ce rappel.
+ *
+ * ⚠️ CE QU'ELLE NE PEUT TOUJOURS PAS FAIRE : défaire une écriture déjà partie si
+ * une suivante échoue. Elle s'arrête au premier échec et rend, séparément, ce qui
+ * a été écrit CE TOUR, ce qui a été SAUTÉ (déjà fait), et ce qui ne l'a pas été.
+ *
+ * @param {{taches:object, demandeId:string, ticketsVerifies:Map<string,string>,
+ *   appeler:Function, etapesDejaFaites?:Set<string>, noterEtapeReussie?:(cle:string)=>void}} args
+ * @returns {Promise<{toutesReussies:boolean, ecrits:string[], sautees:string[], nonEcrits:string[], erreur?:string}>}
  */
-export async function executerEcritures({ taches, demandeId, ticketsVerifies, appeler }) {
+export async function executerEcritures({ taches, demandeId, ticketsVerifies, appeler, etapesDejaFaites, noterEtapeReussie }) {
+  const dejaFaites = etapesDejaFaites instanceof Set ? etapesDejaFaites : new Set(etapesDejaFaites || []);
   const plan = [];
-  for (const titre of taches.ouvrir) {
-    plan.push({ etape: `ouvrir « ${titre} »`, run: () => appeler('tickets', { action: 'create', title: titre, demand_id: demandeId, type: 'improvement' }) });
-  }
+  taches.ouvrir.forEach((titre, i) => {
+    plan.push({ cle: `ouvrir#${i}`, etape: `ouvrir « ${titre} »`, run: () => appeler('tickets', { action: 'create', title: titre, demand_id: demandeId, type: 'improvement' }) });
+  });
   for (const code of taches.enCours) {
     const id = ticketsVerifies.get(code);
-    plan.push({ etape: `en-cours ${code}`, run: () => appeler('tickets', { action: 'update', id, status: 'in_progress' }) });
+    plan.push({ cle: `en-cours:${code}`, etape: `en-cours ${code}`, run: () => appeler('tickets', { action: 'update', id, status: 'in_progress' }) });
   }
   for (const { code, commentaire } of taches.fait) {
     const id = ticketsVerifies.get(code);
-    plan.push({ etape: `fait ${code} — commentaire`, run: () => appeler('tickets', { action: 'add_comment', id, content: commentaire }) });
-    plan.push({ etape: `fait ${code} — fermeture`, run: () => appeler('tickets', { action: 'update', id, status: 'completed' }) });
+    plan.push({ cle: `fait:${code}:commentaire`, etape: `fait ${code} — commentaire`, run: () => appeler('tickets', { action: 'add_comment', id, content: commentaire }) });
+    plan.push({ cle: `fait:${code}:fermeture`, etape: `fait ${code} — fermeture`, run: () => appeler('tickets', { action: 'update', id, status: 'completed' }) });
   }
 
   const ecrits = [];
+  const sautees = [];
   for (let i = 0; i < plan.length; i += 1) {
-    const { etape, run } = plan[i];
+    const { cle, etape, run } = plan[i];
+    if (dejaFaites.has(cle)) { sautees.push(etape); continue; }
     let resultat;
     try {
       resultat = await run();
     } catch (e) {
       return {
-        toutesReussies: false, ecrits, nonEcrits: plan.slice(i).map((p) => p.etape),
+        toutesReussies: false, ecrits, sautees,
+        nonEcrits: plan.slice(i).filter((p) => !dejaFaites.has(p.cle)).map((p) => p.etape),
         erreur: `l'écriture « ${etape} » a échoué (${e?.message ?? 'cause inconnue'}).`,
       };
     }
     if (estEchecApplicatif(resultat)) {
       return {
-        toutesReussies: false, ecrits, nonEcrits: plan.slice(i).map((p) => p.etape),
+        toutesReussies: false, ecrits, sautees,
+        nonEcrits: plan.slice(i).filter((p) => !dejaFaites.has(p.cle)).map((p) => p.etape),
         erreur: `l'écriture « ${etape} » a été refusée par le ServiceDesk (${resultat.error ?? 'échec applicatif'}).`,
       };
     }
     ecrits.push(etape);
+    try { noterEtapeReussie?.(cle); } catch { /* best-effort — un rappel cassé ne doit jamais casser l'écriture elle-même */ }
   }
-  return { toutesReussies: true, ecrits, nonEcrits: [] };
+  return { toutesReussies: true, ecrits, sautees, nonEcrits: [] };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -449,17 +480,19 @@ export async function trouverProchaineTache({ demandeId, demandeCreatedAt, direc
  * @param {number[]} entree.horodatagesRelances  timestamps (ms) des relances déjà connues
  * @param {number|null|undefined} entree.plafondParHeure
  * @param {number} entree.maintenant  `Date.now()` injecté
- * @param {string|null|undefined} entree.empreinteDernierBloc  empreinte (D2) du dernier
- *   bloc écrit AVEC SUCCÈS, lue de l'état du lieu — `null`/absent si aucune encore connue.
+ * @param {{empreinte:string, etapes:string[]}|null|undefined} entree.journalPrecedent  le
+ *   journal (D2/D3) lu de l'état du lieu — les étapes déjà réussies pour la DERNIÈRE
+ *   empreinte connue. `null`/absent si aucun journal encore connu. Un bloc d'empreinte
+ *   DIFFÉRENTE ignore ce journal (repart d'un plan vide) : c'est un bloc neuf.
  * @returns {Promise<{
  *   silence:boolean,
  *   sortie:{decision?:'block', reason?:string, systemMessage?:string},
  *   blocEmis:boolean,
- *   empreinteAEnregistrer?:string
+ *   journalAEnregistrer?:{empreinte:string, etapes:string[]}
  * }>}
  */
 export async function deciderStop(entree) {
-  const { texteAssistant, contenuDemande, appeler, horodatagesRelances, plafondParHeure, maintenant, empreinteDernierBloc } = entree;
+  const { texteAssistant, contenuDemande, appeler, horodatagesRelances, plafondParHeure, maintenant, journalPrecedent } = entree;
 
   // ── Pas de bloc (ou un bloc cité, pas terminal) : silence total, zéro appel —
   // la SEULE sortie muette.
@@ -488,50 +521,78 @@ export async function deciderStop(entree) {
   const preflight = await preverifierDemande({ code: demandeLue.code, appeler });
   if (!preflight.ok) return gate(preflight.erreur);
 
-  // ── D2 — REJEU = DOUBLONS. Le même bloc, déjà écrit avec succès (empreinte
-  // identique) : on ne réécrit rien, mais on peut toujours relire la suite.
+  // ── D2/D3 — REJEU = DOUBLONS, À LA GRANULARITÉ DE L'ÉTAPE. Un bloc d'empreinte
+  // différente repart d'un journal vide (bloc neuf) ; un bloc IDENTIQUE reprend
+  // là où il s'était arrêté — y compris après un ÉCHEC PARTIEL (D3 : le refus
+  // nommé d'un échec partiel ne doit pas effacer ce qui a réellement réussi
+  // avant lui, sinon le rejeu — la réaction normale à « ServiceDesk en panne »
+  // — recrée un `ouvrir` déjà créé).
   const empreinte = empreinteBloc(extrait.contenu);
-  const dejaEcrit = !!empreinteDernierBloc && empreinteDernierBloc === empreinte;
+  const etapesDejaFaites = (journalPrecedent && journalPrecedent.empreinte === empreinte)
+    ? new Set(journalPrecedent.etapes || [])
+    : new Set();
 
-  let ecriture;
-  if (dejaEcrit) {
-    ecriture = { toutesReussies: true, ecrits: [], nonEcrits: [], dejaEcrit: true };
-  } else {
-    // Vérifie CHAQUE ticket cité (en-cours ET fait) AVANT la première écriture.
-    const codesACiter = [...new Set([...taches.enCours, ...taches.fait.map((f) => f.code)])];
-    const ticketsVerifies = new Map();
-    for (const code of codesACiter) {
-      const v = await verifierTicketAppartient({ code, demandeId: preflight.id, appeler });
-      if (!v.ok) return gate(v.erreur);
-      ticketsVerifies.set(code, v.id);
-    }
-
-    ecriture = await executerEcritures({ taches, demandeId: preflight.id, ticketsVerifies, appeler });
-    if (!ecriture.toutesReussies) {
-      return gate(
-        `${ecriture.erreur} Écrit : ${ecriture.ecrits.length ? ecriture.ecrits.join(' · ') : 'rien'}. `
-        + `Non écrit : ${ecriture.nonEcrits.join(' · ')}.`,
-      );
-    }
+  // Vérifie CHAQUE ticket cité (en-cours ET fait) AVANT toute écriture — même sur
+  // un rejeu : un ticket peut avoir changé de demande entre deux tours.
+  const codesACiter = [...new Set([...taches.enCours, ...taches.fait.map((f) => f.code)])];
+  const ticketsVerifies = new Map();
+  for (const code of codesACiter) {
+    const v = await verifierTicketAppartient({ code, demandeId: preflight.id, appeler });
+    // Rien n'a encore été tenté CE TOUR : le journal à réenregistrer est celui
+    // qu'on avait déjà (inchangé), pas absent — un refus ici ne doit pas faire
+    // « oublier » un journal légitime déjà connu.
+    if (!v.ok) return { ...gate(v.erreur), journalAEnregistrer: journalPrecedent ?? undefined };
+    ticketsVerifies.set(code, v.id);
   }
-  // Enregistrée SEULEMENT après un succès complet (frais ou déjà connu) — jamais
-  // avant, et jamais sur un chemin de refus.
-  const empreinteAEnregistrer = dejaEcrit ? undefined : empreinte;
 
-  const resumeEcriture = dejaEcrit
-    ? 'déjà écrit (empreinte identique à la dernière écriture réussie) — aucune réécriture'
-    : `écrit (${ecriture.ecrits.join(' · ') || 'rien'})`;
+  const etapesAJour = new Set(etapesDejaFaites);
+  const ecriture = await executerEcritures({
+    taches, demandeId: preflight.id, ticketsVerifies, appeler,
+    etapesDejaFaites,
+    noterEtapeReussie: (cle) => etapesAJour.add(cle),
+  });
+
+  // Le journal à enregistrer reflète TOUJOURS l'état réellement atteint — succès
+  // complet, échec partiel, ou rien de neuf (rejeu entièrement déjà fait) : c'est
+  // précisément ce qui ferme D3.
+  const journalAEnregistrer = { empreinte, etapes: [...etapesAJour] };
+
+  if (!ecriture.toutesReussies) {
+    const noteSautees = ecriture.sautees.length
+      ? ` Déjà fait (sauté) : ${ecriture.sautees.join(' · ')}.`
+      : '';
+    return {
+      ...gate(
+        `${ecriture.erreur} Écrit : ${ecriture.ecrits.length ? ecriture.ecrits.join(' · ') : 'rien'}. `
+        + `Non écrit : ${ecriture.nonEcrits.join(' · ')}.${noteSautees}`,
+      ),
+      journalAEnregistrer,
+    };
+  }
+
+  const resumeEcriture = (() => {
+    if (ecriture.sautees.length && ecriture.ecrits.length) {
+      return `repris (déjà fait, sauté : ${ecriture.sautees.join(' · ')}) — écrit maintenant (${ecriture.ecrits.join(' · ')})`;
+    }
+    if (ecriture.sautees.length) {
+      return `déjà écrit (${ecriture.sautees.length} étape(s), même bloc) — aucune réécriture`;
+    }
+    return `écrit (${ecriture.ecrits.join(' · ') || 'rien'})`;
+  })();
 
   if (taches.attend === 'dirigeant') {
     return {
       ...arret(`scribe des tâches : ${resumeEcriture} — \`attend: dirigeant\` posé, pas de relance.`),
-      empreinteAEnregistrer,
+      journalAEnregistrer,
     };
   }
 
-  // Un `ouvrir` FRAIS ajoute au compte de la demande ; un `ouvrir` déjà écrit
-  // (rejeu) a déjà été compté par le pré-vol de CE tour — pas une seconde fois.
-  const nbOuvrirCrees = dejaEcrit ? 0 : taches.ouvrir.length;
+  // Un `ouvrir` compte pour la demande SEULEMENT s'il vient d'être créé CE TOUR
+  // (une étape « ouvrir#… » neuve, pas sautée) — un `ouvrir` déjà fait lors d'un
+  // tour précédent est déjà reflété dans `preflight.directTicketCount`.
+  const etapesFraiches = [...etapesAJour].filter((c) => !etapesDejaFaites.has(c));
+  const nbOuvrirCrees = etapesFraiches.filter((c) => c.startsWith('ouvrir#')).length;
+
   const suite = await trouverProchaineTache({
     demandeId: preflight.id,
     demandeCreatedAt: preflight.createdAt,
@@ -540,7 +601,7 @@ export async function deciderStop(entree) {
   });
 
   if (!suite.ok) {
-    return { ...arret(`scribe des tâches : ${resumeEcriture} — suite non lue (${suite.erreur}).`), empreinteAEnregistrer };
+    return { ...arret(`scribe des tâches : ${resumeEcriture} — suite non lue (${suite.erreur}).`), journalAEnregistrer };
   }
   if (!suite.mesureCoherente) {
     return {
@@ -548,14 +609,20 @@ export async function deciderStop(entree) {
         `scribe des tâches : ${resumeEcriture} — comptes divergents à la lecture de la `
         + `suite (${suite.trouve} trouvé(s) pour ${suite.annonce} annoncé(s)) : non mesuré, aucune tâche nommée.`,
       ),
-      empreinteAEnregistrer,
+      journalAEnregistrer,
     };
   }
   if (!suite.tache) {
-    return { ...arret(`scribe des tâches : ${resumeEcriture} — aucune tâche ouverte restante.`), empreinteAEnregistrer };
+    return { ...arret(`scribe des tâches : ${resumeEcriture} — aucune tâche ouverte restante.`), journalAEnregistrer };
   }
 
-  return { ...gate(`prochaine tâche : ${suite.tache.code} — ${suite.tache.titre}`), empreinteAEnregistrer };
+  // ⚠️ OBSERVABILITÉ (D3) : un rejeu qui a SAUTÉ des étapes ET trouve une suite
+  // le dit dans le `reason` — pas seulement sur le chemin d'arrêt. Sinon la
+  // reprise reste invisible dès qu'elle réussit.
+  const noteReprise = ecriture.sautees.length
+    ? `(reprise : ${ecriture.sautees.length} étape(s) déjà faite(s) sautée(s) — ${ecriture.sautees.join(' · ')}) `
+    : '';
+  return { ...gate(`${noteReprise}prochaine tâche : ${suite.tache.code} — ${suite.tache.titre}`), journalAEnregistrer };
 }
 
 /**

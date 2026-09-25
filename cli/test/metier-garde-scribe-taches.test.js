@@ -295,6 +295,19 @@ test('preverifierDemande — succès sur une demande connue', async () => {
   assert.deepEqual(r, { ok: true, id: 'uuid-demande', createdAt: '2026-09-25T03:36:28.213Z', directTicketCount: 3 });
 });
 
+test('preverifierDemande — `direct_ticket_count` ABSENT ou NON NUMÉRIQUE → refus nommé, jamais une suite nommée', async () => {
+  for (const demand of [
+    { id: 'uuid-demande', created_at: '2026-09-25T00:00:00Z' }, // champ absent
+    { id: 'uuid-demande', created_at: '2026-09-25T00:00:00Z', direct_ticket_count: '3' }, // chaîne, pas un nombre
+    { id: 'uuid-demande', created_at: '2026-09-25T00:00:00Z', direct_ticket_count: null },
+  ]) {
+    const appeler = async () => ({ demand });
+    const r = await preverifierDemande({ code: 'D-20260925-0003', appeler });
+    assert.equal(r.ok, false, `direct_ticket_count=${JSON.stringify(demand.direct_ticket_count)} devrait refuser`);
+    assert.match(r.erreur, /direct_ticket_count/);
+  }
+});
+
 test('preverifierDemande — ServiceDesk injoignable (jette) → refus nommé', async () => {
   const appeler = async () => { throw new Error('HTTP 503'); };
   const r = await preverifierDemande({ code: 'D-20260925-0003', appeler });
@@ -663,24 +676,24 @@ test('D2 — même message rejoué deux fois → UN SEUL tickets.create, la seco
   const premier = await deciderStop({
     texteAssistant: texte, contenuDemande: 'D-20260925-0003', appeler,
     horodatagesRelances: [], plafondParHeure: 30, maintenant: 1000,
-    empreinteDernierBloc: null,
+    journalPrecedent: null,
   });
-  assert.equal(typeof premier.empreinteAEnregistrer, 'string', 'un succès frais doit rendre une empreinte à enregistrer');
-  assert.equal(premier.empreinteAEnregistrer, empreinteBloc(extraireBloc(texte).contenu));
+  assert.deepEqual(premier.journalAEnregistrer, { empreinte: empreinteBloc(extraireBloc(texte).contenu), etapes: ['ouvrir#0'] },
+    'un succès frais doit rendre le journal des étapes réellement réussies');
 
   // Le hook est redéclenché (retry de l'hôte) sur EXACTEMENT le même message —
-  // le fil mince relirait la même empreinte depuis l'état du lieu.
+  // le fil mince relirait le même journal depuis l'état du lieu.
   const second = await deciderStop({
     texteAssistant: texte, contenuDemande: 'D-20260925-0003', appeler,
     horodatagesRelances: [], plafondParHeure: 30, maintenant: 2000,
-    empreinteDernierBloc: premier.empreinteAEnregistrer,
+    journalPrecedent: premier.journalAEnregistrer,
   });
 
   const creations = appels.filter((a) => a.args.action === 'create');
   assert.equal(creations.length, 1, `deux rejeux ne doivent créer qu'UN SEUL ticket : ${JSON.stringify(creations)}`);
-  assert.match(second.sortie.systemMessage ?? '', /déjà écrit|empreinte identique/,
+  assert.match(second.sortie.systemMessage ?? '', /déjà écrit/,
     'le second appel doit LE DIRE, pas rester muet sur le fait qu\'il n\'a rien réécrit');
-  assert.equal(second.empreinteAEnregistrer, undefined, 'rien de neuf à enregistrer : l\'empreinte était déjà la bonne');
+  assert.deepEqual(second.journalAEnregistrer, premier.journalAEnregistrer, 'rien de neuf : le journal reste identique');
 });
 
 test('D2 — un rejeu peut RELIRE LA SUITE sans réécrire (pas seulement se taire)', async () => {
@@ -697,7 +710,7 @@ test('D2 — un rejeu peut RELIRE LA SUITE sans réécrire (pas seulement se tai
   const r = await deciderStop({
     texteAssistant: texte, contenuDemande: 'D-20260925-0003', appeler,
     horodatagesRelances: [], plafondParHeure: 30, maintenant: 1000,
-    empreinteDernierBloc: empreinte, // déjà écrit lors d'un tour précédent
+    journalPrecedent: { empreinte, etapes: ['en-cours:T-20260925-0001'] }, // déjà écrit lors d'un tour précédent
   });
 
   assert.ok(!appels.some((a) => ['create', 'update', 'add_comment'].includes(a.args.action)),
@@ -705,4 +718,63 @@ test('D2 — un rejeu peut RELIRE LA SUITE sans réécrire (pas seulement se tai
   assert.ok(appels.some((a) => a.args.action === 'list'), 'la suite doit quand même être relue sur un rejeu');
   assert.equal(r.sortie.decision, 'block');
   assert.match(r.sortie.reason, /prochaine tâche/);
+  assert.match(r.sortie.reason, /reprise/, 'D3 — un rejeu qui saute des étapes et trouve une suite le dit dans le reason');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// D3 — REJEU APRÈS ÉCHEC PARTIEL = DOUBLON (sans un journal PAR ÉTAPE). Le
+// défaut réel : `ouvrir` réussit, `en-cours` tombe en panne, l'agent réémet le
+// même bloc → tout le plan rejouait, `ouvrir` créait un second ticket.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test('D3 — échec au milieu du plan PUIS rejeu du même bloc → UN SEUL create, seule l\'étape en panne est retentée', async () => {
+  const { appeler, appels } = construireAppeler({
+    // direct_ticket_count=1 : le ticket « nouvelle tâche » existe RÉELLEMENT déjà
+    // (créé au 1er tour) au moment où le 2e tour refait son pré-vol — le double
+    // modélise l'état RÉEL du ServiceDesk, pas un instantané figé au 1er appel.
+    demandes: { 'D-20260925-0003': { id: 'uuid-demande', created_at: '2026-09-25T00:00:00Z', direct_ticket_count: 1 } },
+    tickets: { 'T-20260925-0001': { id: 'uuid-1', demand_id: 'uuid-demande' } },
+    listePages: [[{ id: 'n', ticket_id: 'T-20260925-0009', title: 'nouvelle tâche', status: 'new', demand_id: 'uuid-demande', created_at: '2026-09-25T01:00:00Z', sequence_order: null }]],
+  });
+  const texte = ['```taches', 'ouvrir: nouvelle tâche', 'en-cours: T-20260925-0001', '```'].join('\n');
+
+  // 1er tour : le transport JETTE spécifiquement sur l'update `en-cours`, après
+  // que `ouvrir` (create) ait réussi — panne ServiceDesk EN COURS DE PLAN.
+  const appelerEnPanne = async (nom, args) => {
+    if (nom === 'tickets' && args.action === 'update' && args.status === 'in_progress') {
+      throw new Error('ServiceDesk indisponible (panne simulée)');
+    }
+    return appeler(nom, args);
+  };
+
+  const premier = await deciderStop({
+    texteAssistant: texte, contenuDemande: 'D-20260925-0003', appeler: appelerEnPanne,
+    horodatagesRelances: [], plafondParHeure: 30, maintenant: 1000,
+    journalPrecedent: null,
+  });
+  assert.equal(premier.sortie.decision, 'block', 'un échec partiel reste un refus nommé (relance)');
+  assert.match(premier.sortie.reason, /échoué|panne/);
+  assert.deepEqual(premier.journalAEnregistrer, {
+    empreinte: empreinteBloc(extraireBloc(texte).contenu),
+    etapes: ['ouvrir#0'],
+  }, 'le journal doit garder ce qui a RÉELLEMENT réussi (ouvrir), même après un refus');
+
+  const creationsApresPremierTour = appels.filter((a) => a.args.action === 'create');
+  assert.equal(creationsApresPremierTour.length, 1);
+
+  // 2e tour : l'agent réémet EXACTEMENT le même bloc (réaction normale à un
+  // refus « ServiceDesk en panne ») — cette fois le ServiceDesk répond.
+  const second = await deciderStop({
+    texteAssistant: texte, contenuDemande: 'D-20260925-0003', appeler,
+    horodatagesRelances: [], plafondParHeure: 30, maintenant: 2000,
+    journalPrecedent: premier.journalAEnregistrer,
+  });
+
+  const creationsApresSecondTour = appels.filter((a) => a.args.action === 'create');
+  assert.equal(creationsApresSecondTour.length, 1,
+    `le rejeu ne doit PAS recréer le ticket déjà ouvert : ${JSON.stringify(creationsApresSecondTour)}`);
+  const misesAJour = appels.filter((a) => a.args.action === 'update' && a.args.status === 'in_progress');
+  assert.equal(misesAJour.length, 1, 'l\'étape en panne (en-cours) doit être RETENTÉE, une seule fois, au 2e tour');
+  assert.equal(second.sortie.decision, 'block');
+  assert.match(second.sortie.reason, /prochaine tâche/);
 });

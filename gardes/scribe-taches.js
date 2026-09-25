@@ -90,19 +90,25 @@ function cheminEtat(cwd) {
 }
 
 /**
- * L'état du plafond ET l'empreinte du dernier bloc écrit (D2) — LE MÊME fichier,
- * par lieu. `dernierBlocEmpreinte` reste `null` tant qu'aucune écriture n'a
- * encore réussi.
+ * L'état du plafond ET le JOURNAL PAR ÉTAPE (D2/D3) — LE MÊME fichier, par lieu.
+ * `journal` reste `null` tant qu'aucune écriture n'a encore été tentée avec
+ * succès sur au moins une étape. Sa forme : `{ empreinte, etapes }`.
+ *
+ * ⚠️ TOLÉRANT À UN FICHIER D'UN FORMAT ANTÉRIEUR (`dernierBlocEmpreinte` seul,
+ * ou rien du tout) — un champ absent ou mal formé rend simplement `journal:null`,
+ * jamais une exception : un état périmé ne doit jamais faire pendre le hook.
  */
 function lireEtat(chemin) {
-  if (!existsSync(chemin)) return { horodatages: [], dernierBlocEmpreinte: null };
+  if (!existsSync(chemin)) return { horodatages: [], journal: null };
   try {
     const j = JSON.parse(readFileSync(chemin, 'utf8'));
-    return {
-      horodatages: Array.isArray(j?.horodatages) ? j.horodatages.filter((n) => typeof n === 'number') : [],
-      dernierBlocEmpreinte: typeof j?.dernierBlocEmpreinte === 'string' ? j.dernierBlocEmpreinte : null,
-    };
-  } catch { return { horodatages: [], dernierBlocEmpreinte: null }; }
+    const horodatages = Array.isArray(j?.horodatages) ? j.horodatages.filter((n) => typeof n === 'number') : [];
+    const journalBrut = j?.journal;
+    const journal = (journalBrut && typeof journalBrut.empreinte === 'string' && Array.isArray(journalBrut.etapes))
+      ? { empreinte: journalBrut.empreinte, etapes: journalBrut.etapes.filter((e) => typeof e === 'string') }
+      : null;
+    return { horodatages, journal };
+  } catch { return { horodatages: [], journal: null }; }
 }
 
 function ecrireEtat(chemin, etat) {
@@ -112,7 +118,7 @@ function ecrireEtat(chemin, etat) {
   } catch {
     // Best-effort : une écriture d'état qui échoue ne doit pas faire tomber le
     // verdict déjà rendu — au pire, le plafond suivant sous-comptera, ou un
-    // rejeu réécrira ce que D2 aurait sauté.
+    // rejeu réécrira ce que le journal aurait sauté.
   }
 }
 
@@ -165,7 +171,7 @@ async function main() {
   const N = Number(process.env.SOMTECH_SCRIBE_RELANCES_PAR_HEURE);
   const chemin = cheminEtat(cwd);
   const maintenant = Date.now();
-  const { horodatages, dernierBlocEmpreinte } = lireEtat(chemin);
+  const { horodatages, journal } = lireEtat(chemin);
 
   let resultat;
   try {
@@ -174,7 +180,7 @@ async function main() {
       horodatagesRelances: horodatages,
       plafondParHeure: Number.isFinite(N) ? N : undefined,
       maintenant,
-      empreinteDernierBloc: dernierBlocEmpreinte,
+      journalPrecedent: journal,
     });
   } catch (e) {
     repondre({ systemMessage: `scribe des tâches : panne de décision (${e?.message ?? 'cause inconnue'}) — arrêt permis plutôt qu'un verdict non calculé.` });
@@ -182,12 +188,13 @@ async function main() {
   }
 
   // Deux champs indépendants du même état : le plafond compte les BLOCKS émis,
-  // D2 retient l'empreinte du dernier bloc ÉCRIT AVEC SUCCÈS. L'un peut bouger
-  // sans l'autre (un `attend: dirigeant` écrit sans jamais émettre de block).
-  if (resultat.blocEmis || resultat.empreinteAEnregistrer) {
+  // le journal (D2/D3) retient les étapes du plan RÉELLEMENT réussies, à jour
+  // même sur un chemin de refus (échec partiel). L'un peut bouger sans l'autre
+  // (un `attend: dirigeant` écrit sans jamais émettre de block).
+  if (resultat.blocEmis || resultat.journalAEnregistrer) {
     ecrireEtat(chemin, {
       horodatages: resultat.blocEmis ? [...module.purgerHorodatages(horodatages, maintenant), maintenant] : horodatages,
-      dernierBlocEmpreinte: resultat.empreinteAEnregistrer ?? dernierBlocEmpreinte,
+      journal: resultat.journalAEnregistrer ?? journal,
     });
   }
   repondre(resultat.sortie);
