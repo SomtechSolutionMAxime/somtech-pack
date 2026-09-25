@@ -6228,8 +6228,8 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "J'ai besoin de toi : <la décision attendue, en une ligne>",
-      "Ce que j'attends de toi : <la décision attendue, en une ligne>",
+      "J'ai besoin de toi : <la décision ou le geste attendu, en une ligne>",
+      "Ce que j'attends de toi : <la décision ou le geste attendu, en une ligne>",
     ),
   },
 
@@ -6330,7 +6330,7 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "**Et ça part sur ta ligne, donc à sa forme** — `J'ai besoin de toi : <la décision attendue>` en dernière ligne : c'est le message qui attend vraiment quelque chose de lui.",
+      "**Et ça part sur ta ligne, donc à sa forme** — `J'ai besoin de toi : <la décision ou le geste attendu>` en dernière ligne : c'est le message qui attend vraiment quelque chose de lui.",
       '**Et ça part sur ta ligne, donc à sa forme** — brièvement, en une ligne.',
     ),
   },

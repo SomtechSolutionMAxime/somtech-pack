@@ -1697,11 +1697,19 @@ if printf '%s' "$S_TON" | grep -qF "**Jamais d'identifiant technique sur la lign
 else
   ko "13c — ligne-directe n'énumère plus l'interdit d'identifiant technique, ou y écrit une exception"
 fi
-# le LU : première ligne du message porteur, jamais seul, renvoi au métier.
-if printf '%s' "$S_TON" | grep -qF "**Le \`LU\` est la première ligne du message qui porte le fait, jamais un message à lui** (voir le métier, « Accuser LU »)."; then
-  ok "13d — ligne-directe : le LU est la première ligne du message porteur, jamais seul, avec renvoi au métier"
+# B — la ligne du dirigeant et la ligne cliente ne se confondent pas : aucun code de chantier côté client.
+if printf '%s' "$S_TON" | grep -qF "sur la ligne du dirigeant, le nom de l'agent ou le code lisible" \
+   && printf '%s' "$S_TON" | grep -qF "sur une ligne cliente, aucun code de chantier."; then
+  ok "13c — ligne-directe distingue la ligne du dirigeant (nom ou code lisible) de la ligne cliente (aucun code de chantier)"
 else
-  ko "13d — ligne-directe ne dit plus que le LU est la première ligne du message porteur"
+  ko "13c — ligne-directe autorise le code lisible sans distinguer la ligne cliente, où le code du chantier n'entre nulle part"
+fi
+# le LU : première ligne du message porteur, jamais seul, renvoi au métier.
+if printf '%s' "$S_TON" | grep -qF "**Le \`LU\` est la première ligne du message qui porte le fait, jamais un message à lui ; un LU rattrapé en retard part quand même, seul s'il le faut.**" \
+   && ! printf '%s' "$S_TON" | grep -qF "voir le métier"; then
+  ok "13d — ligne-directe : la règle du LU est dite en autonome (première ligne du message porteur ; le LU rattrapé part quand même), sans renvoi à un métier"
+else
+  ko "13d — ligne-directe ne dit plus le LU en autonome (première ligne du message porteur, LU rattrapé), ou renvoie à un métier que les agents non-orchestrateurs n'ont pas"
 fi
 # le doute + l'exemple, dans les deux skills.
 if printf '%s' "$S_TON" | grep -qF "**Dans le doute, écris la ligne** : l'oubli est la faute grave. *« J'ai tranché X, je continue »* n'attend rien ; *« dis-moi si tu veux le contraire »* attend." \
@@ -1729,6 +1737,59 @@ if ! grep -qF "qui lui appartienne" "$METIER" && ! grep -qF "si quelque chose lu
   ok "13h — le topo et le bilan du métier bornent la ligne sur « attend », plus sur « lui appartient »"
 else
   ko "13h — le topo ou le bilan du métier borne encore la ligne sur « lui appartient »"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ⑭ GARDES NÉGATIVES DE SECTION — génériques, appariées à la présence de la phrase.
+#    Les gardes par phrase entière ne voient pas une phrase AJOUTÉE À CÔTÉ qui contredit
+#    (« hormis le pane », « un LU seul reste toutefois permis »…). On ne liste pas les
+#    contraires un à un : on interdit, dans la section, la FAMILLE de mots qui les portent.
+#    ⚠️ Limite écrite plus bas : une contradiction en mots neufs échappe encore.
+# ═══════════════════════════════════════════════════════════════════════════
+echo "⑭ gardes négatives de section"
+# (i) « J'ai besoin de toi : rien » n'est écrit nulle part — sauf exemple marqué « à ne pas écrire ».
+RIEN_TROUVE="$(grep -hE "besoin de toi *: *\`?rien" "$METIER" "$SK_LD" "$SK_OC" 2>/dev/null | grep -viE "à ne pas écrire" || true)"
+if [ -z "$RIEN_TROUVE" ] && printf '%s' "$S_DER" | grep -qF "y écrire « rien » est du bruit"; then
+  ok "14i — « J'ai besoin de toi : rien » n'est écrit nulle part (métier + deux skills), et le motif « bruit » est présent"
+else
+  ko "14i — « J'ai besoin de toi : rien » est de nouveau écrit quelque part : $(printf '%s' "$RIEN_TROUVE" | head -1 | cut -c1-100)"
+fi
+# (ii) l'interdit d'identifiant : aucun mot d'exception dans SA section.
+if printf '%s' "$S_DER" | grep -qF "**Jamais d'identifiant technique sur la ligne**" \
+   && ! printf '%s' "$S_DER" | grep -qiE "sauf|hormis|excepté|à moins|si utile|quand tu demandes"; then
+  ok "14ii — la section de l'interdit d'identifiant ne porte aucun mot d'exception (sauf/hormis/excepté/à moins/si utile/quand tu demandes)"
+else
+  ko "14ii — la section de l'interdit d'identifiant porte un mot d'exception, ou l'interdit a disparu"
+fi
+# (iii) les sections du LU : aucune permission de l'accusé seul.
+if printf '%s' "$S_LU" | grep -qF "**Aucun accusé seul**" && printf '%s' "$S_RATT" | grep -qF "un LU rattrapé part quand même" \
+   && ! printf '%s%s%s' "$S_LU" "$S_RATT" "$S_TON" | grep -qiE "toutefois|reste permis|peut être un message"; then
+  ok "14iii — les sections du LU (métier, ronde, skill) ne portent ni « toutefois », ni « reste permis », ni « peut être un message »"
+else
+  ko "14iii — une section du LU porte « toutefois / reste permis / peut être un message » : l'accusé seul est permis par la bande"
+fi
+# (iv) topo et bilan : ANCRÉS à leur section, et jamais « toujours » / « même vide ».
+S_TOPO="$(section 'Le topo du matin')"
+S_CLORE_M="$(section 'Clore')"
+if printf '%s' "$S_TOPO" | grep -qF "si le topo attend quelque chose de lui" \
+   && printf '%s' "$S_CLORE_M" | grep -qF "si le bilan attend quelque chose de lui" \
+   && ! printf '%s%s' "$S_TOPO" "$S_CLORE_M" | grep -qiE "toujours|même vide"; then
+  ok "14iv — topo et bilan bornent la ligne sur « attend » dans LEUR section, sans « toujours » ni « même vide »"
+else
+  ko "14iv — le topo ou le bilan (dans sa section) n'est plus borné sur « attend », ou exige « toujours / même vide »"
+fi
+# (v) l'exception du LU rattrapé : phrase entière, sans négation collée devant.
+if printf '%s' "$S_LU" | grep -qF "Exception : le LU rattrapé par la ronde (voir rondes)." \
+   && ! printf '%s' "$S_LU" | grep -qE "Aucune? [Ee]xception"; then
+  ok "14v — l'exception du LU rattrapé est entière et sans négation collée"
+else
+  ko "14v — l'exception du LU rattrapé n'est plus entière, ou un « Aucune exception » la nie"
+fi
+# (vi) le critère « attend » : ni « toujours » ni « même vide » collé au critère dans la section de la ligne.
+if ! printf '%s' "$S_DER" | grep -qiE "toujours (la|cette) ligne|même vide|peut porter rien|sans dommage|question ouverte peut"; then
+  ok "14vi — la section de la dernière ligne ne l'exige pas « même vide » et ne rouvre pas la question ouverte"
+else
+  ko "14vi — la section de la dernière ligne exige la ligne « même vide », ou rouvre les questions ouvertes"
 fi
 
 echo
