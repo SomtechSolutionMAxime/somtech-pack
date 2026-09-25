@@ -1399,7 +1399,7 @@ export const CONTROLES = [
           'le motif : git log ne voit que le commité, son zéro est vrai et trompeur devant un fichier non suivi'],
         [/seule la question répond à « qu['’]est-ce qui n['’]existe QUE là »/,
           'la lecture répond à « qu’y a-t-il », seule la question à « qu’est-ce qui n’existe QUE là »'],
-        [/N['’]utilise JAMAIS `@\{u\}`/, 'la garde `@{u}`, dans la même section'],
+        [/JAMAIS[^.`]{0,20}`@\{u\}`/, 'la garde `@{u}`, dans la même section'],
         [/les deux, jamais l['’]une pour l['’]autre/, 'les deux gardes (`@{u}` et la question) se lisent ENSEMBLE'],
       ];
       for (const [motif, dit] of exige) {
@@ -4942,8 +4942,8 @@ export const MUTATIONS = [
     cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
     fichier: 'metier',
     muter: (t) => t.replace(
-      'un refus de lecture a forcé à demander.)*',
-      'un refus de lecture a forcé à demander.)* La lecture suffit.',
+      'un refus de lecture a fait demander.)*',
+      'un refus de lecture a fait demander.)* La lecture suffit.',
     ),
   },
   {

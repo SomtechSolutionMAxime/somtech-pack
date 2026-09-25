@@ -310,9 +310,9 @@ git -C <repo> worktree prune
 
 > ⚠️ **N'utilise JAMAIS `@{u}` pour ce contrôle, et n'avale jamais son erreur.** Deux gardes, deux défauts, un seul geste : **les deux, jamais l'une pour l'autre.**
 >
-> **1. La référence.** Une branche `wt/<timestamp>` **n'a pas d'upstream** : `git log @{u}..` échoue *toujours*, et un `2>/dev/null` change cet échec en sortie vide, qui se lit « tout est poussé » : tu détruis ses commits. `origin/<branche-cible>..HEAD` **échoue bruyamment** si la référence est fausse.
+> **1. La référence.** Une branche `wt/<timestamp>` **n'a pas d'upstream** : `git log @{u}..` échoue *toujours*, et un `2>/dev/null` change cet échec en sortie vide, lu « tout est poussé » : tu détruis les commits. `origin/<branche-cible>..HEAD` **échoue bruyamment** si elle est fausse.
 >
-> **2. La question.** Pouvoir lire l'espace d'un chef ne t'exempte pas de LUI DEMANDER avant de fermer son pane ou de retirer son espace. Ce log ne voit que ce qui est **commité** : son « zéro commit » est vrai et **trompeur** devant un fichier non suivi, une base de données, un correctif jamais ajouté à l'index. Ta lecture répond à « qu'y a-t-il » ; seule la question répond à « qu'est-ce qui n'existe QUE là ». *(Un chef à zéro commit portait seul un correctif et une base de 58 Mo : un refus de lecture a forcé à demander.)*
+> **2. La question.** Pouvoir lire l'espace d'un chef ne t'exempte pas de LUI DEMANDER avant de fermer son pane ou de retirer son espace. Ce log ne voit que ce qui est **commité** : son « zéro commit » est vrai et **trompeur** devant un fichier non suivi, une base de données, un correctif jamais ajouté à l'index. Ta lecture répond à « qu'y a-t-il » ; seule la question répond à « qu'est-ce qui n'existe QUE là ». *(Cas réel : zéro commit, seul un correctif et 58 Mo ; un refus de lecture a fait demander.)*
 
 ⚠️ **Ferme le pane, jamais le tab.** Un tab héberge souvent plusieurs panes — donc plusieurs agents, **dont potentiellement toi**. `herdr tab close` les emporte tous, sans confirmation. `herdr agent list` donne le `tab_id` de chacun.
 
