@@ -3930,9 +3930,9 @@ export const CONTROLES = [
 
   {
     id: 'la-formule-jai-besoin-de-toi',
-    quoi: 'tout message se termine par la formule LITTÉRALE, le « rien » compris — et elle est rappelée là où les messages se fabriquent',
+    quoi: 'la dernière ligne est la formule LITTÉRALE, exigée sur le message qui attend quelque chose du dirigeant — un message purement informatif n’en a pas — et elle est rappelée là où les messages se fabriquent',
     verifier({ metier }) {
-      const s = sectionDe(metier, /Tout message se termine par/i, 'sur la formule de fin de message');
+      const s = sectionDe(metier, /La dernière ligne\s*:/i, 'sur la formule de fin de message');
 
       // ── LA FORMULE, LITTÉRALE — et ici la littéralité EST la règle, pas un raccourci de garde.
       // Le bénéfice décrit par le dirigeant est le coup d'œil : reconnaître une chaîne identique,
@@ -3940,7 +3940,9 @@ export const CONTROLES = [
       // l'intention en laissant tomber le seul effet recherché.
       const LITTERALE = "J'ai besoin de toi :";
       const lignes = s.corps.split('\n').filter((l) => /besoin de toi/i.test(l));
-      assert.ok(lignes.length >= 2, `la formule doit être montrée dans ses DEUX formes — la demande et le « rien » (${lignes.length} ligne·s trouvée·s)`);
+      // D-20260925-0003 : le « rien » n'est plus écrit — la formule ne s'écrit que sur le message
+      // qui ATTEND quelque chose. Une seule forme est donc montrée.
+      assert.ok(lignes.length >= 1, `la formule doit être montrée (${lignes.length} ligne·s trouvée·s)`);
       for (const l of lignes) {
         assert.ok(
           l.includes(LITTERALE),
@@ -3948,8 +3950,8 @@ export const CONTROLES = [
         );
       }
       assert.ok(
-        lignes.some((l) => /:\s*rien\./i.test(l)),
-        'la forme « J’ai besoin de toi : rien. » doit être montrée — c’est celle qu’on omet, et son omission annule la règle',
+        !lignes.some((l) => /:\s*rien\./i.test(l)),
+        'la forme « J’ai besoin de toi : rien. » ne doit plus être prescrite : un message qui n’attend rien n’a pas cette ligne (D-20260925-0003)',
       );
 
       // ── LA VARIANTE PROSCRITE EST NOMMÉE, ET DONNÉE COMME DESTRUCTRICE.
@@ -3962,64 +3964,46 @@ export const CONTROLES = [
         `« ${variantes[0].trim()} » : la variante doit être donnée comme DÉTRUISANT le bénéfice, jamais comme une formulation acceptable`,
       );
 
-      // La sonde accepte « s'écrit » comme « doit s'écrire » : la garantie est que le `rien`
-      // S'ÉCRIT, pas la façon dont l'obligation est conjuguée — mesuré par la campagne de
-      // reformulations légitimes du 2026-08-17, où « Le `rien` doit s'écrire » faisait crier
-      // cette garde sur un texte plus impératif que l'original.
-      // ⚠️ LA POLARITÉ SEULE NE SUFFISAIT PAS, ET UNE PASSE DE REVUE L'A MESURÉ — 2026-08-19.
-      //
-      // La sonde `/Le `rien` s'écrit/` est courte : n'importe quelle phrase de cette section
-      // qui la porte satisfait la garantie. Mesuré — **la MOITIÉ de la phrase (28 mots sur 55)
-      // réinjectée ailleurs dans la section suffisait**, l'énoncé d'origine ayant disparu. La
-      // garde tenait l'AFFIRMATION et laissait partir le MOTIF, qui est ce qui la rend
-      // applicable : sans lui, « le rien s'écrit » est une consigne qu'on peut croire
-      // décorative, et c'est exactement comme ça qu'elle a cessé de mordre la première fois.
-      //
-      // On ancre donc la phrase porteuse sur ses DEUX moitiés — ce qu'elle affirme ET le coût
-      // qu'elle évite —, et la polarité continue de balayer le CORPS : une négation écrite
-      // dans une autre phrase de la section doit rester visible, ce qu'une lecture ligne à
-      // ligne perdrait. Les deux gardes ne se remplacent pas, elles se complètent.
-      const rien = s.corps.split('\n').filter((l) => /Le `rien` (?:s'écrit|doit s'écrire)/i.test(l));
-      assert.equal(rien.length, 1, `la règle du « rien » doit être énoncée une fois exactement (${rien.length})`);
+      // ── LA RÈGLE : EXIGÉE SUR CE QUI ATTEND, ABSENTE DE CE QUI N'ATTEND RIEN.
+      // Ses DEUX moitiés sont ancrées sur la même phrase : ce qu'elle exige (le message qui
+      // attend quelque chose) ET ce qu'elle épargne (le « rien » est du bruit). Une phrase qui
+      // n'en garderait qu'une redeviendrait, soit la ligne sur tout message (la volubilité),
+      // soit une ligne facultative que personne n'écrit plus.
+      const attend = s.corps.split('\n').filter((l) => /exigée sur chaque message qui attend quelque chose/i.test(l));
+      assert.equal(attend.length, 1, `la règle « exigée sur le message qui attend » doit être énoncée une fois exactement (${attend.length})`);
+      exigeContrainte(attend[0], 'la dernière ligne, exigée sur le message qui attend quelque chose');
       assert.match(
-        rien[0], /oblige à lire le reste/i,
-        `« ${rien[0].trim().slice(0, 90)}… » affirme que le « rien » s’écrit sans dire CE QUE ÇA ÉVITE. `
-          + `Le motif — une ligne qui n’apparaît qu’en cas de demande oblige à lire le reste pour savoir `
-          + `s’il y en a une — est ce qui rend la règle applicable ; sans lui elle se lit comme un détail `
-          + `de forme, et c’est ainsi qu’elle a cessé de mordre la première fois.`,
+        attend[0], /purement informatif n'a pas cette ligne/i,
+        `« ${attend[0].trim().slice(0, 90)}… » n’écarte pas le message purement informatif : sans cette moitié, la ligne redevient exigée partout`,
+      );
+      assert.match(
+        attend[0], /« rien » est du bruit/i,
+        `« ${attend[0].trim().slice(0, 90)}… » écarte le message informatif sans dire POURQUOI : le « rien » est du bruit, et c’est ce motif qui empêche de le réécrire`,
       );
       exigePolarite(
-        s.corps, /Le `rien` (?:s'écrit|doit s'écrire)/i,
-        'le « rien » s’écrit — une ligne qui n’apparaît qu’en cas de demande oblige à lire le reste pour savoir s’il y en a une',
-        { inverse: /inutile de l'écrire|seulement quand tu as besoin|on l'omet|facultative/i },
+        s.corps, /exigée sur chaque message qui attend quelque chose/i,
+        'la ligne est exigée sur le message qui attend quelque chose de lui, et sur lui seul',
+        { inverse: /sur tout message|sur chaque message, |même quand rien|`rien\.` compris|le `rien` s'écrit/i },
+      );
+      // ── AUCUN IDENTIFIANT TECHNIQUE SUR LA LIGNE — règle du CLAUDE.md du dirigeant que le métier reprend.
+      const ident = s.corps.split('\n').filter((l) => /Jamais d'identifiant technique sur la ligne/i.test(l));
+      assert.equal(ident.length, 1, `l’interdiction d’identifiant technique doit être énoncée une fois exactement (${ident.length})`);
+      for (const mot of [/pane/i, /canal/i, /commit/i, /session/i]) {
+        assert.match(ident[0], mot, `l’interdiction ne nomme plus ${mot} : ce qui n’est pas nommé s’écrit`);
+      }
+      const pane = s.corpsEtendu.split('\n').filter((l) => /Aucun identifiant de pane sur la ligne/i.test(l));
+      assert.equal(pane.length, 1, `l’interdiction d’identifiant de pane doit être énoncée une fois exactement (${pane.length})`);
+      assert.match(pane[0], /titre de fenêtre/i, 'l’interdiction du pane ne dit plus CE QU’ON DONNE À LA PLACE (le nom de l’agent, le titre de fenêtre) : sans lui, on redonne le pane');
+      assert.match(pane[0], /ne lui dit rien/i, 'l’interdiction du pane ne dit plus POURQUOI (un identifiant de pane ne lui dit rien) : sans le motif, la règle se lit comme un détail de forme');
+      exigePolarite(
+        s.corpsEtendu, /Aucun identifiant de pane sur la ligne/i,
+        'aucun identifiant de pane sur la ligne — le nom de l’agent et le titre de fenêtre',
+        { inverse: /avant l'identifiant de pane|le pane avant/i },
       );
       exigePolarite(
         s.corps, /La formule est littérale/i,
         'la formule est littérale — l’esprit ne suffit pas, c’est la chaîne qui se balaie',
         { inverse: /tu peux la reformuler|formule-la comme tu veux|l'esprit suffit|à ta façon/i },
-      );
-
-      // ⚠️ LA PORTÉE NE S'ÉCRIT PLUS « tous tes messages, sans exception » : la réécriture
-      // l'énonce par le défaut qu'elle corrige — « Ce n'est pas la rubrique d'un compte rendu,
-      // c'est la dernière ligne de tout message. » C'est la même portée, dite à l'envers, et
-      // c'est bien elle qui fait le travail : ce qui la ruine est qu'on la prenne pour la
-      // rubrique d'un geste. La sonde suit donc l'énoncé réel de la portée, et continue
-      // d'exiger qu'il CONTRAIGNE — « il vaut mieux la mettre partout » ne porterait rien.
-      const portees = s.corps.split('\n').filter((l) => /dernière ligne de tout message/i.test(l));
-      assert.equal(portees.length, 1, `la portée de la formule doit être énoncée une fois exactement (${portees.length})`);
-      exigeContrainte(portees[0], 'la portée de la formule');
-      // ⚠️ ET SES DEUX MOITIÉS — mesuré, pas supposé : cinq mots (« dernière ligne de tout
-      // message ») réinjectés ailleurs dans la section suffisaient à satisfaire cette garantie,
-      // l'énoncé d'origine ayant disparu. La portée n'est PAS « la formule va partout » : elle
-      // est écrite à l'envers, PAR LE DÉFAUT QU'ELLE CORRIGE — « ce n'est pas la rubrique d'un
-      // compte rendu ». C'est cette moitié-là qui fait le travail : le métier dit lui-même que
-      // « J'ai besoin de toi » n'a jamais mordu tant qu'elle était bornée à une rubrique. La
-      // laisser partir rendrait la portée vraie et inopérante, comme elle l'était.
-      assert.match(
-        portees[0], /rubrique/i,
-        `« ${portees[0].trim().slice(0, 90)}… » énonce la portée sans nommer CE QU'ELLE CORRIGE. `
-          + `La règle a vécu bornée à la rubrique d'un compte rendu et n'a jamais mordu ; c'est ce `
-          + `défaut nommé qui empêche un lecteur de l'y réduire à nouveau.`,
       );
 
       // ── ⚠️ LA COUVERTURE — ET C'EST ELLE QUI FERME LE DÉFAUT D'ORIGINE.
@@ -6176,8 +6160,8 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "J'ai besoin de toi : rien.",
-      'Rien de ton côté.',
+      "J'ai besoin de toi : <la décision attendue, en une ligne>",
+      "Ce que j'attends de toi : <la décision attendue, en une ligne>",
     ),
   },
 
@@ -6190,8 +6174,8 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "**Ce n'est pas la rubrique d'un compte rendu, c'est la dernière ligne de tout message.**",
-      '**La formule est la dernière ligne de tout message.**',
+      " n'a pas cette ligne : y écrire « rien » est du bruit de plus.",
+      " n'a pas cette ligne.",
     ),
   },
 
@@ -6201,8 +6185,8 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      " ; une ligne qui n'apparaît **que** lorsqu'il y a une demande oblige à lire le reste pour savoir s'il y en a une — précisément le travail qu'elle devait lui épargner.",
-      '.',
+      "**Jamais d'identifiant technique sur la ligne** — ni pane, ni canal, ni identifiant de session, ni commit. Tu nommes l'agent, ou le code lisible",
+      "**Un identifiant technique sur la ligne est toléré** — pane, canal, session, commit. Tu nommes l'agent, ou le code lisible",
     ),
   },
 
@@ -6212,8 +6196,8 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "**Le `rien` s'écrit — c'est la moitié qui fait fonctionner la règle.**",
-      "**Le `rien` est facultatif — la ligne n'apparaît que si tu as une demande.**",
+      "**Elle est exigée sur chaque message qui attend quelque chose de lui, et elle est la dernière ligne.**",
+      "**Elle est exigée sur tout message, `J'ai besoin de toi : rien.` compris, et elle est la dernière ligne.**",
     ),
   },
 
@@ -6234,7 +6218,7 @@ export const MUTATIONS = [
     // toi : …` en dernière ligne ». La mutation le vide de sa dernière ligne sans retirer une
     // seule règle — c'est le geste exact que la cible doit voir.
     muter: (t) => t.replace(
-      "**Le topo est un message comme les autres** : des faits, et `J'ai besoin de toi : …` en dernière ligne — `rien.` compris.",
+      "**Le topo est un message comme les autres** : des faits ; `J'ai besoin de toi : …` en dernière ligne **seulement** si quelque chose lui appartient — un topo qui n'attend rien n'a pas cette ligne.",
       '**Le topo est un message comme les autres** : des faits.',
     ),
   },
@@ -6245,7 +6229,7 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "**Le bilan est un message comme les autres** : des faits, et `J'ai besoin de toi : …` en dernière ligne — `rien.` s'il ne reste rien qui lui appartienne, et c'est précisément le cas où l'écrire compte, puisque c'est le dernier mot du chantier.\n\n",
+      "**Le bilan est un message comme les autres** : des faits ; `J'ai besoin de toi : …` en dernière ligne **seulement** s'il reste quelque chose qui lui appartienne.\n\n",
       '',
     ),
   },
@@ -6267,7 +6251,7 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "des faits, pas ton raisonnement, et `J'ai besoin de toi : ` en dernière ligne de **chaque** message, `rien.` compris.",
+      "des faits, pas ton raisonnement, et `J'ai besoin de toi : ` en dernière ligne de **chaque message qui attend quelque chose**.",
       'des faits, pas ton raisonnement, et le format court.',
     ),
   },
@@ -6278,7 +6262,7 @@ export const MUTATIONS = [
     cible: 'la-formule-jai-besoin-de-toi',
     fichier: 'metier',
     muter: (t) => t.replace(
-      "**Et ça part sur ta ligne, donc à sa forme** — `J'ai besoin de toi : <la décision attendue>` en dernière ligne.",
+      "**Et ça part sur ta ligne, donc à sa forme** — `J'ai besoin de toi : <la décision attendue>` en dernière ligne : c'est le message qui attend vraiment quelque chose de lui.",
       '**Et ça part sur ta ligne, donc à sa forme** — brièvement, en une ligne.',
     ),
   },
@@ -6296,7 +6280,7 @@ export const MUTATIONS = [
     // rendu diffère d'un tiret de l'ancienne (« — des faits », et non « : des faits »). Un
     // signe suffisait à la rendre muette, et une mutation muette compte comme une preuve.
     muter: (t) => t.replace(
-      " **C'est donc une surface de sa parole comme la ligne** — des faits, et `J'ai besoin de toi : …` en dernière ligne, `rien.` compris.",
+      " **C'est donc une surface de sa parole comme la ligne** — des faits, et `J'ai besoin de toi : …` en dernière ligne quand le compte rendu attend quelque chose de lui.",
       '',
     ),
   },

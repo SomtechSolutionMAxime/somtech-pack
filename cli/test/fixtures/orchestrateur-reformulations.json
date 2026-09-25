@@ -108,10 +108,10 @@
     "apres": "**Le calcul qui tranche n'a rien d'intuitif : ce que tu écris se multiplie par le nombre d'agents.**"
   },
   {
-    "id": "le-rien-secrit",
-    "quoi": "synonyme (s'écrit → doit s'écrire, fait fonctionner → fait tenir)",
-    "avant": "**Le `rien` s'écrit — c'est la moitié qui fait fonctionner la règle.**",
-    "apres": "**Le `rien` doit s'écrire — c'est la moitié qui fait tenir la règle.**"
+    "id": "la-ligne-est-exigee-sur-ce-qui-attend",
+    "quoi": "synonyme (de lui → de sa part) qui garde le sens entier",
+    "avant": "**Elle est exigée sur chaque message qui attend quelque chose de lui, et elle est la dernière ligne.**",
+    "apres": "**Elle est exigée sur chaque message qui attend quelque chose de sa part, et elle est la dernière ligne.**"
   },
   {
     "id": "nen-renvoie-au-cto",
