@@ -681,7 +681,7 @@ Les chefs d'équipe tiennent leurs stories ; **toi tu réponds de l'ensemble**. 
 
 - **statuts au moment où l'état change**, jamais différés (règle d'or n°13) — et pour *toutes* les stories qu'un merge ferme, pas seulement la principale ;
 - **la filiation de chaque agent que tu ouvres** (voir 4b-bis) — c'est une écriture ServiceDesk comme les autres, et la seule qui disparaît définitivement si tu l'oublies sur le moment ;
-- **un compte rendu d'avancement sur le chantier lui-même** — c'est là que le dirigeant regarde, pas dans les tickets. **C'est donc une surface de sa parole comme la ligne** : des faits, et `J'ai besoin de toi : …` en dernière ligne **quand il attend quelque chose de lui** (jamais un `rien.` de remplissage). Sans lui, le chantier dit ce qu'on allait faire, jamais où on en est. La surface dépend de la nature du chantier : une **Demande** a un fil (`demands` action `comment`), une **Livraison** aussi (`delivery_comments` action `create`), un **Projet n'en a pas** — pour lui, écris dans les champs du projet (`projects` action `update`), et porte les décisions dans son journal dédié (`project_decisions`), qui est fait pour ça ;
+- **un compte rendu d'avancement sur le chantier lui-même** — c'est là que le dirigeant regarde, pas dans les tickets. **C'est donc une surface de sa parole comme la ligne** : des faits, et `J'ai besoin de toi : …` en dernière ligne **quand il attend quelque chose de lui** — une décision, ou un geste à poser (jamais un `rien.` de remplissage). **Dans le doute, écris la ligne** : l'oubli est la faute grave. *« J'ai tranché X, je continue »* n'attend rien ; *« dis-moi si tu veux le contraire »* attend. Sans lui, le chantier dit ce qu'on allait faire, jamais où on en est. La surface dépend de la nature du chantier : une **Demande** a un fil (`demands` action `comment`), une **Livraison** aussi (`delivery_comments` action `create`), un **Projet n'en a pas** — pour lui, écris dans les champs du projet (`projects` action `update`), et porte les décisions dans son journal dédié (`project_decisions`), qui est fait pour ça ;
 - ce qui reste ouvert, avec **ce qui bloque quoi** ;
 - ce qui appartient au dirigeant, énoncé comme tel.
 
@@ -705,7 +705,7 @@ node "$HOME/.somtech/ligne-directe/bin/ligne-directe.js" fermer \
   --bilan "<ce qui a été livré, ce qui reste, ce qui appartient au dirigeant>"
 ```
 
-**Le bilan est un message comme les autres** : des faits, et `J'ai besoin de toi : …` en dernière ligne **seulement s'il reste une décision ou un geste qui lui appartient** — s'il n'en reste aucun, le bilan n'a pas cette ligne.
+**Le bilan est un message comme les autres** : des faits, et `J'ai besoin de toi : …` en dernière ligne **seulement si le bilan attend quelque chose de lui** — une décision ou un geste à poser ; sinon il n'a pas cette ligne, et dans le doute on l'écrit : l'oubli est la faute grave.
 
 Le bilan part d'abord, le canal s'archive ensuite. Une ligne qu'on abandonne sans la refermer laisse un canal ouvert sur une question sans réponse — et le jour où le dirigeant y écrit, personne n'est au bout. (Le veilleur finit par le détecter et referme d'office, mais il le fait à ta place et le dit : autant le faire toi.)
 

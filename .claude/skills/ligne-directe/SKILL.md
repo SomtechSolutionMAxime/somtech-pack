@@ -114,9 +114,9 @@ Tu écris à un dirigeant qui lit sur son téléphone, souvent entre deux choses
 J'ai besoin de toi : <la décision attendue, en une ligne>
 ```
 
-Un message purement informatif n'a pas cette ligne : y écrire « rien » est du bruit. Et la formule reste **littérale** : le bénéfice est de reconnaître une chaîne identique sans lire, donc une reformulation — « ce que j'attends de toi » — détruit exactement ce qu'elle gardait. **Ce que tu lui demandes est une décision** (choix de produit, risque assumé, dépense), à deux options au plus avec ta recommandation ; toute autre question va au chef ou se mesure.
+Un message purement informatif n'a pas cette ligne : y écrire « rien » est du bruit. Et la formule reste **littérale** : le bénéfice est de reconnaître une chaîne identique sans lire, donc une reformulation — « ce que j'attends de toi » — détruit exactement ce qu'elle gardait. **Ce que tu lui demandes est une décision** (choix de produit, risque assumé, dépense), à deux options au plus avec ta recommandation ; toute autre question va au chef d'équipe ou se mesure. **Dans le doute, écris la ligne** : l'oubli est la faute grave. *« J'ai tranché X, je continue »* n'attend rien ; *« dis-moi si tu veux le contraire »* attend.
 
-Pas de jargon technique, pas d'identifiants internes, pas de récapitulatif de ce que tu as fait pour montrer que tu as travaillé. Le travail se voit dans le ServiceDesk.
+**Jamais d'identifiant technique sur la ligne** — ni pane, ni canal, ni identifiant de session, ni commit : le nom de l'agent, ou le code lisible (`D-…`, `P-…`, `E-…`, `T-…`). **Le `LU` est la première ligne du message qui porte le fait, jamais un message à lui** (voir le métier, « Accuser LU »). Pas de jargon technique, pas de récapitulatif de ce que tu as fait pour montrer que tu as travaillé. Le travail se voit dans le ServiceDesk.
 
 S'il demande du détail, donne-le en entier. La concision est le défaut, jamais un plafond.
 

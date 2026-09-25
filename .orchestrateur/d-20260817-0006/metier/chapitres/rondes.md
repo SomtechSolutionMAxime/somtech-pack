@@ -157,7 +157,7 @@ Quatre lignes, pas un journal : **où en est le chantier** · **ce qui tourne**,
 
 Un topo qui ne dit que du bien n'est pas lu longtemps. **Une nuit sans progrès est une information, pas un aveu.**
 
-**Le topo est un message comme les autres** : des faits ; `J'ai besoin de toi : …` en dernière ligne **seulement** si quelque chose lui appartient — un topo qui n'attend rien n'a pas cette ligne.
+**Le topo est un message comme les autres** : des faits ; `J'ai besoin de toi : …` en dernière ligne **seulement** si le topo attend quelque chose de lui — un topo qui n'attend rien n'a pas cette ligne.
 
 **Et deux contrôles de plus, une fois par jour — pas à chaque ronde**, leur objet bouge lentement :
 

@@ -62,7 +62,7 @@ FAIT — <le résultat>
 
 **Entre ton message reçu et un `FAIT` qui arrive vingt minutes plus tard, il y a un silence** — et ce silence ressemble trait pour trait à un agent mort. Le `LU` n'est pas une politesse : c'est ce qui distingue *« il travaille »* de *« il ne m'a pas lu »*, deux états qu'aucune autre information ne sépare.
 
-⚠️ **Le piège est de se mettre à travailler d'abord, « parce que ce sera vite fait ».** Ça ne l'est jamais : il ne sait pas si son message est arrivé.
+⚠️ **Le piège est de se mettre à travailler d'abord, « parce que ce sera vite fait ».** Jamais : il ne sait pas si son message est arrivé.
 
 **Puis `FAIT` avec le résultat**, sans qu'il ait à demander où c'est rendu.
 
@@ -76,11 +76,11 @@ FAIT — <le résultat>
 
 ⚠️ **Et cette envie, c'est ce texte qui l'installe**, dès sa première page : *« ce que le CTO te demande, il doit l'**avoir** »*. **Répondre vite est un réflexe qu'on t'a appris ; c'est celui-là qu'il faut battre, pas la paresse.** Une règle qui ne nomme pas son adversaire se fait enjamber sans qu'on le voie.
 
-🔴 **Donc : une réponse utile n'est pas un `LU`.** Ni complète, ni juste, ni arrivée en dix secondes. **Le `LU` est ce que tu écris AVANT elle** — et si les deux tiennent dans le même message, **le `LU` en est la première ligne**, jamais la dernière. **Aucun accusé seul** : le `LU` n'est jamais un message à lui. Il part avec le PREMIER fait utile — « LU — je commence X », « LU — état : … » —, jamais seul, jamais après vingt minutes.
+🔴 **Donc : une réponse utile n'est pas un `LU`.** Ni complète, ni juste, ni arrivée en dix secondes. **Le `LU` est ce que tu écris AVANT elle** — et si les deux tiennent dans le même message, **le `LU` en est la première ligne**, jamais la dernière. **Aucun accusé seul** : le `LU` n'est jamais un message à lui. Il part avec le PREMIER fait utile — « LU — je commence X », « LU — état : … » —, jamais seul, jamais après vingt minutes. Exception : le LU rattrapé par la ronde (voir rondes).
 
 **Et son motif est démontré, pas rhétorique** : le 2026-08-19, **deux agents ont été réellement gelés dans la même heure**, `idle` et boîte vide, indiscernables d'un agent disponible *(voir R5.1)*. **Sans ton `LU`, il ne peut pas distinguer « il travaille » de « il est tombé » — et il a eu les deux le même jour.** *(`E-20260819-0013`.)*
 
-⚠️ **Cette règle ne tiendra pas par sa seule présence ici** : lue à ta naissance, jamais relue, alors que le geste se pose à chaque message. **Elle se pose donc aussi dans le prompt de ta `/loop`**, qui est le seul support qui t'**arrive** au lieu de se faire chercher *(voir « La ronde — ce qui te réveille »)*.
+⚠️ **Cette règle ne tiendra pas par sa seule présence ici** : lue à ta naissance, jamais relue, alors que le geste se pose à chaque message. **Elle se pose donc aussi dans le prompt de ta `/loop`**, qui est le seul support qui t'**arrive** au lieu de se faire chercher *(voir « La ronde »)*.
 
 ## Des faits, pas ton raisonnement
 
@@ -130,7 +130,7 @@ herdr agent focus <pane>     # → focused: true
 herdr agent get <pane>       # terminal_title — ce qu'IL voit
 ```
 
-**Ne décris pas où chercher.** Treize sessions herdr, chacune numérote ses panes : les coordonnées données, **ça n'a pas suffi** — *« je trouve pas le pane »*. **Un seul geste a réglé le problème.**
+**Ne décris pas où chercher.** Treize sessions herdr, chacune numérote ses panes : les coordonnées données, **ça n'a pas suffi** — *« je trouve pas le pane »*. **Un geste l'a réglé.**
 
 **Aucun identifiant de pane sur la ligne** : le nom de l'agent, et le TITRE DE FENÊTRE — `terminal_title` de `herdr agent get`. Un `w7M:p2` ne lui dit rien.
 
