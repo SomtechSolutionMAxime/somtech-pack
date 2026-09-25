@@ -281,7 +281,19 @@ function construireAppeler({ demandes = {}, tickets = {}, listePages = [[]], ech
       const items = listePages[page] || [];
       return { success: true, tickets: items, count: listePages.flat().length };
     }
-    if (nom === 'tickets' && (args.action === 'create' || args.action === 'update' || args.action === 'add_comment')) {
+    if (nom === 'tickets' && args.action === 'add_comment') {
+      // ⚠️ CONFORME AU RÉEL — MESURÉ EN QA CONTRE LE VRAI SERVICE (D-20260925-0004,
+      // T-20260925-0080) : `add_comment` SANS `author_label` refuse, HTTP 200,
+      // `{"error":{"code":-32603,"message":"author_label is required"}}` — que
+      // `transportServiceDesk` (ligne-directe) fait désormais JETER avec ce
+      // message exact (D-b). Un double qui l'accepterait sans label serait plus
+      // permissif que le vrai service.
+      if (typeof args.author_label !== 'string' || !args.author_label.trim()) {
+        throw new Error('author_label is required');
+      }
+      return { success: true, ticket: { id: args.id || 'nouveau-uuid' } };
+    }
+    if (nom === 'tickets' && (args.action === 'create' || args.action === 'update')) {
       return { success: true, ticket: { id: args.id || 'nouveau-uuid' } };
     }
     throw new Error(`appel non modélisé dans le double : ${nom}/${args.action}`);
@@ -365,8 +377,8 @@ test('executerEcritures — ordre exact : tous les ouvrir, puis en-cours, puis f
     fait: [{ code: 'T-20260925-0002', commentaire: 'fermé' }],
   };
   const ticketsVerifies = new Map([['T-20260925-0001', 'uuid-1'], ['T-20260925-0002', 'uuid-2']]);
-  const r = await executerEcritures({ taches, demandeId: 'uuid-demande', ticketsVerifies, appeler });
-  assert.equal(r.toutesReussies, true);
+  const r = await executerEcritures({ taches, demandeId: 'uuid-demande', ticketsVerifies, appeler, authorLabel: 'batiscan (scribe des tâches)' });
+  assert.equal(r.toutesReussies, true, JSON.stringify(r));
   assert.deepEqual(appels.map((a) => `${a.nom}.${a.args.action}`), [
     'tickets.create', 'tickets.update', 'tickets.add_comment', 'tickets.update',
   ]);
@@ -376,8 +388,18 @@ test('executerEcritures — ordre exact : tous les ouvrir, puis en-cours, puis f
   assert.equal(appels[1].args.status, 'in_progress');
   assert.equal(appels[2].args.id, 'uuid-2');
   assert.equal(appels[2].args.content, 'fermé');
+  assert.equal(appels[2].args.author_label, 'batiscan (scribe des tâches)', 'D-a : author_label doit être transmis sur add_comment');
   assert.equal(appels[3].args.id, 'uuid-2');
   assert.equal(appels[3].args.status, 'completed');
+});
+
+test('D-a — `add_comment` SANS author_label refuse (conforme au vrai service) → executerEcritures nomme l\'échec, pas un plantage muet', async () => {
+  const { appeler } = construireAppeler();
+  const taches = { ouvrir: [], enCours: [], fait: [{ code: 'T-20260925-0002', commentaire: 'fermé' }] };
+  const ticketsVerifies = new Map([['T-20260925-0002', 'uuid-2']]);
+  const r = await executerEcritures({ taches, demandeId: 'uuid-demande', ticketsVerifies, appeler }); // authorLabel absent
+  assert.equal(r.toutesReussies, false);
+  assert.match(r.erreur, /author_label is required/);
 });
 
 test('executerEcritures — échec en cours de route : ce qui a été écrit ET ce qui ne l\'a pas été, nommés', async () => {
@@ -599,9 +621,12 @@ test('bloc valide COMPLET → écritures dans l\'ordre, sous la bonne demande, P
     contenuDemande: 'D-20260925-0003',
     appeler,
     horodatagesRelances: [], plafondParHeure: 30, maintenant: 1000,
+    authorLabel: 'batiscan (scribe des tâches)',
   });
   const ecritures = appels.filter((a) => ['create', 'update', 'add_comment'].includes(a.args.action));
   assert.deepEqual(ecritures.map((a) => a.args.action), ['create', 'update', 'add_comment', 'update']);
+  const commentaire = ecritures.find((a) => a.args.action === 'add_comment');
+  assert.equal(commentaire.args.author_label, 'batiscan (scribe des tâches)', 'D-a : author_label doit être transmis');
   assert.equal(r.sortie.decision, 'block');
   assert.match(r.sortie.reason, /prochaine tâche/);
   // « X » (in_progress) est plus ancien que « nettoyer... » (new) → X d'abord.

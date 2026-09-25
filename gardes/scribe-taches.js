@@ -10,7 +10,7 @@
 // pour relancer l'agent (il ne peut pas s'arrêter) ; rien, ou `{}`, pour le laisser
 // s'arrêter ; `systemMessage` pour dire quelque chose à l'humain sans relancer.
 
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, writeSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -101,6 +101,29 @@ function lireFichierDemande(cwd) {
   const p = join(cwd, '.demande');
   if (!existsSync(p)) return null;
   try { return readFileSync(p, 'utf8'); } catch { return null; }
+}
+
+/**
+ * Le libellé d'auteur pour `tickets add_comment` (D-a, T-20260925-0080) —
+ * MESURÉ CONTRE LE VRAI SERVICE : obligatoire pour une clé sans JWT (HTTP 200,
+ * `{"error":{"code":-32603,"message":"author_label is required"}}` sinon).
+ *
+ * Nomme l'auteur RÉEL : le nom de l'agent lu dans `<lieu>/.nom-agent` (une
+ * ligne) s'il existe, sinon le nom du dossier du lieu — dans les deux cas
+ * suffixé « (scribe des tâches) » pour que le commentaire dise QUI a vraiment
+ * écrit (le hook, au nom de l'agent), jamais un « MCP » anonyme.
+ */
+function libelleAuteur(cwd) {
+  let nom = null;
+  const p = join(cwd, '.nom-agent');
+  if (existsSync(p)) {
+    try {
+      const premiere = readFileSync(p, 'utf8').split('\n')[0].trim();
+      if (premiere) nom = premiere;
+    } catch { /* fallback plus bas */ }
+  }
+  if (!nom) nom = basename(cwd);
+  return `${nom} (scribe des tâches)`;
 }
 
 /** L'état du plafond, PAR LIEU — un fichier nommé par le sha1 du cwd. */
@@ -238,6 +261,7 @@ async function main() {
       // un chemin de refus. Un `stop_hook_active` manquant ou non-booléen
       // vaut `false` : seule la valeur EXACTE `true` change quoi que ce soit.
       stopHookActive: requete?.stop_hook_active === true,
+      authorLabel: libelleAuteur(cwd),
       // ⚠️ FERME LE TROU DU DÉLAI INTERNE (T-20260925-0080, revue de fond, passe 3) :
       // si le minuteur ci-dessus tue le process AU MILIEU du plan d'écritures, cette
       // fonction `deciderStop` ne rend JAMAIS son `journalAEnregistrer` — le process

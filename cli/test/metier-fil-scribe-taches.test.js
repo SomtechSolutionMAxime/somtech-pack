@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 
@@ -431,6 +431,9 @@ export async function appeler(nom, args) {
   if (nom === 'demands' && args.action === 'get') {
     return { demand: { id: 'uuid-demande', created_at: '2026-09-25T00:00:00Z', direct_ticket_count: 0 } };
   }
+  if (nom === 'tickets' && args.action === 'get') {
+    return { success: true, ticket: { id: args.id, demand_id: 'uuid-demande' } };
+  }
   return { success: true, ticket: { id: 'uuid-nouveau' } };
 }
 `);
@@ -564,4 +567,46 @@ test('R2/R3 bout en bout — état corrompu + bloc + stop_hook_active:false → 
   const sortie = JSON.parse(executerGarde({ cwd: TMP, transcriptPath: t, stopHookActive: false, env: { SOMTECH_SCRIBE_ETAT: etat, SOMTECH_SCRIBE_RELANCES_PAR_HEURE: '30' } }));
   assert.equal(sortie.decision, 'block');
   assert.match(sortie.reason, /corrompu/);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// D-a, BOUT EN BOUT — `author_label` sur `tickets add_comment`, mesuré contre
+// le vrai ServiceDesk (QA, D-20260925-0004, T-20260925-0080) : obligatoire
+// pour une clé sans JWT, sinon refus HTTP 200 « author_label is required ».
+// ═══════════════════════════════════════════════════════════════════════════
+
+test('D-a bout en bout — `.nom-agent` présent → author_label = son contenu + « (scribe des tâches) »', () => {
+  const t = join(TMP, 'transcript.jsonl');
+  writeFileSync(t, transcriptAvec(['```taches', 'fait: T-20260925-0002 — fermé', '```'].join('\n')));
+  writeFileSync(join(TMP, '.demande'), 'D-20260925-0003\n');
+  writeFileSync(join(TMP, '.nom-agent'), 'batiscan\n');
+  const { chemin: double, journal } = ecrireDoubleQuiJournaliseEtReussit(TMP);
+
+  execFileSync(process.execPath, [GARDE], {
+    input: JSON.stringify({ cwd: TMP, transcript_path: t }), encoding: 'utf8',
+    env: { ...process.env, SOMTECH_SCRIBE_ETAT: join(TMP, 'etat'), SOMTECH_SCRIBE_RELANCES_PAR_HEURE: '30', SOMTECH_SCRIBE_APPELER_TEST: double },
+  });
+
+  const appels = readFileSync(journal, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const commentaire = appels.find((a) => a.args.action === 'add_comment');
+  assert.ok(commentaire, `aucun add_comment journalisé : ${JSON.stringify(appels)}`);
+  assert.equal(commentaire.args.author_label, 'batiscan (scribe des tâches)');
+});
+
+test('D-a bout en bout — SANS `.nom-agent` → author_label = nom du dossier du lieu + « (scribe des tâches) »', () => {
+  const t = join(TMP, 'transcript.jsonl');
+  writeFileSync(t, transcriptAvec(['```taches', 'fait: T-20260925-0002 — fermé', '```'].join('\n')));
+  writeFileSync(join(TMP, '.demande'), 'D-20260925-0003\n');
+  // pas de .nom-agent ici
+  const { chemin: double, journal } = ecrireDoubleQuiJournaliseEtReussit(TMP);
+
+  execFileSync(process.execPath, [GARDE], {
+    input: JSON.stringify({ cwd: TMP, transcript_path: t }), encoding: 'utf8',
+    env: { ...process.env, SOMTECH_SCRIBE_ETAT: join(TMP, 'etat'), SOMTECH_SCRIBE_RELANCES_PAR_HEURE: '30', SOMTECH_SCRIBE_APPELER_TEST: double },
+  });
+
+  const appels = readFileSync(journal, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const commentaire = appels.find((a) => a.args.action === 'add_comment');
+  assert.ok(commentaire, `aucun add_comment journalisé : ${JSON.stringify(appels)}`);
+  assert.equal(commentaire.args.author_label, `${basename(TMP)} (scribe des tâches)`);
 });

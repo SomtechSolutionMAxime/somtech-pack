@@ -350,10 +350,17 @@ export async function verifierTicketAppartient({ code, demandeId, appeler }) {
  * a été écrit CE TOUR, ce qui a été SAUTÉ (déjà fait), et ce qui ne l'a pas été.
  *
  * @param {{taches:object, demandeId:string, ticketsVerifies:Map<string,string>,
- *   appeler:Function, etapesDejaFaites?:Set<string>, noterEtapeReussie?:(cle:string)=>void}} args
+ *   appeler:Function, etapesDejaFaites?:Set<string>, noterEtapeReussie?:(cle:string)=>void,
+ *   authorLabel?:string}} args
+ *   `authorLabel` — MESURÉ CONTRE LE VRAI SERVICE (QA, T-20260925-0080) :
+ *   `tickets add_comment` SANS `author_label` refuse avec `HTTP 200,
+ *   {"error":{"code":-32603,"message":"author_label is required"}}` — obligatoire
+ *   pour une clé sans JWT. Envoyé UNIQUEMENT sur `add_comment` (`create` et
+ *   `update` n'en ont pas besoin d'après le contrat MCP, non contredit par la
+ *   mesure).
  * @returns {Promise<{toutesReussies:boolean, ecrits:string[], sautees:string[], nonEcrits:string[], erreur?:string}>}
  */
-export async function executerEcritures({ taches, demandeId, ticketsVerifies, appeler, etapesDejaFaites, noterEtapeReussie }) {
+export async function executerEcritures({ taches, demandeId, ticketsVerifies, appeler, etapesDejaFaites, noterEtapeReussie, authorLabel }) {
   const dejaFaites = etapesDejaFaites instanceof Set ? etapesDejaFaites : new Set(etapesDejaFaites || []);
   const plan = [];
   taches.ouvrir.forEach((titre, i) => {
@@ -365,7 +372,7 @@ export async function executerEcritures({ taches, demandeId, ticketsVerifies, ap
   }
   for (const { code, commentaire } of taches.fait) {
     const id = ticketsVerifies.get(code);
-    plan.push({ cle: `fait:${code}:commentaire`, etape: `fait ${code} — commentaire`, run: () => appeler('tickets', { action: 'add_comment', id, content: commentaire }) });
+    plan.push({ cle: `fait:${code}:commentaire`, etape: `fait ${code} — commentaire`, run: () => appeler('tickets', { action: 'add_comment', id, content: commentaire, author_label: authorLabel }) });
     plan.push({ cle: `fait:${code}:fermeture`, etape: `fait ${code} — fermeture`, run: () => appeler('tickets', { action: 'update', id, status: 'completed' }) });
   }
 
@@ -514,6 +521,11 @@ export async function trouverProchaineTache({ demandeId, demandeCreatedAt, direc
  *   horodatages ne peuvent pas être lus). Seule une RELANCE légitime
  *   (« prochaine tâche ») reste un `decision:block` sous `stopHookActive`,
  *   bornée par le plafond comme toujours — c'est la chaîne voulue.
+ * @param {string|undefined} entree.authorLabel  le libellé d'auteur envoyé sur
+ *   `tickets add_comment` (D-a, T-20260925-0080) — MESURÉ CONTRE LE VRAI SERVICE :
+ *   obligatoire pour une clé sans JWT, sinon refus nommé « author_label is
+ *   required ». Le fil mince le construit (nom lu dans `.nom-agent` du lieu, ou
+ *   nom du dossier) ; ce module ne fait que le transmettre.
  * @returns {Promise<{
  *   silence:boolean,
  *   sortie:{decision?:'block', reason?:string, systemMessage?:string},
@@ -524,7 +536,7 @@ export async function trouverProchaineTache({ demandeId, demandeCreatedAt, direc
 export async function deciderStop(entree) {
   const {
     texteAssistant, contenuDemande, appeler, horodatagesRelances, plafondParHeure, maintenant,
-    journalPrecedent, onEtapeReussie, etatCorrompu, stopHookActive,
+    journalPrecedent, onEtapeReussie, etatCorrompu, stopHookActive, authorLabel,
   } = entree;
 
   // ── Pas de bloc (ou un bloc cité, pas terminal) : silence total, zéro appel —
@@ -599,7 +611,7 @@ export async function deciderStop(entree) {
   const etapesAJour = new Set(etapesDejaFaites);
   const ecriture = await executerEcritures({
     taches, demandeId: preflight.id, ticketsVerifies, appeler,
-    etapesDejaFaites,
+    etapesDejaFaites, authorLabel,
     noterEtapeReussie: (cle) => {
       etapesAJour.add(cle);
       // Persistance IMMÉDIATE, PAR ÉTAPE — voir la doc de `onEtapeReussie` ci-dessus :
