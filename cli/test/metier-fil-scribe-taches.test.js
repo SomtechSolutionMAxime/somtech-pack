@@ -295,3 +295,96 @@ test('le délai interne du fil mince : une étape réussie AVANT une étape qui 
   assert.deepEqual(j.journal?.etapes, ['ouvrir#0'],
     `l'étape ouvrir, réussie AVANT la panne, doit survivre à la coupure du minuteur : ${JSON.stringify(j)}`);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LE SEUIL DE TEST LUI-MÊME — deux mutations survivantes relevées par la
+// revue de fond (passe 1 sur ce lot) : (1) retirer `NODE_TEST_CONTEXT &&` du
+// garde-fou du seuil, (2) retirer `typeof mod.appeler === 'function'`. Les
+// témoins précédents lancaient TOUJOURS le fil SOUS `node --test`, donc
+// `NODE_TEST_CONTEXT` était TOUJOURS présent dans l'environnement hérité —
+// aucun d'eux ne pouvait distinguer « le garde-fou marche » de « il n'existe
+// pas ». Ceux-ci l'enlèvent explicitement de l'environnement de l'ENFANT.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Comme `executerGarde`, mais retire EXPLICITEMENT `NODE_TEST_CONTEXT` de l'environnement de l'enfant. */
+function executerGardeSansContexteTest({ cwd, transcriptPath, stopHookActive = false, env = {} }) {
+  const entree = JSON.stringify({ cwd, transcript_path: transcriptPath, stop_hook_active: stopHookActive });
+  const environnement = { ...process.env, ...env, SOMTECH_DESK_API_KEY: '', SERVICEDESK_MCP_TOKEN: '' };
+  delete environnement.NODE_TEST_CONTEXT;
+  return execFileSync(process.execPath, [GARDE], { input: entree, encoding: 'utf8', env: environnement });
+}
+
+/** Un double qui JOURNALISE chaque appel dans un fichier — pour prouver qu'il n'a JAMAIS été appelé. */
+function ecrireDoubleQuiJournalise(tmp) {
+  const journal = join(tmp, 'appels-double.log');
+  const chemin = join(tmp, 'double-journalise.mjs');
+  writeFileSync(chemin, `
+import { appendFileSync } from 'node:fs';
+const JOURNAL = ${JSON.stringify(journal)};
+export async function appeler(nom, args) {
+  appendFileSync(JOURNAL, JSON.stringify({ nom, args }) + '\\n');
+  return { success: true };
+}
+`);
+  return { chemin, journal };
+}
+
+test('SEUIL DE TEST — sans `NODE_TEST_CONTEXT` dans l\'environnement de l\'enfant, le double n\'est JAMAIS appelé, même si `SOMTECH_SCRIBE_APPELER_TEST` le désigne', () => {
+  const t = join(TMP, 'transcript.jsonl');
+  const texte = ['```taches', 'attend: dirigeant', '```'].join('\n');
+  writeFileSync(t, transcriptAvec(texte));
+  writeFileSync(join(TMP, '.demande'), 'D-20260925-0003\n');
+  const { chemin: double, journal } = ecrireDoubleQuiJournalise(TMP);
+
+  const sortie = JSON.parse(executerGardeSansContexteTest({
+    cwd: TMP, transcriptPath: t,
+    env: {
+      SOMTECH_SCRIBE_ETAT: join(TMP, 'etat'), SOMTECH_SCRIBE_RELANCES_PAR_HEURE: '30',
+      SOMTECH_SCRIBE_APPELER_TEST: double,
+    },
+  }));
+
+  assert.ok(!existsSync(journal),
+    `le double a été appelé alors que NODE_TEST_CONTEXT était absent de l'environnement de l'enfant : `
+    + `${existsSync(journal) ? readFileSync(journal, 'utf8') : '(absent)'}`);
+  // Sans clé (retirée de l'environnement) ET sans le seuil de test (désarmé
+  // faute de NODE_TEST_CONTEXT), le fil retombe sur le VRAI `transportServiceDesk()`
+  // — qui rend `null` sans clé (aucun appel réseau tenté). C'est ce qui rend
+  // exactement ce refus-là, jamais un autre.
+  assert.equal(sortie.decision, 'block');
+  assert.match(sortie.reason, /clé absente/);
+});
+
+/** Un double dont `appeler` n'est PAS une fonction — une chaîne, comme n'importe quel module mal formé. */
+function ecrireDoubleAppelerPasFonction(tmp) {
+  const chemin = join(tmp, 'double-invalide.mjs');
+  writeFileSync(chemin, `export const appeler = "pas une fonction";\n`);
+  return { chemin };
+}
+
+test('double injecté dont `appeler` n\'est PAS une fonction → refus nommé (comme clé absente), jamais un plantage muet', () => {
+  const t = join(TMP, 'transcript.jsonl');
+  const texte = ['```taches', 'attend: dirigeant', '```'].join('\n');
+  writeFileSync(t, transcriptAvec(texte));
+  writeFileSync(join(TMP, '.demande'), 'D-20260925-0003\n');
+  const { chemin: double } = ecrireDoubleAppelerPasFonction(TMP);
+
+  const sortie = JSON.parse(executerGarde({
+    cwd: TMP, transcriptPath: t,
+    env: {
+      SOMTECH_SCRIBE_ETAT: join(TMP, 'etat'), SOMTECH_SCRIBE_RELANCES_PAR_HEURE: '30',
+      SOMTECH_SCRIBE_APPELER_TEST: double,
+    },
+  }));
+
+  // ⚠️ Le distinguo qui rougit sous la mutation : SANS le contrôle `typeof`,
+  // `appeler` vaudrait la CHAÎNE non-vide (donc vraie) « pas une fonction »,
+  // `deciderStop` la prendrait pour un accès valide, tenterait le pré-vol, et
+  // `appeler('demands', …)` jetterait « appeler is not a function » — capté
+  // PLUS LOIN par `preverifierDemande`, avec un refus « injoignable », PAS
+  // « clé absente ». La forme du refus est donc la preuve, pas seulement son
+  // existence.
+  assert.equal(sortie.decision, 'block');
+  assert.match(sortie.reason, /clé absente/,
+    `un \`appeler\` non-fonction doit être traité comme une absence d'accès, en amont de tout appel : ${JSON.stringify(sortie)}`);
+});
