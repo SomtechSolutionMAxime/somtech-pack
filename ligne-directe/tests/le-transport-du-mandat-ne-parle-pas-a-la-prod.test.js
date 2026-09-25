@@ -22,7 +22,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { accesServiceDesk, etatDuMandat, CHAMP_DU_CODE } from '../src/mandat.js';
+import { accesServiceDesk, etatDuMandat, CHAMP_DU_CODE, transportServiceDesk } from '../src/mandat.js';
 
 /** Une réponse MCP telle que le vrai service la rend : du JSON dans du texte dans une enveloppe. */
 const enveloppe = (corps) => ({
@@ -138,4 +138,48 @@ test('sans clé, aucun accès n’est construit — et on ne devine pas pour aut
   const etat = await etatDuMandat('d-20260819-0001', { appeler: null });
   assert.equal(etat.clos, null);
   assert.match(etat.raison, /aucun accès/);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UNE ERREUR JSON-RPC ARRIVE EN HTTP 200, ET LE TRANSPORT PERDAIT LE MESSAGE DU
+// SERVICE (revue de fond, T-20260925-0080, QA contre le vrai ServiceDesk).
+//
+// MESURÉ CONTRE LE VRAI SERVICE : `tickets add_comment` sans `author_label`
+// rend HTTP 200, corps `{"error":{"code":-32603,"message":"author_label is
+// required"},"jsonrpc":"2.0","id":1}` — PAS une réponse HTTP en erreur, PAS
+// `result.content`. `!texte` jetait alors « réponse sans contenu » — vrai,
+// mais ça perd le SEUL indice qui dit quoi réparer.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test('une enveloppe JSON-RPC `error` (HTTP 200) fait jeter le MESSAGE DU SERVICE, pas « réponse sans contenu »', async () => {
+  const appeler = transportServiceDesk({
+    cle: 'k',
+    fetcher: async () => ({
+      ok: true,
+      json: async () => ({ error: { code: -32603, message: 'author_label is required' }, jsonrpc: '2.0', id: 1 }),
+    }),
+  });
+  await assert.rejects(() => appeler('tickets', { action: 'add_comment', id: 'x' }), (err) => {
+    assert.equal(err.message, 'author_label is required');
+    return true;
+  });
+});
+
+test('une réponse VRAIMENT sans contenu (ni `error`, ni `result.content`) jette TOUJOURS « réponse sans contenu » — comportement inchangé', async () => {
+  const appeler = transportServiceDesk({
+    cle: 'k',
+    fetcher: async () => ({ ok: true, json: async () => ({ result: {} }) }),
+  });
+  await assert.rejects(() => appeler('tickets', { action: 'get', id: 'x' }), /réponse sans contenu/);
+});
+
+test('une enveloppe `error` sans message exploitable (absent, vide) retombe sur le comportement inchangé', async () => {
+  for (const erreur of [{}, { message: '' }, undefined]) {
+    const appeler = transportServiceDesk({
+      cle: 'k',
+      fetcher: async () => ({ ok: true, json: async () => ({ error: erreur, result: {} }) }),
+    });
+    await assert.rejects(() => appeler('tickets', { action: 'get', id: 'x' }), /réponse sans contenu/,
+      `error=${JSON.stringify(erreur)} doit retomber sur le message générique`);
+  }
 });

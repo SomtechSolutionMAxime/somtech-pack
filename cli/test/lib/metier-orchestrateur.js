@@ -1166,6 +1166,19 @@ export const CONTROLES = [
         );
       }
 
+      // ── LE GEL DE L'ÉCRITURE ÉPISODIQUE (T-20260923-0012 ; STD-045 §2.7.2). Le tableau offre
+      // `/episodique` comme un geste disponible ; l'encoder communique son contenu hors Québec. Un
+      // orchestrateur qui lit la rangée sans le gel ne peut pas tenir la conduite. On garde ce que
+      // la ligne PRESCRIT — le gel, son pointeur, son motif —, PAS sa formulation : la garde
+      // cherche un radical et deux références, jamais la phrase exacte (T-20260925-0053 : une garde
+      // qui rougit quand on reformule dicte la forme du texte sans le dire). Trouvé en revue de
+      // fond : sans ce contrôle, retirer le gel laissait tout vert et le plafond de taille, lui,
+      // se réjouissait de la baisse.
+      const geste = gestes.find((g) => g.includes('/episodique'));
+      assert.match(geste, /gel/i, 'le geste « /episodique » ne dit plus que son écriture est gelée : l’orchestrateur l’offrira comme disponible');
+      assert.match(geste, /T-20260923-0012/, 'le gel ne pointe plus son ticket : il ne se lève ni ne se relit nulle part');
+      assert.match(geste, /STD-045/, 'le gel ne cite plus son motif (STD-045) : une règle sans motif s’assouplit');
+
       // ── QUAND il rappelle. Trois moments, et ils ont en commun d'être AVANT qu'il engage
       // quelqu'un — un rappel fait après le brief ne sert plus à rien. Le COMPTE est la garde :
       // en retirer un ne casse rien et rouvre exactement le défaut que l'ajout ferme.
@@ -4865,6 +4878,21 @@ export const MUTATIONS = [
     // « Gestes de mémoire » de la table des outils. La mutation nomme donc le moteur à la
     // place du geste dans cette rangée-là. Ce qu'elle FAIT est inchangé au mot près.
     muter: (t) => t.replace('`/episodique` (le vécu)', '`/graphiti` (Neo4j)'),
+  },
+  {
+    id: 'l-ecriture-episodique-n-est-plus-dite-gelee',
+    quoi: 'la rangée offre `/episodique` comme un geste disponible — l’orchestrateur encode et communique hors Québec (STD-045 §2.7.2)',
+    cible: 'se-sert-des-memoires',
+    fichier: 'metier',
+    // Retire le gel PAR SON RADICAL, pas par sa phrase : la mutation vise ce que la garde garde.
+    muter: (t) => t.replace(/ — \*\*[^*]*gel[^*]*\*\*[^·|]*/, ' '),
+  },
+  {
+    id: 'le-gel-de-l-ecriture-episodique-ne-pointe-plus-son-ticket',
+    quoi: 'le gel reste dit mais son pointeur mène nulle part — il ne se lève ni ne se relit',
+    cible: 'se-sert-des-memoires',
+    fichier: 'metier',
+    muter: (t) => t.replace('T-20260923-0012', 'T-20260923-0099'),
   },
   {
     id: 'un-moment-du-rappel-disparait',
