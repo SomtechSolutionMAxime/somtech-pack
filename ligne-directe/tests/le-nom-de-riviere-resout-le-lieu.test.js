@@ -258,3 +258,21 @@ test('un code à MAJUSCULES tapé tel quel se résout sans jamais être « retro
   assert.equal(r.exact, true);
   assert.equal(r.demande, 'J-Upper');
 });
+
+test('naissance — une RIVIÈRE dont l’entrée est un lien CASSÉ : refus qui le DIT, pas « ni code ni nom »', () => {
+  const racine = depot({});
+  mkdirSync(join(racine, DOSSIER), { recursive: true });
+  symlinkSync('/nonexistent-cible-cassee', join(racine, DOSSIER, 'bonaventure'));
+  const r = saisir(racine, 'bonaventure');
+  assert.equal(r.ok, false, 'rien n’est posé par-dessus un lien');
+  assert.match(r.message, /lien symbolique cassé/);
+  assert.doesNotMatch(r.message, /n'est ni le code d'un lieu/);
+});
+
+test('naissance — le code d’un lien valide (rivière ou non) est accepté', () => {
+  const racine = depot({});
+  const reel = mkdtempSync(join(tmpdir(), 'nom-riviere-reel-'));
+  mkdirSync(join(racine, DOSSIER), { recursive: true });
+  symlinkSync(reel, join(racine, DOSSIER, 'j-20260814-0001'));
+  assert.equal(saisir(racine, 'j-20260814-0001').ok, true);
+});

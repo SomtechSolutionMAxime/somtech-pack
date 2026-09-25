@@ -6,7 +6,14 @@
 // enseigne (`cli/test/lib/competences-de-pose.js` en relève le CODE, ligne à ligne) ; y mettre
 // des motifs de naissance ferait décrire à la compétence de pose des refus qu'elle ne rend jamais.
 
+import { lstatSync } from 'node:fs';
+import { join } from 'node:path';
 import { role as roleDe, baptemeDuRole } from './roles.js';
+
+/** Une entrée (même un lien cassé) porte-t-elle ce chemin ? `lstat` ne suit pas les liens. */
+function entreeExiste(chemin) {
+  try { lstatSync(chemin); return true; } catch { return false; }
+}
 import {
   messageLieuAmbigu, messageNomAmbigu, messageNomIntrouvable, resoudreLieuParCodeOuNom,
 } from './lieu-nom.js';
@@ -57,6 +64,18 @@ export function resoudreLaSaisieDeLieu({ depot, role, saisie }) {
       : { ok: true, nom: saisie, source: 'code', saisie, lieu: lieu.racine };
   }
   if (estUneRiviere(saisie)) {
+    // Une entrée de ce nom EXISTE mais son lien est cassé : « ni code ni nom » serait plus fort que
+    // la mesure (relevé en revue de fond). On dit ce qu'on voit, et on ne pose rien par-dessus.
+    if (entreeExiste(join(lieu.parent, saisie))) {
+      return {
+        ok: false,
+        motif: 'nom_introuvable',
+        message:
+          `« ${saisie} » est une entrée de « ${lieu.parent} » dont la cible n'existe pas (lien symbolique ` +
+          `cassé) : ce n'est donc ni un lieu utilisable, ni un nom inscrit. Répare ou retire ce lien, ` +
+          `ou donne le CODE du mandat.`,
+      };
+    }
     return {
       ok: false,
       motif: 'nom_introuvable',
