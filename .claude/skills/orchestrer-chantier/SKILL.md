@@ -532,18 +532,23 @@ epics action update <epic-id> --description "...[ajouter à la fin]\n\nAgent e-2
 
 # 2. vérifier que son travail est bien parti — jamais retirer un worktree qui a du non-poussé
 git -C ~/worktrees/<repo>/<timestamp> status --porcelain
-git -C ~/worktrees/<repo>/<timestamp> log --oneline @{u}.. 2>/dev/null
+git -C ~/worktrees/<repo>/<timestamp> log --oneline origin/<branche-cible>..HEAD
 
-# 3. fermer SON pane, pas son tab
+# 3. DEMANDER au chef ce qui n'existe que dans son espace — rien ne se ferme avant sa réponse
+#    (la lecture ne dispense pas de demander : git log ne voit que ce qui est commité)
+
+# 4. fermer SON pane, pas son tab
 herdr pane close "$P"
 
-# 4. retirer le worktree et sa branche-socle
+# 5. retirer le worktree et sa branche-socle
 #    C'est `pack agent naitre` qui l'a ouvert (§4b), pas le lanceur de session : le teardown
 #    de ce dernier ne connaît pas les worktrees qu'il n'a pas ouverts, donc `git` le retire.
-git -C <repo> worktree remove ~/worktrees/<repo>/<timestamp>   # --force si des restes traînent
+git -C <repo> worktree remove ~/worktrees/<repo>/<timestamp>
 git -C <repo> branch -D wt/<timestamp>
 git -C <repo> worktree prune
 ```
+
+**La question précède la fermeture, et un worktree qui refuse de se retirer est un signal, jamais un obstacle : pas de `--force`.** Pouvoir lire l'espace d'un chef ne dispense pas de LUI DEMANDER : `git log origin/<branche-cible>..HEAD` ne voit que ce qui est commité, son « zéro commit » est vrai et trompeur devant un fichier non suivi ou une base. Sans réponse (chef gelé, `agent_not_found`, déjà `done`), l'espace reste : relance par `livrer.js`, puis escalade au CTO avec ce qui est en jeu — jamais de fermeture faute de réponse. N'utilise jamais `@{u}` ici : une branche-socle n'a pas d'upstream, et l'erreur avalée se lit « tout est poussé ».
 
 **Ferme le pane, jamais le tab.** Un tab héberge souvent plusieurs panes — donc plusieurs agents, dont potentiellement toi. `herdr tab close` les emporte tous, sans confirmation : tu peux te fermer toi-même en croyant fermer ton chef d'équipe. Si tu veux savoir avec qui un agent partage son tab avant d'agir, `herdr agent list` donne le `tab_id` de chacun.
 

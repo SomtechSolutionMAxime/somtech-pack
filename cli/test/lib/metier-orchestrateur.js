@@ -1399,8 +1399,12 @@ export const CONTROLES = [
           'le motif : git log ne voit que le commité, son zéro est vrai et trompeur devant un fichier non suivi'],
         [/seule la question répond à « qu['’]est-ce qui n['’]existe QUE là »/,
           'la lecture répond à « qu’y a-t-il », seule la question à « qu’est-ce qui n’existe QUE là »'],
-        [/JAMAIS[^.`]{0,20}`@\{u\}`/, 'la garde `@{u}`, dans la même section'],
+        [/(?:Ne te sers|N['’]utilise) JAMAIS(?: de| d['’]utiliser)? `@\{u\}`/, 'la garde `@{u}`, dans la même section'],
         [/les deux, jamais l['’]une pour l['’]autre/, 'les deux gardes (`@{u}` et la question) se lisent ENSEMBLE'],
+        [/# 3\. DEMANDER au chef ce qui n['’]existe que dans son espace — rien ne se ferme avant sa réponse/,
+          'la question est une ÉTAPE du bloc, avant la fermeture du pane'],
+        [/l['’]espace RESTE : tu relances par `livrer\.js`, puis, toujours sans réponse, tu escalades au CTO[^.]*— jamais de fermeture faute de réponse/,
+          'sans réponse du chef, l’espace reste : relance, escalade, jamais de fermeture faute de réponse'],
       ];
       for (const [motif, dit] of exige) {
         assert.match(
@@ -1409,12 +1413,42 @@ export const CONTROLES = [
             + `croire des fichiers redondants sur un « zéro commit » — et l'espace serait détruit.`,
         );
       }
-      const contraire = corps.match(/la lecture (?:suffit|remplace la question)|lire suffit|inutile de demander|pas besoin de demander/i);
+      const contraire = corps.match(/la lecture (?:suffit|remplace la question)|lire suffit|inutile de demander|pas besoin de demander|sauf si|hormis|excepté|à moins|sans rien demander|sans demander/i);
       assert.ok(
         !contraire,
         `la section de fermeture d’un chef écrit le contraire de la règle (« ${contraire && contraire[0]} ») : `
           + `la lecture répond à « qu’y a-t-il », jamais à « qu’est-ce qui n’existe que là ».`,
       );
+    },
+  },
+
+  {
+    id: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    quoi: 'l’étape f du skill (fermer un chef) demande avant de fermer, compare à origin/<cible>, et ne force jamais le retrait',
+    verifier({ competence }) {
+      // T-20260925-0015 (revue). Le skill enseignait le défaut que le métier ferme : `git log @{u}..
+      // 2>/dev/null` et `worktree remove … # --force`. Un agent qui suit le skill ferme sur un « zéro
+      // commit » trompeur et détruit le non-suivi. Ancré à l'ÉTAPE f seule, en phrases entières.
+      const i = competence.indexOf('**f. Fermer proprement');
+      assert.ok(i >= 0, 'le skill ne porte plus son étape f « Fermer proprement »');
+      const j = competence.indexOf('**Fais l’inventaire', i) >= 0 ? competence.indexOf('**Fais l’inventaire', i) : competence.indexOf('**Fais l\'inventaire', i);
+      const f = competence.slice(i, j > i ? j : undefined).replace(/[ \t]+/g, ' ');
+      const lignes = f.split('\n').map((l) => l.trim());
+      const question = f.includes('# 3. DEMANDER au chef ce qui n\'existe que dans son espace — rien ne se ferme avant sa réponse');
+      assert.ok(question, 'étape f du skill : la question « DEMANDER au chef » avant la fermeture a disparu');
+      assert.ok(
+        f.includes('Pouvoir lire l\'espace d\'un chef ne dispense pas de LUI DEMANDER : `git log origin/<branche-cible>..HEAD` ne voit que ce qui est commité'),
+        'étape f du skill : la lecture ne dispense plus de demander, ou le motif (git log ne voit que le commité) a disparu',
+      );
+      assert.ok(
+        lignes.some((l) => /^git .* log .*origin\/<branche-cible>\.\.HEAD$/.test(l)),
+        'étape f du skill : le contrôle ne compare plus à origin/<branche-cible>..HEAD',
+      );
+      const fautives = lignes.filter((l) => /^git\b/.test(l) && (
+        (/\blog\b/.test(l) && /@\{u\}/.test(l)) || (/\blog\b/.test(l) && /2\s*>\s*\/dev\/null/.test(l)) || (/worktree remove/.test(l) && /--force/.test(l))));
+      assert.deepEqual(fautives, [], 'étape f du skill : une ligne exécutable enseigne le défaut (@{u}, erreur avalée, ou --force)');
+      const exc = f.match(/sauf si|hormis|excepté|à moins|sans rien demander|sans demander/i);
+      assert.ok(!exc, `étape f du skill : une exception à la question est écrite (« ${exc && exc[0]} »)`);
     },
   },
 
@@ -4934,7 +4968,7 @@ export const MUTATIONS = [
     quoi: 'le paragraphe « La question » disparaît — la lecture permise suffit alors, et le « zéro commit » fait fermer',
     cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
     fichier: 'metier',
-    muter: (t) => t.replace(/> \*\*2\. La question\.\*\*[^\n]*\n\n?/, ''),
+    muter: (t) => t.replace(/> \*\*La question \(étape 3\)\.\*\*[^\n]*\n\n?/, ''),
   },
   {
     id: 'la-lecture-suffit-est-ecrit',
@@ -4942,8 +4976,8 @@ export const MUTATIONS = [
     cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
     fichier: 'metier',
     muter: (t) => t.replace(
-      'un refus de lecture a fait demander.)*',
-      'un refus de lecture a fait demander.)* La lecture suffit.',
+      'un correctif unique et 58 Mo de base.)*',
+      'un correctif unique et 58 Mo de base.)* La lecture suffit.',
     ),
   },
   {
@@ -4952,10 +4986,45 @@ export const MUTATIONS = [
     cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
     fichier: 'metier',
     muter: (t) => {
-      const m = t.match(/> \*\*2\. La question\.\*\*[^\n]*\n/);
+      const m = t.match(/> \*\*La question \(étape 3\)\.\*\*[^\n]*\n/);
       if (!m) return t;
       return `${t.replace(m[0], '')}\n\n## Annexe déplacée\n\n${m[0]}\n`;
     },
+  },
+  {
+    id: 'le-skill-perd-la-question',
+    quoi: 'la ligne « DEMANDER au chef » disparaît de l’étape f du skill — le worktree se retire sur un « zéro commit »',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace(/# 3\. DEMANDER au chef[^\n]*\n[^\n]*\n\n/, ''),
+  },
+  {
+    id: 'le-skill-revient-a-l-upstream-et-au-force',
+    quoi: 'le skill enseigne de nouveau `log @{u}.. 2>/dev/null` et `worktree remove --force`',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace('log --oneline origin/<branche-cible>..HEAD\n\n# 3.', 'log --oneline @{u}.. 2>/dev/null\n\n# 3.'),
+  },
+  {
+    id: 'le-skill-ecrit-une-exception',
+    quoi: 'le skill écrit « Sauf si git log est vide. » en phrase séparée — les positives restent intactes',
+    cible: 'le-skill-ferme-un-chef-apres-avoir-demande',
+    fichier: 'competence',
+    muter: (t) => t.replace('jamais de fermeture faute de réponse.', 'jamais de fermeture faute de réponse. Sauf si git log est vide.'),
+  },
+  {
+    id: 'la-fermeture-ecrit-une-exception-en-phrase-separee',
+    quoi: 'le métier écrit « Sauf si git log est vide. » à part — chaque phrase seule est correcte, la section ne l’est plus',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace('jamais de fermeture faute de réponse.', 'jamais de fermeture faute de réponse. Sauf si git log est vide.'),
+  },
+  {
+    id: 'la-fermeture-ecrit-se-ferme-sans-rien-demander',
+    quoi: 'le métier écrit « Un espace propre à ta lecture se ferme sans rien demander. » en phrase séparée',
+    cible: 'fermer-un-chef-se-demande-la-lecture-ne-dispense-pas',
+    fichier: 'metier',
+    muter: (t) => t.replace('jamais de fermeture faute de réponse.', 'jamais de fermeture faute de réponse. Un espace propre à ta lecture se ferme sans rien demander.'),
   },
   {
     id: 'un-chemin-de-machine-entre-dans-le-gabarit',

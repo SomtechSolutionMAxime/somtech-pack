@@ -87,7 +87,7 @@ Une **Demande** passe `delivered` toute seule quand tous ses enfants sont fermé
 
 *Comment fermer `qa`* : la méthode et son coût sont cadrés par STD-030 §2.7. **L'arbitrage est le tien et il pèse** — la validation par cahier de test coûte quelques dizaines de sous par scénario, la recette pilotée par un agent dans un vrai navigateur de l'ordre de cent fois plus. Sur vingt tickets, l'écart n'est plus un détail. **Réserve la seconde à ce qui la mérite** : sécurité, facturation, authentification, ou un parcours qu'aucun scénario ne couvre.
 
-Avant d'y arriver : vérifie qu'aucun epic ne reste ouvert pour de la dette qui aurait dû être sortie, et qu'aucun espace de travail orphelin ne traîne.
+Avant d'y arriver : vérifie qu'aucun epic ne reste ouvert pour de la dette qui aurait dû être sortie, et qu'aucun espace de travail orphelin ne traîne — après avoir demandé à chaque chef ce qui n'existe que là.
 
 > 🔴 **Tu ne refermes ta ligne que si le CHANTIER est clos — jamais si c'est TOI qui t'arrêtes** (renaissance, relais). Le chantier continue sans toi, et refermer **couperait le CTO entre ta mort et la naissance de ton successeur**.
 >

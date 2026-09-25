@@ -1088,6 +1088,53 @@ contraire_absent "inutile de demander"
 contraire_absent "la lecture remplace la question"
 contraire_absent "n'a pas besoin de demander"
 
+# ── (T-20260925-0015, revue) la question est une ÉTAPE, un silence ne ferme rien, le skill l'enseigne aussi
+garde_ferme "# 3. DEMANDER au chef ce qui n'existe que dans son espace — rien ne se ferme avant sa réponse" \
+  "la question est une ÉTAPE du bloc, avant la fermeture du pane" \
+  "la question n'est plus une étape du bloc de fermeture — elle redevient un encadré qu'on saute"
+garde_ferme "l'espace RESTE : tu relances par \`livrer.js\`, puis, toujours sans réponse, tu escalades au CTO avec ce qui est en jeu — jamais de fermeture faute de réponse." \
+  "sans réponse du chef, l'espace reste : relance, puis escalade — jamais de fermeture faute de réponse" \
+  "le cas du chef qui ne répond pas n'est plus écrit — un silence se lirait « rien à perdre »"
+
+# Le skill : son étape f est la seconde surface du même geste.
+S_SKILL_F="$(awk '/^\*\*f\. Fermer proprement/{d=1} /^\*\*Fais l.inventaire/{d=0} d' "$RACINE/.claude/skills/orchestrer-chantier/SKILL.md")"
+garde_skill() {
+  if printf '%s' "$S_SKILL_F" | grep -qF -- "$1"; then ok "$2"; else ko "$3"; fi
+}
+garde_skill "# 3. DEMANDER au chef ce qui n'existe que dans son espace — rien ne se ferme avant sa réponse" \
+  "skill étape f : la question précède la fermeture du pane" \
+  "skill étape f : la question avant de fermer a disparu"
+garde_skill "Pouvoir lire l'espace d'un chef ne dispense pas de LUI DEMANDER : \`git log origin/<branche-cible>..HEAD\` ne voit que ce qui est commité" \
+  "skill étape f : la lecture ne dispense pas de demander, et le motif est dit" \
+  "skill étape f : la lecture ne dispense plus de demander, ou le motif a disparu"
+garde_skill "git -C ~/worktrees/<repo>/<timestamp> log --oneline origin/<branche-cible>..HEAD" \
+  "skill étape f : le contrôle compare à origin/<branche-cible>" \
+  "skill étape f : le contrôle ne compare plus à origin/<branche-cible>"
+skill_sans() { # $1 motif ERE, $2 libellé — négatif apparié à la présence de la question
+  if printf '%s' "$S_SKILL_F" | grep -qF -- "# 3. DEMANDER au chef" \
+     && ! printf '%s' "$S_SKILL_F" | grep -E "$1" | grep -qv '^$'; then
+    ok "skill étape f : $2 — et la question est là"
+  else
+    ko "skill étape f : $2 est présent, ou la question a disparu"
+  fi
+}
+skill_sans '^git .*log.*@\{u\}' "aucun contrôle par @{u}"
+skill_sans '^git .*log.*2>[[:space:]]*/dev/null' "aucun contrôle qui avale son erreur"
+skill_sans '^git .*worktree remove.*--force' "aucun « worktree remove --force »"
+
+# Négatif de SECTION, famille d'exceptions : la question ne se contourne pas, même en phrases
+# séparées (« Sauf si git log est vide. », « Un espace propre à ta lecture se ferme sans rien demander. »).
+exceptions_absentes() { # $1 nom, $2 texte
+  if printf '%s' "$2" | grep -qF -- "DEMANDER" \
+     && ! printf '%s' "$2" | grep -qiE "sauf si|hormis|excepté|à moins|se ferme sans rien demander|sans rien demander|sans demander"; then
+    ok "$1 : aucune exception à la question (sauf si / hormis / à moins / sans demander…)"
+  else
+    ko "$1 : une exception à la question est écrite — ou la question a disparu"
+  fi
+}
+exceptions_absentes "« Fermer proprement »" "$S_FERMER"
+exceptions_absentes "skill étape f" "$S_SKILL_F"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ⑩ LE TEXTE NE GONFLE PAS
 #
