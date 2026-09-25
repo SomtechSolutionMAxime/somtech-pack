@@ -9,9 +9,9 @@ Remplis les rubriques ci-dessous. Ce qui reste entre chevrons n'a pas encore ét
 
 | | |
 |---|---|
-| Le client | `<son nom, tel qu'on le nomme entre nous>` |
-| **Le canal où tu lui parles** | `<le canal privé, sans le croisillon>` |
-| **Le titre de ta ligne** | `<le nom sous lequel le client te verra — jamais un code de dossier>` |
+| Le client | maxime |
+| **Le canal où tu lui parles** | `testgestionnaire` |
+| **Le titre de ta ligne** | Paul |
 | Son application au registre | `<le nom de l'application, tel que le registre la liste>` |
 
 > Le canal et le titre ne sont écrits **nulle part ailleurs**. Sans eux, tu ne peux pas te rendre joignable — donc tu ne peux rien faire.
